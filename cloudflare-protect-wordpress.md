@@ -9,3 +9,11 @@
 # Rule 3 – Managed Challenge /wp-admin (Managed Challenge)
 * Action: Managed Challenge
 * ```(http.request.uri.path contains "/wp-login.php") or (http.request.uri.path contains "/wp-admin/" and http.request.uri.path ne "/wp-admin/admin-ajax.php")```
+
+# Rule 4 – Allow Good Bots and User Agent/URI/URL Query (Allow)
+* Action: Allow
+* ```(cf.client.bot) or (http.user_agent contains "Metorik API Client") or (http.user_agent contains "Wordfence Central API") or (http.request.uri.query contains "wc-api=wc_shipstation") or (http.user_agent eq "Better Uptime Bot") or (http.user_agent eq "ShortPixel")```
+
+# Rule 5 – Challenge Outside of GEO (JS Challenge)
+* Action: JS Challenge
+* ```(ip.geoip.country ne "CA")```
