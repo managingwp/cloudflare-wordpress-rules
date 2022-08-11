@@ -1,0 +1,4 @@
+# Rule 1
+
+(http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json")
+
