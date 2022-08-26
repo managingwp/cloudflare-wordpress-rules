@@ -7,7 +7,7 @@ ZONE=$1
 
 # -- _error
 _error () {
-	echo "***$@"
+	echo " *ERROR* - $@"
 }
 
 _debug () {
@@ -46,7 +46,7 @@ CF_GET_ZONEID () {
 
 # -- Create filters
 CF_CREATE_FILTER () {
-	echo "Creating Filter - $1"
+	echo " - Creating Filter - $1"
 	CF_CREATE_FILTER_CURL=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters" \
 	-H "X-Auth-Email: ${CF_ACCOUNT}" \
 	-H "X-Auth-Key: ${CF_TOKEN}" \
@@ -74,15 +74,15 @@ CF_CREATE_FILTER () {
     		_error "No Cloudflare filter id provided, api error"
     		exit 1
     	else
-    		echo "Created Cloudflare Filter ID - $CF_CREATE_FILTER_ID"
+    		echo " -- Created Cloudflare Filter ID - $CF_CREATE_FILTER_ID"
     	fi
     fi
 }
 
 # -- Create rule
 CF_CREATE_RULE () {
-	echo "Creating Rule with ${1} - ${2} - ${3}"
-	curl -X POST \
+	echo " - Creating Rule with ${1} - ${2} - ${3}"
+	CF_CREATE_RULE_CURL=$(curl -s -X POST \
 	"https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules" \
 	-H "X-Auth-Email: ${CF_ACCOUNT}" \
 	-H "X-Auth-Key: ${CF_TOKEN}" \
@@ -95,7 +95,15 @@ CF_CREATE_RULE () {
     "action": "'"${2}"'",
     "description": "'"${3}"'"
   }
-]'
+]')
+	CF_CREATE_RULE_RESULT=$( echo $CF_CREATE_RULE_CURL | jq -r '.success')
+	if [[ $CF_CREATE_RULE_RESULT == "false" ]]; then
+		_error "Error creating Cloudflare filter"
+        echo $CF_CREATE_RULE_CURL
+        exit 1
+    else
+    	echo " -- Created Rule Successfully"
+    fi	
 }
 
 # -- main
@@ -113,14 +121,18 @@ fi
 
 CF_GET_ZONEID $ZONE
 
-# -- Block xmrpc.php
+# -- Block xmlrpc.php
+echo "Creating block xml-rpc.php rule"
 CF_CREATE_FILTER 'http.request.uri.path eq \"/xmlrpc.php\"'
 if [[ $? -eq "0" ]];then
 	CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "block" "Block URI Query, URL, User Agents, and IPs (Block)"
 fi
+echo ""
 
 # --  Managed Challenge /wp-admin (Managed Challenge)
+echo "Creating Managed Challenge /wp-admin (Managed Challenge) rule"
 CF_CREATE_FILTER '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\")'
 if [[ $? -eq "0" ]];then
 	CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "managed_challenge" "Managed Challenge /wp-admin (Managed Challenge)"
 fi
+echo ""
