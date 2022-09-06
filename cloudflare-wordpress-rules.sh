@@ -24,7 +24,7 @@ _error () {
 }
 
 _success () {
-    echo -e "${RED}** SUCCESS ** - $@ ${ECOL}"
+    echo -e "${GREEN}** SUCCESS ** - $@ ${ECOL}"
 }
 
 _running () {
