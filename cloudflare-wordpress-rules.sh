@@ -69,10 +69,13 @@ usage () {
 	echo "   $0 testdomain.com delete-filter 32341983412384bv213v"
 	echo "   $0 testdomian.com create-rules"
 	echo ""
+	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
+	echo ""
 }
 
 # -- Get domain zoneid
 # --------------------
+# CF_GET_ZONEID $CF_ZONE
 CF_GET_ZONEID () {
     ZONE=$1
     CF_ZONEID_CURL=$(curl -s -X GET 'https://api.cloudflare.com/client/v4/zones/?per_page=500' \
@@ -96,8 +99,9 @@ CF_GET_ZONEID () {
 }
 	
 
-# -- Create filters
+# -- Create filter
 # -----------------
+# CF_CREATE_FILETER $CF_EXPRESSION
 CF_CREATE_FILTER () {
 	echo "  - Creating Filter - $1"
 	CF_CREATE_FILTER_CURL=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters" \
@@ -189,6 +193,7 @@ CF_GET_FILTERS () {
     -H "X-Auth-Key: ${CF_TOKEN}" \
     -H "Content-Type: application/json")
     _debug_json $CF_GET_FILTERS_CURL
+    echo $CF_GET_FILTERS_CURL | jq -r
 }
 
 # -- Get Filter ID
@@ -216,6 +221,7 @@ CF_DELETE_FILTER () {
     -H "Content-Type: application/json" \
     -d '{"id":"'"${FILTER}"'"}')
 	_debug_json $CF_DELETE_FILTERS_CURL
+	echo $CF_DELETE_FILTERS_CURL | jq -r
 }
 
 # -- Get rules
@@ -228,6 +234,7 @@ CF_GET_RULES () {
     -H "X-Auth-Key: ${CF_TOKEN}" \
     -H "Content-Type: application/json")
     _debug_json $CF_GET_RULES_CURL
+    echo $CF_GET_RULES_CURL | jq -r
 }
 
 # -- Delete rule
@@ -249,6 +256,7 @@ CF_DELETE_RULE () {
     -H "Content-Type: application/json")
 	    
     _debug_json $CF_DELETE_RULE_CURL
+    echo $CF_DELETE_RULE_CURL | jq -r
 }
 
 # -- Protect WordPress
