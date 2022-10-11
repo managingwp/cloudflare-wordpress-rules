@@ -366,7 +366,7 @@ CF_PROTECT_WP () {
 	
 	# --  Allow Good Bots and User Agent/URI/URL Query (Allow) - Priority 4
 	_creating "  Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\")'
+	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"umbrella bot\")'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)"
 	fi
