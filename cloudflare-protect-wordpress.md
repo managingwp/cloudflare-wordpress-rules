@@ -17,3 +17,11 @@
 # Rule 5 – Challenge Outside of GEO (JS Challenge)
 * Action: JS Challenge
 * ```(ip.geoip.country ne "CA")```
+
+# Common IPS
+## ShortPixel
+```
+176.9.40.54
+176.9.106.100
+176.9.21.94
+```
