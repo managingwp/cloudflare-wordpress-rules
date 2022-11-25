@@ -12,7 +12,7 @@
 
 # Rule 4 – Allow Good Bots and User Agent/URI/URL Query (Allow)
 * Action: Allow
-* ```(cf.client.bot) or (http.user_agent contains "Metorik API Client") or (http.user_agent contains "Wordfence Central API") or (http.request.uri.query contains "wc-api=wc_shipstation") or (http.user_agent eq "Better Uptime Bot") or (http.user_agent eq "ShortPixel") or (http.user_agent contains "umbrella bot")```
+* ```(cf.client.bot) or (http.user_agent contains "Metorik API Client") or (http.user_agent contains "Wordfence Central API") or (http.request.uri.query contains "wc-api=wc_shipstation") or (http.user_agent eq "Better Uptime Bot") or (http.user_agent eq "ShortPixel") or (http.user_agent contains "umbrella bot") or (http.user_agent contains "Integrately")```
 
 # Rule 5 – Challenge Outside of GEO (JS Challenge)
 * Action: JS Challenge
