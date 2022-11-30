@@ -3,6 +3,7 @@
 # -- variables
 # ------------
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_NAME="cloudflare-wordpress-rules"
 DEBUG="0"
 DOMAIN=$1
 CMD=$2
@@ -52,7 +53,7 @@ _debug_json () {
 }
 
 usage () {
-	echo "$0 <domain.com> <cmd> <id>"
+	echo "$SCRIPT_NAME <domain.com> <cmd> <id>"
 	echo ""
 	echo "Commands"
 	echo "   create-rules <profile>     - Create rules on domain"
@@ -62,12 +63,12 @@ usage () {
 	echo "   get-filters                - Get Filters"
 	echo "   get-filter-id <id>         - Get Filter <id>"
 	echo ""
-	echo "Profiles"
+	echo "Profiles - *Not functional yet*"
 	echo "   protect-wp                 - The 5 golden rules, see https://github.com/managingwp/cloudflare-wordpress-rules"
 	echo ""
 	echo "Examples"
-	echo "   $0 testdomain.com delete-filter 32341983412384bv213v"
-	echo "   $0 testdomian.com create-rules"
+	echo "   $SCRIPT_NAME testdomain.com delete-filter 32341983412384bv213v"
+	echo "   $SCRIPT_NAME testdomian.com create-rules"
 	echo ""
 	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
 	echo ""
