@@ -2,13 +2,22 @@
 This repository holds common Cloudflare WordPress Rules.
 
 # [cloudflare-protect-wordpress.md](cloudflare-protect-wordpress.md)
-Contains all of the Cloudflare WAF expression rules that I've created.
+* Contains all of the Cloudflare WAF expression rules that I've created.
+* It's regularly updated.
+* You can copy and paste the contents into the Cloudflare expression builder.
+
 
 # [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
-Bash script to create Cloudflare WAF rules on a domain name through the Cloudflare API.
+* Bash script to create Cloudflare WAF rules on a domain name through the Cloudflare API.
+* In beta, so use at your own risk.
+
 ## Usage
 ```
-cloudflare-wordpress-rules <domain.com> <cmd> <id>
+Usage: cloudflare-wordpress-rules (-d|-dr) <domain.com> <command>
+
+Options
+   -d                         - Debug mode
+   -dr                        - Dry run, don't send to Cloudflare
 
 Commands
    create-rules <profile>     - Create rules on domain
@@ -18,7 +27,7 @@ Commands
    get-filters                - Get Filters
    get-filter-id <id>         - Get Filter <id>
 
-Profiles - *Not functional yet*
+Profiles - * Not yet functional*
    protect-wp                 - The 5 golden rules, see https://github.com/managingwp/cloudflare-wordpress-rules
 
 Examples
@@ -26,4 +35,6 @@ Examples
    cloudflare-wordpress-rules testdomian.com create-rules
 
 Cloudflare API Credentials should be placed in $HOME/.cloudflare
+
+Version: 0.0.1
 ```

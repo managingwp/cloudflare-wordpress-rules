@@ -2,22 +2,21 @@
 
 # -- variables
 # ------------
+VERSION=0.0.1
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 SCRIPT_NAME="cloudflare-wordpress-rules"
 DEBUG="0"
-DOMAIN=$1
-CMD=$2
-ID=$3
+DRYRUN="0"
 
 # -- Colors
-RED="\e[31m"
-GREEN="\e[32m"
-BLUEBG="\e[44m"
-YELLOWBG="\e[43m"
-GREENBG="\e[42m"
-DARKGREYBG="\e[100m"
-ECOL="\e[0m"
-
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+CYAN="\033[0;36m"
+BLUEBG="\033[0;44m"
+YELLOWBG="\033[0;43m"
+GREENBG="\033[0;42m"
+DARKGREYBG="\033[0;100m"
+ECOL="\033[0;0m"
 
 # -- _error
 _error () {
@@ -41,8 +40,8 @@ _separator () {
 }
 
 _debug () {
-	if [ -f $SCRIPT_DIR/.debug ]; then
-		echo "DEBUG: $@"
+	if [[ $DEBUG == "1" ]]; then
+		echo -e "${CYAN}** DEBUG: $@${ECOL}"
 	fi
 }
 
@@ -53,7 +52,11 @@ _debug_json () {
 }
 
 usage () {
-	echo "$SCRIPT_NAME <domain.com> <cmd> <id>"
+	echo "Usage: $SCRIPT_NAME (-d|-dr) <domain.com> <command>"
+	echo ""
+	echo "Options"
+	echo "   -d                         - Debug mode"
+	echo "   -dr                        - Dry run, don't send to Cloudflare"
 	echo ""
 	echo "Commands"
 	echo "   create-rules <profile>     - Create rules on domain"
@@ -63,7 +66,7 @@ usage () {
 	echo "   get-filters                - Get Filters"
 	echo "   get-filter-id <id>         - Get Filter <id>"
 	echo ""
-	echo "Profiles - *Not functional yet*"
+	echo "Profiles - * Not yet functional*"
 	echo "   protect-wp                 - The 5 golden rules, see https://github.com/managingwp/cloudflare-wordpress-rules"
 	echo ""
 	echo "Examples"
@@ -72,6 +75,7 @@ usage () {
 	echo ""
 	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
 	echo ""
+	echo "Version: $VERSION"
 }
 
 # -- Get domain zoneid
@@ -387,6 +391,40 @@ CF_PROTECT_WP () {
 # -------
 # -- main
 # -------
+
+# -- Parse options
+    POSITIONAL=()
+    while [[ $# -gt 0 ]]
+    do
+    key="$1"
+
+    case $key in
+        -d|--debug)
+        DEBUG="1"
+        shift # past argument
+        ;;
+        -dr|--dryrun)
+        DRYRUN="1"
+        shift # past argument
+        ;;
+        *)    # unknown option
+        POSITIONAL+=("$1") # save it in an array for later
+        shift # past argument
+        ;;
+    esac
+    done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+# -- Commands
+_debug "ARGS: $@"
+DOMAIN=$1
+CMD=$2
+ID=$3
+
+# -- Dryrun
+if [[ $DRYRUN = "1" ]]; then
+	_error "Dryrun not implemented yet"
+fi
 
 # -- Check for .cloudflare credentials.
 if [[ -f ~/.cloudflare ]]; then
