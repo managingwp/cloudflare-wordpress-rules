@@ -414,7 +414,7 @@ CF_PROTECT_WP () {
 
 	# -- Challenge Outside of GEO (JS Challenge)	
 	_creating "  Challenge Outside of GEO (JS Challenge)"
-	CF_CREATE_FILTER '(ip.geoip.country ne \"CA\")'
+	CF_CREATE_FILTER '(not ip.geoip.country in {\"CA\" \"US\"})'
 	if [[ $? == "0" ]]; then
 		CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "js_challenge" "5" "Challenge Outside of GEO (JS Challenge)"
 	fi

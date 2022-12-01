@@ -1,14 +1,16 @@
 # Cloudflare WordPress Rules
 This repository holds common Cloudflare WordPress Rules.
 
-# [cloudflare-protect-wordpress.md](cloudflare-protect-wordpress.md)
+# [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
 * Contains all of the Cloudflare WAF expression rules that I've created.
 * It's regularly updated.
 * You can copy and paste the contents into the Cloudflare expression builder.
 
+# [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
+* Contains Cloudflare cache rules expressions.
 
 # [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
-* Bash script to create Cloudflare WAF rules on a domain name through the Cloudflare API.
+* Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
 * In beta, so use at your own risk.
 
 ## Usage
@@ -21,6 +23,7 @@ Options
 
 Commands
    create-rules <profile>     - Create rules on domain
+   create-cache-rules         - Not implemented yet, coming soon.
    get-rules                  - Get rules
    delete-rule                - Delete rule
    delete-filter <id>         - Delete rule ID on domain
