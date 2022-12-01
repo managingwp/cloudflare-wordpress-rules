@@ -16,7 +16,7 @@
 
 # Rule 5 – Challenge Outside of GEO (JS Challenge)
 * Action: JS Challenge
-* ```(ip.geoip.country ne "CA")```
+* ```(not ip.geoip.country in {"CA" "US"})```
 
 # Common IPS
 ## ShortPixel
