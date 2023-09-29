@@ -19,64 +19,51 @@ GREENBG="\033[0;42m"
 DARKGREYBG="\033[0;100m"
 ECOL="\033[0;0m"
 
-# -- _error
-_error () {
-	echo -e "${RED}** ERROR ** - $@ ${ECOL}"
-}
+# -- messages
+_error () { echo -e "${RED}** ERROR ** - ${*} ${ECOL}"; }
+_success () { echo -e "${GREEN}** SUCCESS ** - ${*} ${ECOL}"; }
+_running () { echo -e "${BLUEBG} * ${*}${ECOL}"; }
+_creating () { echo -e "${DARKGREYBG}${*}${ECOL}"; }
+_separator () { echo -e "${YELLOWBG}****************${ECOL}"; }
+_dryrun () { echo -e "${CYAN}** DRYRUN: ${*$}{ECOL}"; }
 
-_success () {
-    echo -e "${GREEN}** SUCCESS ** - $@ ${ECOL}"
-}
 
-_running () {
-	echo -e "${BLUEBG} * ${@}${ECOL}"
-}
-
-_creating () {
-	echo -e "${DARKGREYBG}${@}${ECOL}"
-}
-
-_separator () {
-    echo -e "${YELLOWBG}****************${ECOL}"
-}
-
-_debug () {
+# -- debug
+_debug () { 
 	if [[ $DEBUG == "1" ]]; then
-		echo -e "${CYAN}** DEBUG: $@${ECOL}"
+		echo -e "${CYAN}** DEBUG: ${*}${ECOL}"
 	fi
-}
-_dryrun () {
-	echo -e "${CYAN}** DRYRUN: $@${ECOL}"
 }
 
 _debug_json () {
     if [ -f $SCRIPT_DIR/.debug ]; then
-        echo $@ | jq
+        echo "${*}" | jq
     fi
 }
 
+# -- usage
 usage () {
-	echo "Usage: $SCRIPT_NAME (-d|-dr) <domain.com> <command>"
+	echo "Usage: $SCRIPT_NAME (-d|-dr) <command>"
 	echo ""
 	echo " Options"
 	echo "   -d                         - Debug mode"
 	echo "   -dr                        - Dry run, don't send to Cloudflare"
 	echo ""
 	echo " Commands"
-	echo "   create-rules <profile>     - Create rules on domain using <profile> if none specified default profile will be used"
-	echo "   get-rules                  - Get rules"
-	echo "   delete-rule                - Delete rule"
-	echo "   delete-filter <id>         - Delete rule ID on domain"
-	echo "   get-filters                - Get Filters"
-	echo "   get-filter-id <id>         - Get Filter <id>"
+	echo "   create-rules <domain> <profile>    - Create rules on domain using <profile> if none specified default profile will be used"
+	echo "   get-rules <domain>                 - Get rules"
+	echo "   delete-rule <id>                   - Delete rule"
+	echo "   delete-filter <id>                 - Delete rule ID on domain"
+	echo "   get-filters <id>                   - Get Filters"
+	echo "   get-filter-id <id>                 - Get Filter <id>"
 	echo ""
 	echo " Profiles - See profiles directory for examples ** Not yet functional**"
-	echo "   default                  - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
+	echo "   default                            - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
 	echo ""
 	echo ""
 	echo "Examples"
-	echo "   $SCRIPT_NAME testdomain.com delete-filter 32341983412384bv213v"
-	echo "   $SCRIPT_NAME testdomian.com create-rules"
+	echo "   $SCRIPT_NAME delete-filter domain.com 32341983412384bv213v"
+	echo "   $SCRIPT_NAME create-rules domain.com"
 	echo ""
 	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
 	echo ""
@@ -406,7 +393,7 @@ CF_PROTECT_WP () {
 	
 	# --  Allow Good Bots and User Agent/URI/URL Query (Allow) - Priority 4
 	_creating "  Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"umbrella bot\")'
+	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"umbrella bot\") or (http.user_agent contains \"InfiniteWP\") or (http.user_agent contains \"WPUmbrella\")'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)"
 	fi
@@ -457,9 +444,9 @@ cf_create_profile () {
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # -- Commands
-_debug "ARGS: $@"
-DOMAIN=$1
-CMD=$2
+_debug "ARGS: ${*}@"
+DOMAIN=$2
+CMD=$1
 PROFILE=$3
 ID=$3
 
@@ -468,23 +455,46 @@ if [[ $DRYRUN = "1" ]]; then
 	_error "Dryrun not implemented yet"
 fi
 
-# -- Check for .cloudflare credentials.
-if [[ -f ~/.cloudflare ]]; then
-    source ~/.cloudflare
+# -- Check for .cloudflare credentials
+if [ ! -f "$HOME/.cloudflare" ]; then
+		echo "No .cloudflare file."
+	if [ -z "$CF_ACCOUNT" ]; then
+		_error "No \$CF_ACCOUNT set."
+		usage
+		exit 1
+	fi
+	if [ -z "$CF_TOKEN" ]; then
+		_error "No \$CF_TOKEN set."
+		usage
+		exit 1
+	fi
 else
-    _error "Can't find $HOME/.cloudflare exiting."
-    exit 1
+	_debug "Found .cloudflare file."
+	source $HOME/.cloudflare
+	_debug "Sourced CF_ACCOUNT: $CF_ACCOUNT CF_TOKEN: $CF_TOKEN"
+        if [ -z "$CF_ACCOUNT" ]; then
+                _error "No \$CF_ACCOUNT set in config."
+                usage
+				exit 1
+        fi
+        if [ -z "$CF_TOKEN" ]; then
+                _error "No \$CF_TOKEN set in config.
+
+        $USAGE"
+        fi
 fi
 
 # -- Show usage if no domain provided
 if [[ -z $DOMAIN ]]; then
     usage
+    _error "No domain provided"
     exit 1
 fi
 
 # -- Check $CMD
 if [[ -z $CMD ]]; then
 	usage
+	_error "No command provided"
 	exit 1
 # -- create-rules
 elif [[ $CMD == "create-rules" ]]; then
@@ -522,6 +532,7 @@ elif [[ $CMD == "get-filter-id" ]]; then
     _running "  Running Get filter ID $3"
     if [[ -z $ID ]]; then
     	usage
+    	_error "No rule ID provided"
     	exit 1
     else
         CF_GET_ZONEID $DOMAIN
@@ -531,6 +542,7 @@ elif [[ $CMD == "get-filter-id" ]]; then
 elif [[ $CMD == "delete-filter" ]]; then
 	if [[ -z $ID ]]; then
 		usage
+		_error "No rule ID provided"
 		exit 1
 	else
 		_running "  Running Delete filter"
@@ -539,5 +551,6 @@ elif [[ $CMD == "delete-filter" ]]; then
 	fi
 else
 	usage 
+	_error "No command provided"
 	exit 1
 fi

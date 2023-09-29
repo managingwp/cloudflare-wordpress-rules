@@ -1,5 +1,5 @@
 # Cloudflare WordPress Rules
-This repository holds common Cloudflare WordPress Rules.
+This repository holds common Cloudflare WordPress Rules and supporting scripts.
 
 # [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
 * Contains all of the Cloudflare WAF expression rules that I've created.
@@ -13,7 +13,9 @@ This repository holds common Cloudflare WordPress Rules.
 * Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
 * In beta, so use at your own risk.
 
-## Usage
+# Scripts
+## Script cloudflare-wordpress-rules.sh
+### Usage
 ```
 Usage: cloudflare-wordpress-rules (-d|-dr) <domain.com> <command>
 
@@ -37,7 +39,35 @@ Examples
    cloudflare-wordpress-rules testdomain.com delete-filter 32341983412384bv213v
    cloudflare-wordpress-rules testdomian.com create-rules
 
-Cloudflare API Credentials should be placed in $HOME/.cloudflare
+Environment variables:
+    CF_ACCOUNT  -  email address (as -E option)
+    CF_TOKEN    -  API token (as -T option)
+
+Configuration file for credentials:
+    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT and CF_TOKEN defined.
+
+    CF_ACCOUNT=example@example.com
+    CF_TOKEN=<token>
 
 Version: 0.0.1
+```
+## Script cloudflare-spc.sh
+This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin.
+### Usage
+```
+Usage: ./cloudflare-spc.sh create <zone/domainname> <token-name> | list
+	Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
+
+	create <zone> <token-name>         - Creates a token called <token name> for <zone>
+    list                               - Lists account tokens.
+
+Environment variables:
+    CF_ACCOUNT  -  email address (as -E option)
+    CF_TOKEN    -  API token (as -T option)
+
+Configuration file for credentials:
+    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT and CF_TOKEN defined.
+
+    CF_ACCOUNT=example@example.com
+    CF_TOKEN=<token>
 ```
