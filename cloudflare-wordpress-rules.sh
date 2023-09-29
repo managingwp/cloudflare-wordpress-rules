@@ -2,9 +2,9 @@
 
 # -- variables
 # ------------
-VERSION=0.0.1
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 SCRIPT_NAME="cloudflare-wordpress-rules"
+VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
 PROFILE_DIR="${SCRIPT_DIR}/profiles"
@@ -393,7 +393,7 @@ CF_PROTECT_WP () {
 	
 	# --  Allow Good Bots and User Agent/URI/URL Query (Allow) - Priority 4
 	_creating "  Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"umbrella bot\") or (http.user_agent contains \"InfiniteWP\") or (http.user_agent contains \"WPUmbrella\")'
+	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"WPUmbrella\")'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)"
 	fi

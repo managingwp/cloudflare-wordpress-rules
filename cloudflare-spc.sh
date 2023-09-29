@@ -6,35 +6,37 @@
 # ==================================
 # -- Variables
 # ==================================
-VERSION=0.1.0
+# Get Version from VERSION located in root directory
 SCRIPT_NAME=cloudflare-spc
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 API_URL="https://api.cloudflare.com"
 DEBUG="0"
 DRYRUN="0"
 REQUIRED_APPS=("jq" "column")
 
 # -- Colors
-RED="\033[0;31m"
-GREEN="\033[0;32m"
-CYAN="\033[0;36m"
-BLUEBG="\033[0;44m"
-YELLOWBG="\033[0;43m"
-GREENBG="\033[0;42m"
-DARKGREYBG="\033[0;100m"
-ECOL="\033[0;0m"
+NC='\e[0m' # No Color
+CRED='\e[0;31m'
+CGREEN='\e[0;32m'
+CBLUEBG='\e[44m\e[97m'
+CCYAN='\e[0;36m'
+CDARK_GRAYBG='\e[100m\e[97m'
 
-# -- _error
-_error () {	echo -e "${RED}** ERROR ** - $@ ${ECOL}"; }
-_success () { echo -e "${GREEN}** SUCCESS ** - $@ ${ECOL}"; }
-_running () { echo -e "${BLUEBG}${@}${ECOL}"; }
-_creating () { echo -e "${DARKGREYBG}${@}${ECOL}"; }
-_separator () { echo -e "${YELLOWBG}****************${ECOL}"; }
+# ==================================
+# -- Core Functions
+# ==================================
 
-_debug () {	
-	if [[ $DEBUG == "1" ]]; then
-		echo -e "${CYAN}** DEBUG: $@${ECOL}"
-	fi
+# -- messages
+_error () { echo -e "${CRED}** ERROR ** - ${*} ${NC}"; } # _error
+_success () { echo -e "${CGREEN}** SUCCESS ** - ${*} ${NC}"; } # _success
+_running () { echo -e "${CBLUEBG}${*}${NC}"; } # _running
+_creating () { echo -e "${CDARK_GRAYBG}${*}${NC}"; }
+_separator () { echo -e "${CYELLOWBG}****************${NC}"; }
+_debug () {
+    if [[ $DEBUG == "1" ]]; then
+        echo -e "${CCYAN}** DEBUG ${*}${NC}"
+    fi
 }
 
 # -- debug_jsons
@@ -45,114 +47,166 @@ _debug_json () {
     fi
 }
 
-# -- Check for .cloudflare credentials
-if [ ! -f "$HOME/.cloudflare" ];then
-		echo "No .cloudflare file."
-	if [ -z "$CF_ACCOUNT" ];then
-		_error "No \$CF_ACCOUNT set."
-		HELP usage
-		_die
-	fi
-	if [ -z "$CF_4TOKEN" ]; then
-		_error "No \$CF_4TOKEN set."
-		HELP usage
-		_die
-	fi
-else
-	_debug "Found .cloudflare file."
-	source $HOME/.cloudflare
-	_debug "Sourced CF_ACCOUNT: $CF_ACCOUNT CF_4TOKEN: $CF_4TOKEN"
+# TODO a method to be able to specify different credentials loaded from shell variable or .cloudflare file.
 
-        if [ -z "$CF_ACCOUNT" ]; then
-                _error "No \$CF_ACCOUNT set in config."
-                HELP usage
-				_die
-        fi
-        if [ -z "$CF_4TOKEN" ]; then
-                _error "No \$CF_4TOKEN set in config.
-
-        $USAGE"
-        fi
-fi
-
-# -- parse args
-POSITIONAL=()
-while [[ $# -gt 0 ]]
-do
-key="$1"
-
-case $key in
-    create|--create)
-    CMD="create"
-    shift # past argument
-    ;;
-    list|--list)
-    CMD="list"
-    shift # past argument
-    ;;
-    verify|--verify)
-    CMD="verify"
-    shift # past argument
-    ;;
-    -d|--debug)
-    DEBUG="1"
-    shift # past argument
-    ;;
-    -z|--zone)
-    DOMAIN_NAME="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    -t|--token)
-    TOKEN_NAME="$2"
-    shift # past argument
-    shift # past value
-    ;;
-    *)    # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift # past argument
-    ;;
-esac
-done
-set -- "${POSITIONAL[@]}" # restore positional parameters
-
-# Set API token and email
-EMAIL=$CF_ACCOUNT
-
-# -- usage
+# ==================================
+# -- Usage
+# ==================================
 usage () {
     echo \
-"Usage: ./cloudflare-spc.sh [create <zone> <token-name> | list]
+"Usage: ./${SCRIPT_NAME}.sh [create <zone> <token-name> | list]
 
 Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
 
-Commands: 
-    create -z <zone> -t <token-name>         - Creates a token called <token name> for <zone>
-    list                                     - Lists account tokens.
-    veriy <token>                            - Verify token.
+Commands:
+    create-token <domain-name> <token-name> (-z|-a|-t|-ak)           - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
+    list -t [token] | -a [account] -ak [api-key]                     - Lists account tokens.
+    test-creds -t [token] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
+    test-token <token>                                               - Test created token against Cloudflare API.
 
 Options:
-    -z          - Zone as domain name.
-    -t          - Token name for new token
-    -d          - Debug
-    
+    -z|--zone [zoneid]                - Set zoneid
+    -a|--account [name@email.com]     - Cloudflare account email address
+    -t|--token [token]                - API Token to use for creating the new token.
+    -ak|--apikey [apikey]             - API Key to use for creating the new token.
+    -d|--debug                        - Debug mode
+    -dr|--dryrun                      - Dry run mode
+
 Environment variables:
-    CF_ACCOUNT   -  Cloudflare Email address
-    CF_4TOKEN    -  Cloudflare API token
+    CF_SPC_ACCOUNT      - Cloudflare account email address
+    CF_SPC_KEY          - Cloudflare Global API Key
+    CF_SPC_TOKEN        - Cloudflare API token.
 
 Configuration file for credentials:
-    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT and CF_4TOKEN defined.
+    Create a file in \$HOME/.cloudflare with both CF_SPC_ACCOUNT and CF_SPC_KEY defined or CF_SPC_TOKEN. Only use a KEY or Token, not both.
 
-    CF_ACCOUNT=example@example.com
-    CF_4TOKEN=<token>
-    "
+    CF_SPC_ACCOUNT=example@example.com
+    CF_SPC_KEY=<global api key>    
+
+Version: $VERSION - DIR: $SCRIPT_DIR
+"
 }
 
-get_zone_id () {
-    curl -s -X GET \
-    "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN_NAME}" \
-    -H "Authorization: Bearer ${CF_4TOKEN}" \
-    -H "Content-Type: application/json"
+# ==================================
+# -- Functions
+# ==================================
+
+# -- pre_flight_check - Check for .cloudflare credentials
+function pre_flight_check () {
+    if [[ -n $API_TOKEN ]]; then
+        _running "Found \$API_TOKEN via CLI using for authentication/."        
+        API_TOKEN=$CF_SPC_TOKEN
+    elif [[ -n $API_ACCOUNT ]]; then
+        _running "Found \$API_ACCOUNT via CLI using as authentication."                
+        if [[ -n $API_APIKEY ]]; then
+            _running "Found \$API_APIKEY via CLI using as authentication."                        
+        else
+            _error "Found API Account via CLI, but no API Key found, use -ak...exiting"
+            exit 1
+        fi
+    elif [[ -f "$HOME/.cloudflare" ]]; then
+            _debug "Found .cloudflare file."
+            # shellcheck source=$HOME/.cloudflare
+            source "$HOME/.cloudflare"
+            
+            # If $CF_SPC_ACCOUNT and $CF_SPC_KEY are set, use them.
+            if [[ $CF_SPC_TOKEN ]]; then
+                _debug "Found \$CF_SPC_TOKEN in \$HOME/.cloudflare"
+                API_TOKEN=$CF_SPC_TOKEN
+            elif [[ $CF_SPC_ACCOUNT && $CF_SPC_KEY ]]; then
+                _debug "Found \$CF_SPC_ACCOUNT and \$CF_SPC_KEY in \$HOME/.cloudflare"
+                API_ACCOUNT=$CF_SPC_ACCOUNT
+                API_APIKEY=$CF_SPC_KEY
+            else
+                _error "No \$CF_TOKEN exiting"
+                exit 1
+            fi 
+    else
+        _error "Can't find \$HOME/.cloudflare, and no CLI options provided."
+    fi
+
+    # -- Required apps
+    for app in "${REQUIRED_APPS[@]}"; do
+        if ! command -v $app &> /dev/null; then
+            _error "$app could not be found, please install it."
+            exit 1
+        fi
+    done
+}
+
+# -- cf_api <$REQUEST> <$API_PATH>
+function cf_api() {    
+    # -- Run cf_api with tokens
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Running cf_api() with ${*}"
+    
+    if [[ -n $API_TOKEN ]]; then
+        _running "Running cf_api with Cloudflare Token"
+        CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
+        _debug "Using \$API_TOKEN as token. \$CURL_HEADERS: ${CURL_HEADERS[*]}"
+        REQUEST="$1"
+        API_PATH="$2"
+        CURL_OUTPUT=$(mktemp)    
+    elif [[ -n $API_ACCOUNT ]]; then        
+            _running "Running cf_api with Cloudflare API Key"
+            CURL_HEADERS=("-H" "X-Auth-Key: ${API_APIKEY}" -H "X-Auth-Email: ${API_ACCOUNT}")
+            _debug "Using \$API_APIKEY as token. \$CURL_HEADERS: ${CURL_HEADERS[*]}"
+            REQUEST="$1"
+            API_PATH="$2"
+            CURL_OUTPUT=$(mktemp)
+    else
+        _error "No API Token or API Key found...major error...exiting"
+        exit 1
+    fi
+	
+    _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]}""
+    CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$REQUEST" \
+        --url "${API_URL}${API_PATH}" \
+        "${CURL_HEADERS[@]}" \
+        --output "$CURL_OUTPUT" "${EXTRA[@]}")
+    API_OUTPUT=$(<"$CURL_OUTPUT")
+    _debug_json "$API_OUTPUT"
+    rm $CURL_OUTPUT    
+
+		
+	if [[ $CURL_EXIT_CODE == "200" ]]; then
+	    MESG="Success from API: $CURL_EXIT_CODE"
+        _debug "$MESG"
+        _debug "$API_OUTPUT"    
+	else
+        MESG="Error from API: $CURL_EXIT_CODE"
+        _error "$MESG"
+        _debug "$API_OUTPUT"
+    fi
+}
+
+# -- test_creds $ACCOUNT $API_KEY
+function test_creds () {
+    if [[ -n $API_TOKEN ]]; then
+        _debug "function:${FUNCNAME[0]}"
+        _running "Testing credentials via CLI"
+        cf_api GET /client/v4/user/tokens/verify
+        API_OUTPUT=$(echo $API_OUTPUT | jq '.messages[0].message' )
+        [[ $CURL_EXIT_CODE == "200" ]] && _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+    elif [[ -n $API_APIKEY ]]; then
+        _debug "function:${FUNCNAME[0]}"
+        _running "Testing credentials via CLI"
+        cf_api GET /client/v4/user
+        API_OUTPUT=$(echo $API_OUTPUT | jq '.messages[0].message' )
+        [[ $CURL_EXIT_CODE == "200" ]] && _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+    else
+        _error "No API Token or API Key found, exiting"
+        exit 1
+    fi
+}
+
+# -- test_api_token $TOKEN
+function test-token () {    
+    _debug "function:${FUNCNAME[0]}"
+    _running "Testing token via CLI"        
+    cf_api GET /client/v4/user/tokens/verify
+    API_OUTPUT=$(echo $API_OUTPUT | jq '.messages[0].message' )
+    [[ $CURL_EXIT_CODE == "200" ]] && _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
 }
 
 # -- get_zone_id
@@ -162,51 +216,39 @@ function get_zone_id () {
     cf_api GET /client/v4/zones?name=${DOMAIN_NAME}
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
-        _success "Got ZoneID ${ZONE_ID} for ${DOMAIN_NAME}"        
+        if [[ $ZONE_ID != "null" ]]; then            
+            _success "Got ZoneID ${ZONE_ID} for ${DOMAIN_NAME}"
+        else
+            _error "Couldn't get ZoneID, using -z to provide ZoneID or give access read:zone access to your token"
+            echo "$MESG - $AP_OUTPUT"
+            exit 1
+        fi
     else
-        _error "Couldn't get ZoneID, using -z to provide ZoneID or give access read:zone access to your token"
+        _error "Couldn't get ZoneID, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token"
         echo "$MESG - $AP_OUTPUT"
         exit 1
     fi
 }
-
-# get_permissions
+ 
+# -- get_permissions
 get_permissions () {
     _debug "Running get_permissions"
-    curl -s -X GET \
-    "https://api.cloudflare.com/client/v4/user/tokens/permission_groups" \
-    -H "Authorization: Bearer ${CF_4TOKEN}" \
-    -H "Content-Type: application/json"
+    cf_api GET /client/v4/user/tokens/permission_groups
 }
 
-# list_tokens
+# -- list_tokens
 list_tokens () {
     _debug "Running list_tokens"
-    curl -s -X GET \
-    "https://api.cloudflare.com/client/v4/user/tokens" \
-    -H 'Authorization: Bearer '${CF_4TOKEN}'' \
-    -H 'Content-Type: application/json' | jq
-}
-
-# verify_tokens
-verify_tokens () {
-	curl -s -X GET \
-	"https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer ${1}"
+    cf_api GET /client/v4/user/tokens
 }
 
 # -- create_token
 create_token () {
     _debug "function:${FUNCNAME[0]}" 
     echo "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"
-	
-	_debug 'curl -s -X POST "https://api.cloudflare.com/client/v4/user/tokens" \
-     -H "Authorization: Bearer '"${CF_4TOKEN}'" \
-     -H "Content-Type: application/json"
-	
-    NEW_API_TOKEN_OUTPUT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/user/tokens" \
-     -H "Authorization: Bearer ${CF_4TOKEN}" \
-     -H "Content-Type: application/json" \
+    [[ -z $ZONE_ID ]] && get_zone_id || _debug "Using \$ZONE_ID via cli"
+    ZONE_ID_JSON=("com.cloudflare.api.account.zone.${ZONE_ID}")
+    EXTRA=(-H 'Content-Type: application/json' \
      --data '
  {
  	"name": "'${DOMAIN_NAME}' '${TOKEN_NAME}'",
@@ -266,37 +308,107 @@ create_token () {
     fi
 }
 
-# -------
-# -- Main
-# -------
 
-# -- list
-if [[ $CMD == 'list' ]]; then  
+# ==================================
+# -- Arguments
+# ==================================
+
+# -- check if parameters are set
+_debug "PARAMS: ${*}"
+if [[ -z ${*} ]];then
+	usage
+	exit 1
+fi
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -d|--debug)
+    DEBUG="1"
+    shift # past argument
+    ;;
+    -dr|--dryrun)
+    DRYRUN="1"
+    shift # past argument
+    ;;
+    -z|--zoneid)
+    ZONE_ID="$2"
+    shift # past argument
+    shift # past variable
+    ;;
+    -a|--account)
+    API_ACCOUNT="$2"
+    shift # past argument
+    shift # past variable
+    ;;
+    -t|--token)
+    API_TOKEN="$2"    
+    shift # past argument
+    shift # past variable
+    ;;    
+    -ak|--apikey)
+    API_APIKEY="$2"
+    shift # past argument
+    shift # past variable  
+    ;;  
+    create-token|--create-token)
+    CMD="create-token"
+    shift # past argument
+    ;;
+    list|--list)
+    CMD="list"
+    shift # past argument
+    ;;
+    test-creds|--test-creds)
+    CMD="test-creds"
+    shift # past argument
+    ;;
+    test-token|--test-token)
+    CMD="test-token"
+    shift # past argument
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+# ==================================
+# -- Main Loop
+# ==================================
+
+# Set zone ID for domain.com
+_debug "Running: \$CMD: $CMD"
+DOMAIN_NAME=${1}
+TOKEN_NAME=${2}
+
+# -- Debug Enabled
+if [[ $DEBUG == "1" ]]; then
+    _debug "Debug enabled"
+fi
+
+# -- pre-flight check
+_debug "Pre-flight_check"
+[[ $CMD != "test-token" ]] && pre_flight_check
+
+# -- Run
+if [[ $CMD == 'create-token' ]]; then
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
+    create_token 
+elif [[ $CMD == 'list' ]]; then
     list_tokens
-# -- verify
-elif [[ $CMD == 'verify' ]]; then
-	if [[ -z $1 ]]; then
-		_error "Please provide token to verify"
-		exit 1
-	else
-		verify_token
-	fi
-# -- create
-elif [[ $CMD == 'create' ]]; then
-    if [[ -z $DOMAIN_NAME ]]; then
-    	_error "Specify zone using -z"
-    	exit 1
-    elif [[ -z $TOKEN_NAME ]]; then
-		_error "Specify token name using -t"
-        usage
-        exit 1
-    else
-	    ZONE_ID=$(get_zone_id | jq -r '.result[0].id')
-	    _debug "\$ZONE_ID = $ZONE_ID"
-	    create_token
-	fi
+elif [[ $CMD == 'test-creds' ]]; then
+    [[ $2 ]] && test_creds $2 || test_creds
+elif [[ $CMD == 'test-token' ]]; then
+    test_token $1
 else
     usage
-    _error "Unknown command $1"
+    _error "No command provided - $1"
     exit 1
 fi
