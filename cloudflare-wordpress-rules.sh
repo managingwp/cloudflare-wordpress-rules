@@ -2,21 +2,22 @@
 
 # -- variables
 # ------------
+VERSION=0.0.1
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_NAME="cloudflare-wordpress-rules"
 DEBUG="0"
-DOMAIN=$1
-CMD=$2
-ID=$3
+DRYRUN="0"
+PROFILE_DIR="${SCRIPT_DIR}/profiles"
 
 # -- Colors
-RED="\e[31m"
-GREEN="\e[32m"
-BLUEBG="\e[44m"
-YELLOWBG="\e[43m"
-GREENBG="\e[42m"
-DARKGREYBG="\e[100m"
-ECOL="\e[0m"
-
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+CYAN="\033[0;36m"
+BLUEBG="\033[0;44m"
+YELLOWBG="\033[0;43m"
+GREENBG="\033[0;42m"
+DARKGREYBG="\033[0;100m"
+ECOL="\033[0;0m"
 
 # -- _error
 _error () {
@@ -28,7 +29,7 @@ _success () {
 }
 
 _running () {
-	echo -e "${BLUEBG}${@}${ECOL}"
+	echo -e "${BLUEBG} * ${@}${ECOL}"
 }
 
 _creating () {
@@ -40,9 +41,12 @@ _separator () {
 }
 
 _debug () {
-	if [ -f $SCRIPT_DIR/.debug ]; then
-		echo "DEBUG: $@"
+	if [[ $DEBUG == "1" ]]; then
+		echo -e "${CYAN}** DEBUG: $@${ECOL}"
 	fi
+}
+_dryrun () {
+	echo -e "${CYAN}** DRYRUN: $@${ECOL}"
 }
 
 _debug_json () {
@@ -52,25 +56,31 @@ _debug_json () {
 }
 
 usage () {
-	echo "$0 <domain.com> <cmd> <id>"
+	echo "Usage: $SCRIPT_NAME (-d|-dr) <domain.com> <command>"
 	echo ""
-	echo "Commands"
-	echo "   create-rules <profile>     - Create rules on domain"
+	echo " Options"
+	echo "   -d                         - Debug mode"
+	echo "   -dr                        - Dry run, don't send to Cloudflare"
+	echo ""
+	echo " Commands"
+	echo "   create-rules <profile>     - Create rules on domain using <profile> if none specified default profile will be used"
 	echo "   get-rules                  - Get rules"
 	echo "   delete-rule                - Delete rule"
 	echo "   delete-filter <id>         - Delete rule ID on domain"
 	echo "   get-filters                - Get Filters"
 	echo "   get-filter-id <id>         - Get Filter <id>"
 	echo ""
-	echo "Profiles"
-	echo "   protect-wp                 - The 5 golden rules, see https://github.com/managingwp/cloudflare-wordpress-rules"
+	echo " Profiles - See profiles directory for examples ** Not yet functional**"
+	echo "   default                  - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
+	echo ""
 	echo ""
 	echo "Examples"
-	echo "   $0 testdomain.com delete-filter 32341983412384bv213v"
-	echo "   $0 testdomian.com create-rules"
+	echo "   $SCRIPT_NAME testdomain.com delete-filter 32341983412384bv213v"
+	echo "   $SCRIPT_NAME testdomian.com create-rules"
 	echo ""
 	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
 	echo ""
+	echo "Version: $VERSION"
 }
 
 # -- Get domain zoneid
@@ -103,48 +113,60 @@ CF_GET_ZONEID () {
 # -----------------
 # CF_CREATE_FILETER $CF_EXPRESSION
 CF_CREATE_FILTER () {
-	echo "  - Creating Filter - $1"
-	CF_CREATE_FILTER_CURL=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters" \
+	CF_EXPRESSION=$1
+	echo "  - Creating Filter - ${CF_EXPRESSION} on ${CF_ZONEID}"
+	# -- create_filter curl
+	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters"
+	CF_CREATE_FILTER_CURL=$(curl -s -X POST ${CF_API_ENDPOINT} \
 	-H "X-Auth-Email: ${CF_ACCOUNT}" \
 	-H "X-Auth-Key: ${CF_TOKEN}" \
 	-H "Content-Type: application/json" \
 	-d '[
   { 
-    "expression": "'"$1"'"
+    "expression": "'"$CF_EXPRESSION"'"
   }
   ]')
-	CF_CREATE_FILTER_RESULT=$( echo $CF_CREATE_FILTER_CURL | jq -r '.success')
-    if [[ $CF_CREATE_FILTER_RESULT == "false" ]]; then
-		# -- Grabbing error message.
-		CF_CREATE_FILTER_ERROR=$( echo $CF_CREATE_FILTER_CURL | jq -r '.errors[] | "\(.message)"')
+	
+	_debug "${CF_CREATE_FILTER_CURL}"
+	
+	if [[ $DRYRUN == "1" ]];then
+		_dryrun " ** DRYRUN: URL = ${CF_API_ENDPOINT}"
+		_dryrun " ** DRYRUN: expression = ${CF_EXPRESSION}"
+	else
+		# -- Confirm successful command
+		CF_CREATE_FILTER_RESULT=$( echo $CF_CREATE_FILTER_CURL | jq -r '.success')
+	    if [[ $CF_CREATE_FILTER_RESULT == "false" ]]; then
+			# -- Grabbing error message.
+			CF_CREATE_FILTER_ERROR=$( echo $CF_CREATE_FILTER_CURL | jq -r '.errors[] | "\(.message)"')
 
-		# -- Duplicate filter found
-		if [[ $CF_CREATE_FILTER_ERROR == "config duplicates an already existing config" ]]; then
-			_error "A filter exists with this filter, skipping"
-			CF_FILTER_ID=$( echo $CF_CREATE_FILTER_CURL | jq -r '.errors[] | "\(.meta.id)"')			
-			_error "Error ID = $CF_FILTER_ID"
-			CF_GET_FILTER_ID $CF_FILTER_ID
-			while true; do
-				read -p "Delete above mentioned filter $CF_FILTER_ID? (y|n)" yn
-			    case $yn in
-			        [Yy]* ) CF_DELETE_FILTER $CF_FILTER_ID; break;;
-			        [Nn]* ) echo "  - Skipping";break;;
-			        * ) echo "Please answer yes or no.";;
-		    	esac
-			done
-			return 1
-		else
-			_error "Error creating Cloudflare filter"
-	        exit 1
+			# -- Duplicate filter found
+			if [[ $CF_CREATE_FILTER_ERROR == "config duplicates an already existing config" ]]; then
+				_error "A filter exists with this filter, skipping"
+				CF_FILTER_ID=$( echo $CF_CREATE_FILTER_CURL | jq -r '.errors[] | "\(.meta.id)"')			
+				_error "Error ID = $CF_FILTER_ID"
+				CF_GET_FILTER_ID $CF_FILTER_ID
+				while true; do
+					read -p "Delete above mentioned filter $CF_FILTER_ID? (y|n)" yn
+				    case $yn in
+				        [Yy]* ) CF_DELETE_FILTER $CF_FILTER_ID; break;;
+				        [Nn]* ) echo "  - Skipping";break;;
+				        * ) echo "Please answer yes or no.";;
+			    	esac
+				done
+				return 1
+			else
+				_error "Error creating Cloudflare filter"
+		        exit 1
+		    fi
+	    else
+	    	CF_CREATE_FILTER_ID=$(echo $CF_CREATE_FILTER_CURL | jq -r '.result[] | "\(.id)"')
+	    	if [[ -z $CF_CREATE_FILTER_ID ]]; then
+    			_error "No Cloudflare filter id provided, api error"
+    			exit 1
+    		else
+	    		_success "  - Successfully Created Cloudflare Filter ID - $CF_CREATE_FILTER_ID"
+    		fi
 	    fi
-    else
-    	CF_CREATE_FILTER_ID=$(echo $CF_CREATE_FILTER_CURL | jq -r '.result[] | "\(.id)"')
-    	if [[ -z $CF_CREATE_FILTER_ID ]]; then
-    		_error "No Cloudflare filter id provided, api error"
-    		exit 1
-    	else
-    		_success "  - Successfully Created Cloudflare Filter ID - $CF_CREATE_FILTER_ID"
-    	fi
     fi
 }
 
@@ -155,14 +177,17 @@ CF_CREATE_RULE () {
 	ACTION=$2
 	PRIORITY=$3
 	DESCRIPTION=$4
-	
-	echo "  - Creating Rule with ID:$ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-	CF_CREATE_RULE_CURL=$(curl -s -X POST \
-	"https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules" \
-	-H "X-Auth-Email: ${CF_ACCOUNT}" \
-	-H "X-Auth-Key: ${CF_TOKEN}" \
-	-H "Content-Type: application/json" \
--d '[
+
+	echo " - Creating Rule with ID:$ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules"
+    if [[ $DRYRUN == "1" ]]; then
+        _dryrun "URL = ${CF_API_ENDPOINT}"
+    else
+	    CF_CREATE_RULE_CURL=$(curl -s -X POST "${CF_API_ENDPOINT}" \
+		-H "X-Auth-Email: ${CF_ACCOUNT}" \
+		-H "X-Auth-Key: ${CF_TOKEN}" \
+		-H "Content-Type: application/json" \
+	-d '[
   {
     "filter": {
       "id": "'"${ID}"'"
@@ -172,15 +197,16 @@ CF_CREATE_RULE () {
     "description": "'"${DESCRIPTION}"'"
   }
 ]')
-	_debug CF_CREATE_RULE_CURL
-	CF_CREATE_RULE_RESULT=$( echo $CF_CREATE_RULE_CURL | jq -r '.success')
-	if [[ $CF_CREATE_RULE_RESULT == "false" ]]; then
-		_error "Error creating Cloudflare filter"
-        echo $CF_CREATE_RULE_CURL
-        exit 1
-    else
-    	echo " -- Created Rule Successfully"
-    fi	
+    
+		CF_CREATE_RULE_RESULT=$( echo $CF_CREATE_RULE_CURL | jq -r '.success')
+		if [[ $CF_CREATE_RULE_RESULT == "false" ]]; then
+		 	_error "Error creating Cloudflare filter"
+	        echo $CF_CREATE_RULE_CURL
+    	    exit 1
+	    else
+    		echo " -- Created Rule Successfully"
+	    fi	
+	fi
 }
 
 # -- Get Filters
@@ -257,6 +283,20 @@ CF_DELETE_RULE () {
 	    
     _debug_json $CF_DELETE_RULE_CURL
     echo $CF_DELETE_RULE_CURL | jq -r
+}
+
+# -- cf_profile_create <profile-name>
+cf_profile_create () {
+	PROFILE_NAME=$1
+	
+	# -- Check if profile dir exists
+	if [[ ! -d $PROFILE_DIR ]]; then
+		_error "$PROFILE_DIR doesn't exist, failing"	
+		exit 1
+	fi
+	
+	# -- Create rules
+	echo "poop"		
 }
 
 # -- Protect WordPress
@@ -374,7 +414,7 @@ CF_PROTECT_WP () {
 
 	# -- Challenge Outside of GEO (JS Challenge)	
 	_creating "  Challenge Outside of GEO (JS Challenge)"
-	CF_CREATE_FILTER '(ip.geoip.country ne \"CA\")'
+	CF_CREATE_FILTER '(not ip.geoip.country in {\"CA\" \"US\"})'
 	if [[ $? == "0" ]]; then
 		CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "js_challenge" "5" "Challenge Outside of GEO (JS Challenge)"
 	fi
@@ -383,9 +423,50 @@ CF_PROTECT_WP () {
 	_success "  Completed Protect WP profile"
 }
 
+# -- Create Profile
+cf_create_profile () {
+	echo " * Creating profile $1"
+	
+}
+
 # -------
 # -- main
 # -------
+
+# -- Parse options
+    POSITIONAL=()
+    while [[ $# -gt 0 ]]
+    do
+    key="$1"
+
+    case $key in
+        -d|--debug)
+        DEBUG="1"
+        shift # past argument
+        ;;
+        -dr|--dryrun)
+        DRYRUN="1"
+        shift # past argument
+        ;;
+        *)    # unknown option
+        POSITIONAL+=("$1") # save it in an array for later
+        shift # past argument
+        ;;
+    esac
+    done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+# -- Commands
+_debug "ARGS: $@"
+DOMAIN=$1
+CMD=$2
+PROFILE=$3
+ID=$3
+
+# -- Dryrun
+if [[ $DRYRUN = "1" ]]; then
+	_error "Dryrun not implemented yet"
+fi
 
 # -- Check for .cloudflare credentials.
 if [[ -f ~/.cloudflare ]]; then
@@ -405,22 +486,38 @@ fi
 if [[ -z $CMD ]]; then
 	usage
 	exit 1
+# -- create-rules
 elif [[ $CMD == "create-rules" ]]; then
-	_running "  Running Create rules"
+	_running "Running Create rules"
+	if [[ -z $PROFILE ]]; then
+		_running "Missing profile name, using default for rules"
+		CF_GET_ZONEID $DOMAIN
+		CF_PROTECT_WP # @ISSUE needs to be migrated
+	else
+		_running "Creating rules using profile $PROFILE"
+		cf_profile_create $PROFILE
+	fi
+# -- custom-rules
+elif [[ $CMD == "custom-rules" ]]; then
+	_running "Running custom-rules"
 	CF_GET_ZONEID $DOMAIN
-	CF_PROTECT_WP
+	cf_custom_rules $PROFILE
+# -- get-rules
 elif [[ $CMD == "get-rules" ]]; then
     _running "  Running Get rules"
     CF_GET_ZONEID $DOMAIN
     CF_GET_RULES
+# -- delete-rules
 elif [[ $CMD == "delete-rule" ]]; then
     _running "  Running Delete rule"
     CF_GET_ZONEID $DOMAIN
     CF_DELETE_RULE ${3}
+# -- get-filters
 elif [[ $CMD == "get-filters" ]]; then
 	_running "  Running Get filters"
 	CF_GET_ZONEID $DOMAIN
 	CF_GET_FILTERS
+# -- get-filter-id
 elif [[ $CMD == "get-filter-id" ]]; then
     _running "  Running Get filter ID $3"
     if [[ -z $ID ]]; then
@@ -430,6 +527,7 @@ elif [[ $CMD == "get-filter-id" ]]; then
         CF_GET_ZONEID $DOMAIN
     	CF_GET_FILTER_ID $3
     fi
+# -- delete-filter
 elif [[ $CMD == "delete-filter" ]]; then
 	if [[ -z $ID ]]; then
 		usage
