@@ -118,7 +118,7 @@ function pre_flight_check () {
                 API_ACCOUNT=$CF_SPC_ACCOUNT
                 API_APIKEY=$CF_SPC_KEY
             else
-                _error "No \$CF_TOKEN exiting"
+                _error "No \$CF_SPC_TOKEN exiting"
                 exit 1
             fi 
     else

@@ -384,8 +384,8 @@ CF_PROTECT_WP () {
 	_separator
 
 	# --  Managed Challenge /wp-admin (Managed Challenge) - Priority 3
-	_creating "  Creating Managed Challenge /wp-admin (Managed Challenge) rule"
-	CF_CREATE_FILTER '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\")'
+	_creating "  Creating Managed Challenge /wp-admin (Managed Challenge) rule"	
+	CF_CREATE_FILTER '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\" and not http.request.uri.path contains \"/wp-admin/js/password-strength-meter.min.js\")'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "managed_challenge" "3" "Managed Challenge /wp-admin (Managed Challenge)"
 	fi
