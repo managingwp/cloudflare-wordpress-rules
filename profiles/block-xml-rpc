@@ -1,0 +1,4 @@
+FILTER='(http.request.uri.query contains "ical" and cf.client.bot) or (http.request.uri.query contains "eventDisplay" and cf.client.bot) or (http.request.uri.path contains "/events" and cf.client.bot) or (http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")'
+ACTION='block'
+PRIORITY='1'
+PROFILE_NAME='Block URI Query, URL, User Agents, and IPs (Block)"'

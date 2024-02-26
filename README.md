@@ -1,20 +1,20 @@
 # Cloudflare WordPress Rules
 This repository holds common Cloudflare WordPress Rules and supporting scripts.
 
-# [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
+## [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
 * Contains all of the Cloudflare WAF expression rules that I've created.
 * It's regularly updated.
 * You can copy and paste the contents into the Cloudflare expression builder.
+* Previous Version History
 
-# [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
+## [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
 * Contains Cloudflare cache rules expressions.
 
-# [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
+# Scripts
+## [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
 * Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
 * In beta, so use at your own risk.
 
-# Scripts
-## Script cloudflare-wordpress-rules.sh
 ### Usage
 ```
 Usage: cloudflare-wordpress-rules (-d|-dr) <domain.com> <command>
@@ -51,7 +51,7 @@ Configuration file for credentials:
 
 Version: 0.0.1
 ```
-## Script cloudflare-spc.sh
+## [cloudflare-wordpress-spc.sh](cloudflare-wordpress-spc.sh)
 This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin.
 ### Usage
 ```
@@ -70,4 +70,31 @@ Configuration file for credentials:
 
     CF_ACCOUNT=example@example.com
     CF_TOKEN=<token>
+```
+
+# Configuration
+Place your Cloudflare API token in a file called `.cloudflare` in your home directory.
+
+```
+CF_ACCOUNT=""
+CF_TOKEN=""
+```
+
+If you want to use a Cloudflare API key you can use CF_KEY instead of CF_TOKEN.
+
+# Todo
+* Add more rules
+* Test key/token and return permissions.
+
+# FAQ
+
+## Run on multiple domains
+You can run the script on multiple domains by adding the domain names to the command line.
+
+```
+# Shell script to set multiple settings for one domain
+for domain in domain1.com domain2.com domain3.com
+do
+    cloudflare-wordpress-rules.sh set-settings $domain challenge_ttl 86400
+done
 ```

@@ -10,42 +10,17 @@
 SCRIPT_NAME=cloudflare-spc
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
-API_URL="https://api.cloudflare.com"
 DEBUG="0"
 DRYRUN="0"
-REQUIRED_APPS=("jq" "column")
 
-# -- Colors
-NC='\e[0m' # No Color
-CRED='\e[0;31m'
-CGREEN='\e[0;32m'
-CBLUEBG='\e[44m\e[97m'
-CCYAN='\e[0;36m'
-CDARK_GRAYBG='\e[100m\e[97m'
+# ==================================================
+# -- Libraries
+# ==================================================
+# shellcheck source=lib/cloudflare-lib.sh
+source "${SCRIPT_DIR}/lib/cloudflare-lib.sh"
+# shellcheck source=lib/core.sh
+source "${SCRIPT_DIR}/lib/core.sh"
 
-# ==================================
-# -- Core Functions
-# ==================================
-
-# -- messages
-_error () { echo -e "${CRED}** ERROR ** - ${*} ${NC}"; } # _error
-_success () { echo -e "${CGREEN}** SUCCESS ** - ${*} ${NC}"; } # _success
-_running () { echo -e "${CBLUEBG}${*}${NC}"; } # _running
-_creating () { echo -e "${CDARK_GRAYBG}${*}${NC}"; }
-_separator () { echo -e "${CYELLOWBG}****************${NC}"; }
-_debug () {
-    if [[ $DEBUG == "1" ]]; then
-        echo -e "${CCYAN}** DEBUG ${*}${NC}"
-    fi
-}
-
-# -- debug_jsons
-_debug_json () {
-    if [[ $DEBUG_JSON == "1" ]]; then
-        echo -e "${CCYAN}** Outputting JSON ${*}${NC}"
-        echo "${@}" | jq
-    fi
-}
 
 # TODO a method to be able to specify different credentials loaded from shell variable or .cloudflare file.
 
@@ -91,102 +66,13 @@ Version: $VERSION - DIR: $SCRIPT_DIR
 # -- Functions
 # ==================================
 
-# -- pre_flight_check - Check for .cloudflare credentials
-function pre_flight_check () {
-    if [[ -n $API_TOKEN ]]; then
-        _running "Found \$API_TOKEN via CLI using for authentication/."        
-        API_TOKEN=$CF_SPC_TOKEN
-    elif [[ -n $API_ACCOUNT ]]; then
-        _running "Found \$API_ACCOUNT via CLI using as authentication."                
-        if [[ -n $API_APIKEY ]]; then
-            _running "Found \$API_APIKEY via CLI using as authentication."                        
-        else
-            _error "Found API Account via CLI, but no API Key found, use -ak...exiting"
-            exit 1
-        fi
-    elif [[ -f "$HOME/.cloudflare" ]]; then
-            _debug "Found .cloudflare file."
-            # shellcheck source=$HOME/.cloudflare
-            source "$HOME/.cloudflare"
-            
-            # If $CF_SPC_ACCOUNT and $CF_SPC_KEY are set, use them.
-            if [[ $CF_SPC_TOKEN ]]; then
-                _debug "Found \$CF_SPC_TOKEN in \$HOME/.cloudflare"
-                API_TOKEN=$CF_SPC_TOKEN
-            elif [[ $CF_SPC_ACCOUNT && $CF_SPC_KEY ]]; then
-                _debug "Found \$CF_SPC_ACCOUNT and \$CF_SPC_KEY in \$HOME/.cloudflare"
-                API_ACCOUNT=$CF_SPC_ACCOUNT
-                API_APIKEY=$CF_SPC_KEY
-            else
-                _error "No \$CF_SPC_TOKEN exiting"
-                exit 1
-            fi 
-    else
-        _error "Can't find \$HOME/.cloudflare, and no CLI options provided."
-    fi
-
-    # -- Required apps
-    for app in "${REQUIRED_APPS[@]}"; do
-        if ! command -v $app &> /dev/null; then
-            _error "$app could not be found, please install it."
-            exit 1
-        fi
-    done
-}
-
-# -- cf_api <$REQUEST> <$API_PATH>
-function cf_api() {    
-    # -- Run cf_api with tokens
-    _debug "function:${FUNCNAME[0]}"
-    _debug "Running cf_api() with ${*}"
-    
-    if [[ -n $API_TOKEN ]]; then
-        _running "Running cf_api with Cloudflare Token"
-        CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
-        _debug "Using \$API_TOKEN as token. \$CURL_HEADERS: ${CURL_HEADERS[*]}"
-        REQUEST="$1"
-        API_PATH="$2"
-        CURL_OUTPUT=$(mktemp)    
-    elif [[ -n $API_ACCOUNT ]]; then        
-            _running "Running cf_api with Cloudflare API Key"
-            CURL_HEADERS=("-H" "X-Auth-Key: ${API_APIKEY}" -H "X-Auth-Email: ${API_ACCOUNT}")
-            _debug "Using \$API_APIKEY as token. \$CURL_HEADERS: ${CURL_HEADERS[*]}"
-            REQUEST="$1"
-            API_PATH="$2"
-            CURL_OUTPUT=$(mktemp)
-    else
-        _error "No API Token or API Key found...major error...exiting"
-        exit 1
-    fi
-	
-    _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]}""
-    CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$REQUEST" \
-        --url "${API_URL}${API_PATH}" \
-        "${CURL_HEADERS[@]}" \
-        --output "$CURL_OUTPUT" "${EXTRA[@]}")
-    API_OUTPUT=$(<"$CURL_OUTPUT")
-    _debug_json "$API_OUTPUT"
-    rm $CURL_OUTPUT    
-
-		
-	if [[ $CURL_EXIT_CODE == "200" ]]; then
-	    MESG="Success from API: $CURL_EXIT_CODE"
-        _debug "$MESG"
-        _debug "$API_OUTPUT"    
-	else
-        MESG="Error from API: $CURL_EXIT_CODE"
-        _error "$MESG"
-        _debug "$API_OUTPUT"
-    fi
-}
-
 # -- test_creds $ACCOUNT $API_KEY
 function test_creds () {
     if [[ -n $API_TOKEN ]]; then
         _debug "function:${FUNCNAME[0]}"
         _running "Testing credentials via CLI"
         cf_api GET /client/v4/user/tokens/verify
-        API_OUTPUT=$(echo $API_OUTPUT | jq '.messages[0].message' )
+        API_OUTPUT=$(echo "$API_OUTPUT" | jq '.messages[0].message' )
         [[ $CURL_EXIT_CODE == "200" ]] && _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
     elif [[ -n $API_APIKEY ]]; then
         _debug "function:${FUNCNAME[0]}"
@@ -208,27 +94,6 @@ function test-token () {
     API_OUTPUT=$(echo $API_OUTPUT | jq '.messages[0].message' )
     [[ $CURL_EXIT_CODE == "200" ]] && _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
 }
-
-# -- get_zone_id
-function get_zone_id () {
-    _debug "function:${FUNCNAME[0]}"
-    _running "Getting zone_id for ${DOMAIN_NAME}"
-    cf_api GET /client/v4/zones?name=${DOMAIN_NAME}
-    if [[ $CURL_EXIT_CODE == "200" ]]; then
-        ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
-        if [[ $ZONE_ID != "null" ]]; then            
-            _success "Got ZoneID ${ZONE_ID} for ${DOMAIN_NAME}"
-        else
-            _error "Couldn't get ZoneID, using -z to provide ZoneID or give access read:zone access to your token"
-            echo "$MESG - $AP_OUTPUT"
-            exit 1
-        fi
-    else
-        _error "Couldn't get ZoneID, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token"
-        echo "$MESG - $AP_OUTPUT"
-        exit 1
-    fi
-}
  
 # -- get_permissions
 get_permissions () {
@@ -242,12 +107,23 @@ list_tokens () {
     cf_api GET /client/v4/user/tokens
 }
 
-# -- create_token
+# =================================================================================================
+# -- create_token $DOMAIN $TOKEN_NAME
+# =================================================================================================
 create_token () {
     _debug "function:${FUNCNAME[0]}" 
-    echo "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"
-    [[ -z $ZONE_ID ]] && get_zone_id || _debug "Using \$ZONE_ID via cli"
-    ZONE_ID_JSON=("com.cloudflare.api.account.zone.${ZONE_ID}")
+    local DOMAIN_NAME=$1 TOKEN_NAME=$2 CF_ZONE_ID
+    EXTRA=()
+
+    _running2 "Getting Zone ID for $DOMAIN_NAME"
+    CF_ZONE_ID="$(_get_zone_id $DOMAIN_NAME)"
+    if [[ -z $CF_ZONE_ID ]]; then
+        _error "No Zone ID found for $DOMAIN_NAME"
+        exit 1
+    else
+        _success "Zone ID found for $DOMAIN_NAME: $CF_ZONE_ID"
+    fi
+    local ZONE_ID_JSON=("com.cloudflare.api.account.zone.${CF_ZONE_ID}")
     EXTRA=(-H 'Content-Type: application/json' \
      --data '
  {
@@ -298,13 +174,17 @@ create_token () {
  	],
  	"condition": {}
  }')
-    cf_api POST /client/v4/user/tokens $EXTRA
+    _debug "Extra: ${EXTRA[*]}"
+    _running2 "Creating token ${TOKEN_NAME} for ${DOMAIN_NAME}"
+    API_OUTPUT=$(_cf_api POST-JSON /client/v4/user/tokens "${EXTRA[@]}")
+    
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         NEW_API_TOKEN=$(echo $API_OUTPUT | jq '.result.value')
-        echo "New API Token -- ${TOKEN_NAME}: ${NEW_API_TOKEN}"
-    else        
-        echo "$MESG - $API_OUTPUT"
-        exit 1
+        _success "New API Token -- ${TOKEN_NAME}: ${NEW_API_TOKEN}"
+    else
+        _error "Error creating token"
+        echo "$API_OUTPUT"
+        return 1
     fi
 }
 
@@ -335,7 +215,7 @@ case $key in
     shift # past argument
     ;;
     -z|--zoneid)
-    ZONE_ID="$2"
+    CF_ZONE_ID="$2"
     shift # past argument
     shift # past variable
     ;;
@@ -400,7 +280,8 @@ _debug "Pre-flight_check"
 if [[ $CMD == 'create-token' ]]; then
     [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
     [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
-    create_token 
+    _running "Creating token for $DOMAIN_NAME"
+    create_token $DOMAIN_NAME $TOKEN_NAME
 elif [[ $CMD == 'list' ]]; then
     list_tokens
 elif [[ $CMD == 'test-creds' ]]; then
