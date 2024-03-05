@@ -1,13 +1,16 @@
 #!/bin/bash
-
-# -- variables
-# ------------
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# ==================================================
+# -- Variables
+# ==================================================
 SCRIPT_NAME="cloudflare-wordpress-rules"
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
+API_URL="https://api.cloudflare.com"
 DEBUG="0"
 DRYRUN="0"
+REQUIRED_APPS=("jq" "column")
 PROFILE_DIR="${SCRIPT_DIR}/profiles"
+CF_SETTINGS_ALLOWED=("security_level" "challenge_ttl" "browser_check")
 
 # -- Colors
 RED="\033[0;31m"
@@ -17,16 +20,22 @@ BLUEBG="\033[0;44m"
 YELLOWBG="\033[0;43m"
 GREENBG="\033[0;42m"
 DARKGREYBG="\033[0;100m"
+DARKGREY="\033[0;90m"
 ECOL="\033[0;0m"
 
 # -- messages
 _error () { echo -e "${RED}** ERROR ** - ${*} ${ECOL}"; }
 _success () { echo -e "${GREEN}** SUCCESS ** - ${*} ${ECOL}"; }
 _running () { echo -e "${BLUEBG} * ${*}${ECOL}"; }
+_running2 () { echo -e "${DARKGREY} * ${*}${ECOL}"; }
 _creating () { echo -e "${DARKGREYBG}${*}${ECOL}"; }
 _separator () { echo -e "${YELLOWBG}****************${ECOL}"; }
 _dryrun () { echo -e "${CYAN}** DRYRUN: ${*$}{ECOL}"; }
 
+# ==================================================
+# -- Libraries
+# ==================================================
+source "${SCRIPT_DIR}/lib/cloudflare-lib.sh"
 
 # -- debug
 _debug () { 
@@ -53,10 +62,16 @@ usage () {
 	echo "   create-rules <domain> <profile>           - Create rules on domain using <profile> if none specified default profile will be used"
 	echo "   get-rules <domain>                        - Get rules"
 	echo "   delete-rule <id>                          - Delete rule"
-	echo "   delete-filter <id>                        - Delete rule ID on domain"
+	echo ""
 	echo "   get-filters <id>                          - Get Filters"
+	echo "   delete-filter <id>                        - Delete rule ID on domain"	
 	echo "   get-filter-id <id>                        - Get Filter <id>"
-	echo "   set-settings <domain> <setting> <value>   - Set settings on domain"
+	echo ""	
+	echo "   set-settings <domain> <setting> <value>   - Set security settings on domain"
+	echo "         security_level <off|essentially_off|low|medium|high|under_attack>"
+	echo "         challenge_ttl"
+	echo "         browser_integrity_check"
+	echo "   get-settings <domain>                     - Get security settings on domain"
 	echo ""
 	echo " Profiles - See profiles directory for examples ** Not yet functional**"
 	echo "   default                            - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
@@ -71,31 +86,17 @@ usage () {
 	echo "Version: $VERSION"
 }
 
-# -- Get domain zoneid
-# --------------------
-# CF_GET_ZONEID $CF_ZONE
-CF_GET_ZONEID () {
-    ZONE=$1
-    CF_ZONEID_CURL=$(curl -s -X GET 'https://api.cloudflare.com/client/v4/zones/?per_page=500' \
-    -H "X-Auth-Email: ${CF_ACCOUNT}" \
-    -H "X-Auth-Key: ${CF_TOKEN}" \
-    -H "Content-Type: application/json")
-    CF_ZONEID_RESULT=$( echo $CF_ZONEID_CURL | jq -r '.success')
-	if [[ $CF_ZONEID_RESULT == "false" ]]; then
-		_error "Error getting Cloudflare Zone ID"
-		echo $CF_ZONEID_CURL
-		exit 1
-	else
-		CF_ZONEID=$( echo $CF_ZONEID_CURL | jq -r '.result[] | "\(.id) \(.name)"'| grep "$ZONE" | awk {' print $1 '})
-		if [[ -z $CF_ZONEID ]]; then
-			_error "Couldn't find domain $ZONE"
-			exit 1
-		else
-		    echo "  - Found $ZONE - ${CF_ZONEID}"
-		fi
-	fi
+# -- usage_set_settings
+function usage_set_settings () {
+	echo "Usage: $SCRIPT_NAME set-settings <domain> <setting> <value>"
+	echo ""
+	echo " Settings"
+	echo "   security_level"
+	echo "   challenge_ttl"
+	echo "   browser_integrity_check"
+	echo ""
 }
-	
+
 
 # -- Create filter
 # -----------------
@@ -287,8 +288,49 @@ cf_profile_create () {
 	echo "poop"		
 }
 
+# ==================================================
+# -- _cf_set_settings $CF_ZONEID $SETTING $VALUE
+# ==================================================
+_cf_set_settings () {
+	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
+	_debug "function:${FUNCNAME[0]}"
+	_debug "Running _cf_set_settings() with ${*}"
+	
+	_running "Setting $SETTING to $VALUE"
+	_cf_api "PATCH" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}" "$(jq -n --arg value "$VALUE" '{"value": $value}')"
+	if [[ $CURL_EXIT_CODE == "200" ]]; then
+		_success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+		echo "Completed setting $SETTING to $VALUE successfully"
+		exit 0
+	else		
+		exit 1
+	fi
+}
+
+# ==================================================
+# -- _cf_get_settings $CF_ZONEID
+# ==================================================
+function _cf_get_settings () {
+	local CF_ZONE_ID=$1 ZONE_SECURITY_LEVEL
+	_debug "function:${FUNCNAME[0]}"
+	_debug "Running _cf_get_settings() with ${*}"
+
+	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/security_level"
+	echo "Security Level: $(echo $API_OUTPUT | jq -r '.result.value')"
+
+	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/challenge_ttl"
+	CHALLENGE_TTL=$(echo $API_OUTPUT | jq -r '.result.value')
+	# -- Convert to minutes or hours or days etc.
+	HUMAN_TIME=$(_convert_seconds $CHALLENGE_TTL)
+	echo "Challenge TTL: $CHALLENGE_TTL / $HUMAN_TIME"
+
+	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/browser_check"
+	echo "Browser Integrity Check: $(echo $API_OUTPUT | jq -r '.result.value')"
+}
+
+# ==================================================
 # -- Protect WordPress
-# --------------------
+# ==================================================
 CF_PROTECT_WP () {
 	# -- Block xmlrpc.php - Priority 1
 	_creating "  Creating - Block xml-rpc.php rule"
@@ -457,33 +499,7 @@ if [[ $DRYRUN = "1" ]]; then
 fi
 
 # -- Check for .cloudflare credentials
-if [ ! -f "$HOME/.cloudflare" ]; then
-		echo "No .cloudflare file."
-	if [ -z "$CF_ACCOUNT" ]; then
-		_error "No \$CF_ACCOUNT set."
-		usage
-		exit 1
-	fi
-	if [ -z "$CF_TOKEN" ]; then
-		_error "No \$CF_TOKEN set."
-		usage
-		exit 1
-	fi
-else
-	_debug "Found .cloudflare file."
-	source $HOME/.cloudflare
-	_debug "Sourced CF_ACCOUNT: $CF_ACCOUNT CF_TOKEN: $CF_TOKEN"
-        if [ -z "$CF_ACCOUNT" ]; then
-                _error "No \$CF_ACCOUNT set in config."
-                usage
-				exit 1
-        fi
-        if [ -z "$CF_TOKEN" ]; then
-                _error "No \$CF_TOKEN set in config.
-
-        $USAGE"
-        fi
-fi
+pre_flight_check
 
 # -- Show usage if no domain provided
 if [[ -z $DOMAIN ]]; then
@@ -502,7 +518,7 @@ elif [[ $CMD == "create-rules" ]]; then
 	_running "Running Create rules"
 	if [[ -z $PROFILE ]]; then
 		_running "Missing profile name, using default for rules"
-		CF_GET_ZONEID $DOMAIN
+		_get_zone_id$DOMAIN
 		CF_PROTECT_WP # @ISSUE needs to be migrated
 	else
 		_running "Creating rules using profile $PROFILE"
@@ -511,22 +527,22 @@ elif [[ $CMD == "create-rules" ]]; then
 # -- custom-rules
 elif [[ $CMD == "custom-rules" ]]; then
 	_running "Running custom-rules"
-	CF_GET_ZONEID $DOMAIN
+	_get_zone_id$DOMAIN
 	cf_custom_rules $PROFILE
 # -- get-rules
 elif [[ $CMD == "get-rules" ]]; then
     _running "  Running Get rules"
-    CF_GET_ZONEID $DOMAIN
+    _get_zone_id$DOMAIN
     CF_GET_RULES
 # -- delete-rules
 elif [[ $CMD == "delete-rule" ]]; then
     _running "  Running Delete rule"
-    CF_GET_ZONEID $DOMAIN
+    _get_zone_id$DOMAIN
     CF_DELETE_RULE ${3}
 # -- get-filters
 elif [[ $CMD == "get-filters" ]]; then
 	_running "  Running Get filters"
-	CF_GET_ZONEID $DOMAIN
+	_get_zone_id$DOMAIN
 	CF_GET_FILTERS
 # -- get-filter-id
 elif [[ $CMD == "get-filter-id" ]]; then
@@ -536,7 +552,7 @@ elif [[ $CMD == "get-filter-id" ]]; then
     	_error "No rule ID provided"
     	exit 1
     else
-        CF_GET_ZONEID $DOMAIN
+        _get_zone_id$DOMAIN
     	CF_GET_FILTER_ID $3
     fi
 # -- delete-filter
@@ -547,11 +563,34 @@ elif [[ $CMD == "delete-filter" ]]; then
 		exit 1
 	else
 		_running "  Running Delete filter"
-		CF_GET_ZONEID $DOMAIN
+		_get_zone_id$DOMAIN
 		CF_DELETE_FILTER $ID
 	fi
+# -- set-settings
+elif [[ $CMD == "set-settings" ]]; then
+	[[ -z $3 ]] && { usage_set_settings;_error "No setting provided";exit 1; }
+	[[ -z $4 ]] && { usage_set_settings;_error "No value provided";exit 1; }
+
+	# -- Check if setting is valid from array CF_SETTINGS_ALLOWED
+	_debug "Checking if setting is valid from CF_SETTINGS_ALLOWED"
+	if [[ ! " ${CF_SETTINGS_ALLOWED[@]} " =~ " ${3} " ]]; then
+		usage_set_settings
+		_error "Invalid setting provided"
+		exit 1
+	fi
+
+	# -- Run set settings
+	_running "  Running Set settings"
+	_get_zone_id $DOMAIN
+	_cf_set_settings $CF_ZONE_ID $3 $4
+# -- get-settings
+elif [[ $CMD == "get-settings" ]]; then	
+	_running "  Running Get settings"
+	_get_zone_id $DOMAIN
+	_cf_get_settings $CF_ZONE_ID
 else
 	usage 
 	_error "No command provided"
 	exit 1
+
 fi
