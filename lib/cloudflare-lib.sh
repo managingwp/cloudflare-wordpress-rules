@@ -1,4 +1,12 @@
 # ==================================================
+# -- Cloudflare settings default
+# ==================================================
+CF_SETTINGS_ALLOWED=("security_level" "challenge_ttl" "browser_check")
+# -- Challenge TTL
+# Defaults for challenge ttl - 
+CF_DEFAULTS_CHALLENGE_TTL=(300 900 1800 2700 3600 7200 10800 14400 28800 57600 86400 604800 2592000 31536000)
+
+# ==================================================
 # -- pre_flight_check - Check for .cloudflare credentials
 # ==================================================
 function pre_flight_check () {
@@ -42,6 +50,55 @@ function pre_flight_check () {
         fi
     done
 }
+
+# ==================================================
+# -- _cf_check_setting_value $SETTING $VALUE
+# ==================================================
+function _cf_check_setting_value () {
+    # -- Array for each $SETTING and $VALUE is called $CF_SETTINGS_VALUES
+    local SETTING=${1^^}
+    local VALUE=$2
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Checking $SETTING with value $VALUE"
+    local CF_SETTINGS_VALUES
+    # Load up CF_SETTINGS_{SETTING} array into $CF_SETTINGS_VALUES
+    eval "CF_SETTINGS_VALUES=(\"\${CF_DEFAULTS_${SETTING}[@]}\")"
+    _debug "Allowed values for $SETTING are: ${CF_SETTINGS_VALUES[@]}"
+    
+
+    # -- Check if $VALUE is in $CF_SETTINGS_VALUES
+    if [[ " ${CF_SETTINGS_VALUES[@]} " =~ " ${VALUE} " ]]; then
+        _debug "Value $VALUE is in $SETTING"
+        return 0
+    else
+        _error "Value $VALUE is not in $SETTING"
+        _error "Allowed values for $SETTING are: ${CF_SETTINGS_VALUES[@]}"
+        return 1
+    fi
+}
+
+# ==================================================
+# -- _cf_settings_values $SETTING
+# ==================================================
+function _cf_settings_values () {
+    local SETTING=${1^^}
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Getting values for $SETTING"
+    local CF_SETTINGS_VALUES
+    # Load up CF_SETTINGS_{SETTING} array into $CF_SETTINGS_VALUES
+    eval "CF_SETTINGS_VALUES=(\"\${CF_DEFAULTS_${SETTING}[@]}\")"
+    _debug "Allowed values for $SETTING are: ${CF_SETTINGS_VALUES[@]}"
+
+    if [[ $SETTING == "CHALLENGE_TTL" ]]; then
+        echo "Possible Values:"
+        for SECONDS in "${CF_SETTINGS_VALUES[@]}"; do
+            echo -e "\t$SECONDS - $(_convert_seconds $SECONDS)"
+        done            
+    else
+        echo "Possible Values: ${CF_SETTINGS_VALUES[@]}"
+    fi   
+}
+
 
 # ==================================================
 # -- _cf_api <$METHOD> <$API_PATH> <${CURL_HEADERS[@]}>
@@ -105,13 +162,13 @@ function _cf_api() {
         done     
 	
     _debug "Running curl -s --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]} ${CURL_OPTS[*]}""
-    set -x
+    [[ DEBUG == "1" ]] && set -x
     CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$METHOD" \
         --url "${API_URL}${API_PATH}" \
         "${CURL_HEADERS[@]}" \
         "${CURL_OPTS[@]}" \
         --output "$CURL_OUTPUT" "${EXTRA[@]}")
-    set +x
+    [[ DEBUG == "1" ]] && set +x
     API_OUTPUT=$(<"$CURL_OUTPUT")
     _debug_json "$API_OUTPUT"
     rm $CURL_OUTPUT    
@@ -158,11 +215,22 @@ function _get_zone_id () {
 # -- returns $HUMAN_TIME
 # ==================================================
 function _convert_seconds () {
-    local SECONDS=$1
-    _debug "function:${FUNCNAME[0]}"
-    _debug "Converting $SECONDS seconds to human readable time"
+    local T=$1
+    local D=$((T/60/60/24))
+    local H=$((T/60/60%24))
+    local M=$((T/60%60))
+    local S=$((T%60))
     local HUMAN_TIME
-    HUMAN_TIME=$(date -d@${SECONDS} -u +%T)
-    _debug "Converted $SECONDS seconds to $HUMAN_TIME"
-    echo $HUMAN_TIME
+
+    if [ "$D" -gt 0 ]; then
+        HUMAN_TIME="${D}d ${H}h ${M}m ${S}s"
+    elif [ "$H" -gt 0 ]; then
+        HUMAN_TIME="${H}h ${M}m ${S}s"
+    elif [ "$M" -gt 0 ]; then
+        HUMAN_TIME="${M}m ${S}s"
+    else
+        HUMAN_TIME="${S}s"
+    fi
+
+    echo "$HUMAN_TIME"
 }

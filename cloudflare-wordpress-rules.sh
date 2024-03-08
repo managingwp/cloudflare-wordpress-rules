@@ -10,7 +10,6 @@ DEBUG="0"
 DRYRUN="0"
 REQUIRED_APPS=("jq" "column")
 PROFILE_DIR="${SCRIPT_DIR}/profiles"
-CF_SETTINGS_ALLOWED=("security_level" "challenge_ttl" "browser_check")
 
 # -- Colors
 RED="\033[0;31m"
@@ -568,14 +567,20 @@ elif [[ $CMD == "delete-filter" ]]; then
 	fi
 # -- set-settings
 elif [[ $CMD == "set-settings" ]]; then
-	[[ -z $3 ]] && { usage_set_settings;_error "No setting provided";exit 1; }
-	[[ -z $4 ]] && { usage_set_settings;_error "No value provided";exit 1; }
+	CF_SETTING=$3
+	CF_VALUE=$4
+	[[ -z $CF_SETTING ]] && { usage_set_settings;_error "No setting provided";exit 1; }
+	[[ -z $CF_VALUE ]] && { usage_set_settings;_error "No value provided";_cf_settings_values $CF_SETTING;exit 1; }
 
-	# -- Check if setting is valid from array CF_SETTINGS_ALLOWED
-	_debug "Checking if setting is valid from CF_SETTINGS_ALLOWED"
+	# -- Check if valid setting
 	if [[ ! " ${CF_SETTINGS_ALLOWED[@]} " =~ " ${3} " ]]; then
 		usage_set_settings
-		_error "Invalid setting provided"
+		_error "Invalid setting provided"		
+		exit 1
+	fi
+
+	if ! _cf_check_setting_value $3 $4; then
+		_error "Invalid value provided"
 		exit 1
 	fi
 
