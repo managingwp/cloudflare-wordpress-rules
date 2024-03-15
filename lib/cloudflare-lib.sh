@@ -1,10 +1,23 @@
 # ==================================================
 # -- Cloudflare settings default
 # ==================================================
-CF_SETTINGS_ALLOWED=("security_level" "challenge_ttl" "browser_check")
+declare -A CF_SETTINGS
+
+# Add settings to the array
+CF_SETTINGS["security_level"]="Security Level"
+CF_SETTINGS["challenge_ttl"]="Challenge TTL"
+CF_SETTINGS["browser_check"]="Browser Check"
+CF_SETTINGS["always_use_https"]="Always Use HTTPS"
+CF_SETTINGS["min_tls_version"]="Minimum TLS Version"
+
+CF_SETTINGS_ALLOWED=("security_level" "challenge_ttl" "browser_check" "always_use_https")
 # -- Challenge TTL
-# Defaults for challenge ttl - 
+# Defaults for challenge ttl -
 CF_DEFAULTS_CHALLENGE_TTL=(300 900 1800 2700 3600 7200 10800 14400 28800 57600 86400 604800 2592000 31536000)
+CF_DEFAULTS_SECURITY_LEVEL=("essentially_off" "low" "medium" "high" "under_attack")
+CF_DEFAULTS_BROWSER_CHECK=("on" "off")
+CF_DEFAULTS_ALWAYS_USE_HTTPS=("on" "off")
+CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 
 # ==================================================
 # -- pre_flight_check - Check for .cloudflare credentials
@@ -49,6 +62,69 @@ function pre_flight_check () {
             exit 1
         fi
     done
+}
+
+# ==================================================
+# -- _cf_get_settings $CF_ZONEID
+# ==================================================
+function _cf_get_settings () {
+	local CF_ZONE_ID=$1 SETTING_VALUE
+	_debug "function:${FUNCNAME[0]}"
+	_debug "Running _cf_get_settings() with ${*}"
+
+    # -- Get Zone Settings
+    for SETTING in "${!CF_SETTINGS[@]}"; do
+        _cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}"
+        if [[ $CURL_EXIT_CODE == "200" ]]; then
+            SETTING_VALUE=$(echo $API_OUTPUT | jq -r '.result.value')
+            if [[ $SETTING == "challenge_ttl" ]]; then
+                SETTING_VALUE=$(_convert_seconds $SETTING_VALUE)
+            else
+                SETTING_VALUE=$(echo $API_OUTPUT | jq -r '.result.value')
+            fi
+            echo "${CF_SETTINGS[$SETTING]}: $SETTING_VALUE"
+        else
+            _error "Error getting settings for $SETTING"
+            exit 1
+        fi
+    done
+}
+
+# ==================================================
+# -- _cf_set_settings $CF_ZONEID $SETTING $VALUE
+# ==================================================
+_cf_set_settings () {
+	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
+	_debug "function:${FUNCNAME[0]}"
+	_debug "Running _cf_set_settings() with ${*}"
+	
+	_running "Setting $SETTING to $VALUE"
+	_cf_api "PATCH" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}" "$(jq -n --arg value "$VALUE" '{"value": $value}')"
+	if [[ $CURL_EXIT_CODE == "200" ]]; then
+		_success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+		echo "Completed setting $SETTING to $VALUE successfully"
+		exit 0
+	else		
+		exit 1
+	fi
+}
+
+# ==================================================
+# -- _cf_check_setting $SETTING
+# ==================================================
+function _cf_check_setting () {
+    local SETTING=${1}
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Checking $SETTING"
+    if [[ " ${!CF_SETTINGS[@]} " =~ " ${SETTING} " ]]; then
+        _debug "$SETTING is in the list of allowed settings"
+        return 0
+    else
+        _error "$SETTING is not in the list of allowed settings"        
+        _error "Allowed settings are: ${!CF_SETTINGS[@]}"        
+        return 1
+    fi
+
 }
 
 # ==================================================

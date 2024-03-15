@@ -70,6 +70,7 @@ usage () {
 	echo "         security_level <off|essentially_off|low|medium|high|under_attack>"
 	echo "         challenge_ttl"
 	echo "         browser_integrity_check"
+	echo "         always_use_https"
 	echo "   get-settings <domain>                     - Get security settings on domain"
 	echo ""
 	echo " Profiles - See profiles directory for examples ** Not yet functional**"
@@ -90,9 +91,10 @@ function usage_set_settings () {
 	echo "Usage: $SCRIPT_NAME set-settings <domain> <setting> <value>"
 	echo ""
 	echo " Settings"
-	echo "   security_level"
-	echo "   challenge_ttl"
-	echo "   browser_integrity_check"
+	# -- Loop through CF_SETTINGS array and print out key
+	for i in "${!CF_SETTINGS[@]}"; do
+		echo "   ${i}"
+	done
 	echo ""
 }
 
@@ -287,45 +289,7 @@ cf_profile_create () {
 	echo "poop"		
 }
 
-# ==================================================
-# -- _cf_set_settings $CF_ZONEID $SETTING $VALUE
-# ==================================================
-_cf_set_settings () {
-	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
-	_debug "function:${FUNCNAME[0]}"
-	_debug "Running _cf_set_settings() with ${*}"
-	
-	_running "Setting $SETTING to $VALUE"
-	_cf_api "PATCH" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}" "$(jq -n --arg value "$VALUE" '{"value": $value}')"
-	if [[ $CURL_EXIT_CODE == "200" ]]; then
-		_success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
-		echo "Completed setting $SETTING to $VALUE successfully"
-		exit 0
-	else		
-		exit 1
-	fi
-}
 
-# ==================================================
-# -- _cf_get_settings $CF_ZONEID
-# ==================================================
-function _cf_get_settings () {
-	local CF_ZONE_ID=$1 ZONE_SECURITY_LEVEL
-	_debug "function:${FUNCNAME[0]}"
-	_debug "Running _cf_get_settings() with ${*}"
-
-	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/security_level"
-	echo "Security Level: $(echo $API_OUTPUT | jq -r '.result.value')"
-
-	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/challenge_ttl"
-	CHALLENGE_TTL=$(echo $API_OUTPUT | jq -r '.result.value')
-	# -- Convert to minutes or hours or days etc.
-	HUMAN_TIME=$(_convert_seconds $CHALLENGE_TTL)
-	echo "Challenge TTL: $CHALLENGE_TTL / $HUMAN_TIME"
-
-	_cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/browser_check"
-	echo "Browser Integrity Check: $(echo $API_OUTPUT | jq -r '.result.value')"
-}
 
 # ==================================================
 # -- Protect WordPress
@@ -572,10 +536,9 @@ elif [[ $CMD == "set-settings" ]]; then
 	[[ -z $CF_SETTING ]] && { usage_set_settings;_error "No setting provided";exit 1; }
 	[[ -z $CF_VALUE ]] && { usage_set_settings;_error "No value provided";_cf_settings_values $CF_SETTING;exit 1; }
 
-	# -- Check if valid setting
-	if [[ ! " ${CF_SETTINGS_ALLOWED[@]} " =~ " ${3} " ]]; then
-		usage_set_settings
-		_error "Invalid setting provided"		
+	# -- Check if valid setting using CF_SETTINGS array
+	if ! _cf_check_setting $3; then
+		_error "Invalid setting provided"
 		exit 1
 	fi
 
