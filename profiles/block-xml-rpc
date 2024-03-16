@@ -1,0 +1,4 @@
+FILTER='http.request.uri.path eq \"/xmlrpc.php\"'
+ACTION="block"
+PRIORITY="1"
+PROFILE_NAME="block-xml-rpc"
