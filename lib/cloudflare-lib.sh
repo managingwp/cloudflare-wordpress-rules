@@ -310,3 +310,77 @@ function _convert_seconds () {
 
     echo "$HUMAN_TIME"
 }
+
+# ==================================================
+# -- _cf_create_filter $ZONE_ID $EXPRESSION
+# ==================================================
+_cf_create_filter () {
+    local ZONE_ID=$1
+    _debug "function:${FUNCNAME[0]}"
+    _running "Creating filter for $ZONE_ID"
+    if [[ $DRYRUN == "1" ]]; then
+        echo "DRYRUN: Would have created filter for $ZONE_ID"
+    else
+        _cf_api "POST" "/client/v4/zones/${ZONE_ID}/filters" "$(jq -n --arg expression "$EXPRESSION" '{"expression": $expression}')"
+        if [[ $CURL_EXIT_CODE == "200" ]]; then
+            _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+            echo "Created filter for $ZONE_ID successfully"
+        else
+            _error "Error creating filter for $ZONE_ID"
+            exit 1
+        fi
+    fi
+}
+
+# ==================================================
+# --_cf_create_rule $ZONE_ID $FILTER_ID $ACTION $PRIORITY $DESCRIPTION
+# ==================================================
+_cf_create_rule () {
+	local ZONE_ID=$1 FILTER_ID=$2 ACTION=$3 PRIORITY=$4 DESCRIPTION=$5
+
+	echo " - Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"    
+    if [[ $DRYRUN == "1" ]]; then
+        echo "DRYRUN: Would have created rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+    else
+        _debug "Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+        _cf_api "POST" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
+        "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" --arg priority "$PRIORITY" --arg description "$DESCRIPTION" '{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}')"
+
+        # -- Check if the rule was created
+        if [[ $CURL_EXIT_CODE == "200" ]]; then
+            _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+            echo "Created rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+        else
+            _error "Error creating rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+            exit 1
+        fi
+	fi
+}
+
+# ==================================================
+# -- _apply_profile $PROFILE_NAME
+# ==================================================
+function _apply_profile () {
+    local PROFILE_NAME=$1
+    _debug "function:${FUNCNAME[0]}"
+    _running "Applying profile $PROFILE_NAME"
+
+    # -- Check if profile exists under profiles/$PROFILE_NAME
+    if [[ -f "profiles/$PROFILE_NAME" ]]; then
+        _debug "Found profile $PROFILE_NAME"
+        # shellcheck source=profiles/block-xml-rpc
+        source "profiles/$PROFILE_NAME"
+    else
+        _error "Profile $PROFILE_NAME not found"
+        exit 1
+    fi
+    
+    if [[ $CURL_EXIT_CODE == "200" ]]; then
+        _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
+        echo "Created profile $PROFILE_NAME successfully"
+        exit 0
+    else
+        _error "Error creating profile $PROFILE_NAME"
+        exit 1
+    fi
+}

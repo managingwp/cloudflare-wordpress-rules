@@ -58,7 +58,8 @@ usage () {
 	echo "   -dr                        - Dry run, don't send to Cloudflare"
 	echo ""
 	echo " Commands"
-	echo "   create-rules <domain> <profile>           - Create rules on domain using <profile> if none specified default profile will be used"
+	echo "   create-rules <domain>                     - Create default rules for domain"
+	echo ""
 	echo "   get-rules <domain>                        - Get rules"
 	echo "   delete-rule <id>                          - Delete rule"
 	echo ""
@@ -67,14 +68,18 @@ usage () {
 	echo "   get-filter-id <id>                        - Get Filter <id>"
 	echo ""	
 	echo "   set-settings <domain> <setting> <value>   - Set security settings on domain"
-	echo "         security_level <off|essentially_off|low|medium|high|under_attack>"
+	echo "         security_level"
 	echo "         challenge_ttl"
 	echo "         browser_integrity_check"
 	echo "         always_use_https"
+	echo ""
 	echo "   get-settings <domain>                     - Get security settings on domain"
 	echo ""
-	echo " Profiles - See profiles directory for examples ** Not yet functional**"
-	echo "   default                            - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
+	echo ""
+	echo "   apply-profile <domain> <profile>           - Apply profile to domain"	
+	echo "         default                              - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
+	echo ""
+	echo "   list-profiles                              - List profiles"
 	echo ""
 	echo ""
 	echo "Examples"
@@ -98,10 +103,9 @@ function usage_set_settings () {
 	echo ""
 }
 
-
-# -- Create filter
-# -----------------
-# CF_CREATE_FILETER $CF_EXPRESSION
+# ==================================================
+# -- CF_CREATE_FILETER $CF_EXPRESSION
+# ==================================================
 CF_CREATE_FILTER () {
 	CF_EXPRESSION=$1
 	echo "  - Creating Filter - ${CF_EXPRESSION} on ${CF_ZONEID}"
@@ -160,8 +164,9 @@ CF_CREATE_FILTER () {
     fi
 }
 
-# -- Create rule
-# --------------
+# ==================================================
+# -- CF_CREATE_RULE $CF_ZONEID $ACTION $PRIORITY $DESCRIPTION
+# ==================================================
 CF_CREATE_RULE () {
 	ID=$1
 	ACTION=$2
@@ -199,9 +204,9 @@ CF_CREATE_RULE () {
 	fi
 }
 
-# -- Get Filters
-# CF_GET_FILTERS
-# --------------
+# ==================================================
+# -- CF_GET_FILTERS
+# ==================================================
 CF_GET_FILTERS () {	
     CF_GET_FILTERS_CURL=$(curl -s -X GET \
     "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters" \
@@ -212,9 +217,9 @@ CF_GET_FILTERS () {
     echo $CF_GET_FILTERS_CURL | jq -r
 }
 
-# -- Get Filter ID
-# CF_GET_FILTER_ID ${CF_FILTER_ID}
-# --------------
+# ==================================================
+# -- CF_GET_FILTER_ID ${CF_FILTER_ID}
+# ==================================================
 CF_GET_FILTER_ID () {
     CF_GET_FILTER_ID_CURL=$(curl -s -X GET \
     "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters/${1}" \
@@ -224,9 +229,9 @@ CF_GET_FILTER_ID () {
     _debug_json $CF_GET_FILTER_ID_CURL
 }
 
-# -- Delete filters
-# CF_DELETE_FILTER ${CF_FILTER_ID}
-# -----------------
+# ==================================================
+# -- CF_DELETE_FILTER ${CF_FILTER_ID}
+# ==================================================
 CF_DELETE_FILTER () {
 	FILTER=$@
 	_debug "Filter: $FILTER"
@@ -240,9 +245,9 @@ CF_DELETE_FILTER () {
 	echo $CF_DELETE_FILTERS_CURL | jq -r
 }
 
-# -- Get rules
+# ==================================================
 # CF_GET_RULES
-# ------------
+# ==================================================
 CF_GET_RULES () {
     CF_GET_RULES_CURL=$(curl -s -X GET \
     "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules" \
@@ -253,9 +258,9 @@ CF_GET_RULES () {
     echo $CF_GET_RULES_CURL | jq -r
 }
 
-# -- Delete rule
-# CF_DELETE_RULE $CF_ZONEID
-# ------------
+# ==================================================
+# -- CF_DELETE_RULE $CF_ZONEID
+# ==================================================
 CF_DELETE_RULE () {
 	while true; do
 	    read -p "Delete rule ${1} ? (y|n)" yn
@@ -274,22 +279,6 @@ CF_DELETE_RULE () {
     _debug_json $CF_DELETE_RULE_CURL
     echo $CF_DELETE_RULE_CURL | jq -r
 }
-
-# -- cf_profile_create <profile-name>
-cf_profile_create () {
-	PROFILE_NAME=$1
-	
-	# -- Check if profile dir exists
-	if [[ ! -d $PROFILE_DIR ]]; then
-		_error "$PROFILE_DIR doesn't exist, failing"	
-		exit 1
-	fi
-	
-	# -- Create rules
-	echo "poop"		
-}
-
-
 
 # ==================================================
 # -- Protect WordPress
@@ -416,12 +405,6 @@ CF_PROTECT_WP () {
 	_success "  Completed Protect WP profile"
 }
 
-# -- Create Profile
-cf_create_profile () {
-	echo " * Creating profile $1"
-	
-}
-
 # -------
 # -- main
 # -------
@@ -476,7 +459,9 @@ if [[ -z $CMD ]]; then
 	usage
 	_error "No command provided"
 	exit 1
+# ================
 # -- create-rules
+# ================
 elif [[ $CMD == "create-rules" ]]; then
 	_running "Running Create rules"
 	if [[ -z $PROFILE ]]; then
@@ -487,27 +472,37 @@ elif [[ $CMD == "create-rules" ]]; then
 		_running "Creating rules using profile $PROFILE"
 		cf_profile_create $PROFILE
 	fi
+# ================
 # -- custom-rules
+# ================
 elif [[ $CMD == "custom-rules" ]]; then
 	_running "Running custom-rules"
 	_get_zone_id$DOMAIN
 	cf_custom_rules $PROFILE
+# ================
 # -- get-rules
+# ================
 elif [[ $CMD == "get-rules" ]]; then
     _running "  Running Get rules"
-    _get_zone_id$DOMAIN
+    _get_zone_id $DOMAIN
     CF_GET_RULES
+# ================
 # -- delete-rules
+# ================
 elif [[ $CMD == "delete-rule" ]]; then
     _running "  Running Delete rule"
-    _get_zone_id$DOMAIN
+    _get_zone_id $DOMAIN
     CF_DELETE_RULE ${3}
+# ================
 # -- get-filters
+# ================
 elif [[ $CMD == "get-filters" ]]; then
 	_running "  Running Get filters"
-	_get_zone_id$DOMAIN
+	_get_zone_id $DOMAIN
 	CF_GET_FILTERS
+# ================
 # -- get-filter-id
+# ================
 elif [[ $CMD == "get-filter-id" ]]; then
     _running "  Running Get filter ID $3"
     if [[ -z $ID ]]; then
@@ -515,10 +510,12 @@ elif [[ $CMD == "get-filter-id" ]]; then
     	_error "No rule ID provided"
     	exit 1
     else
-        _get_zone_id$DOMAIN
+        _get_zone_id $DOMAIN
     	CF_GET_FILTER_ID $3
     fi
+# ================
 # -- delete-filter
+# ================
 elif [[ $CMD == "delete-filter" ]]; then
 	if [[ -z $ID ]]; then
 		usage
@@ -526,10 +523,12 @@ elif [[ $CMD == "delete-filter" ]]; then
 		exit 1
 	else
 		_running "  Running Delete filter"
-		_get_zone_id$DOMAIN
+		_get_zone_id $DOMAIN
 		CF_DELETE_FILTER $ID
 	fi
+# ================
 # -- set-settings
+# ================
 elif [[ $CMD == "set-settings" ]]; then
 	CF_SETTING=$3
 	CF_VALUE=$4
@@ -551,7 +550,9 @@ elif [[ $CMD == "set-settings" ]]; then
 	_running "  Running Set settings"
 	_get_zone_id $DOMAIN
 	_cf_set_settings $CF_ZONE_ID $3 $4
+# ================
 # -- get-settings
+# ================
 elif [[ $CMD == "get-settings" ]]; then	
 	_running "  Running Get settings"
 	_get_zone_id $DOMAIN
