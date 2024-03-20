@@ -466,7 +466,7 @@ elif [[ $CMD == "create-rules" ]]; then
 	_running "Running Create rules"
 	if [[ -z $PROFILE ]]; then
 		_running "Missing profile name, using default for rules"
-		_get_zone_id$DOMAIN
+		_get_zone_id $DOMAIN
 		CF_PROTECT_WP # @ISSUE needs to be migrated
 	else
 		_running "Creating rules using profile $PROFILE"
