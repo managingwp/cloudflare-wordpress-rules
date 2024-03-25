@@ -108,7 +108,7 @@ function usage_set_settings () {
 # ==================================================
 CF_CREATE_FILTER () {
 	ZONE_ID=$1
-	CF_EXPRESSION=$1
+	CF_EXPRESSION=$2
 	echo "  - Creating Filter - ${CF_EXPRESSION} on ${ZONE_ID}"
 	# -- create_filter curl
 	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/filters"
@@ -291,7 +291,7 @@ CF_PROTECT_WP () {
 	_creating "  Creating - Block xml-rpc.php rule"
 	CF_CREATE_FILTER $ZONE_ID 'http.request.uri.path eq \"/xmlrpc.php\"'
 	if [[ $? == "0" ]]; then
-	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block)"
+	    CF_CREATE_RULE $ZONE_ID "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block)"
 	fi
 	_separator
 
