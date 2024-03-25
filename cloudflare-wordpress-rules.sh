@@ -376,33 +376,33 @@ CF_PROTECT_WP () {
 	BLOG_VAULT_IPS_B=$(echo $BLOG_VAULT_IPS_A|tr "\n" " ")
     WP_UMBRELLA="141.95.192.2"
     echo '(ip.src in { '"${BLOG_VAULT_IPS_B}"' '"${WP_UMBRELLA}"'})'
-	CF_CREATE_FILTER '(ip.src in { '"${BLOG_VAULT_IPS_B}"' }) or (ip.src in {'"${WP_UMBRELLA}"'})'
+	CF_CREATE_FILTER $ZONE_ID '(ip.src in { '"${BLOG_VAULT_IPS_B}"' }) or (ip.src in {'"${WP_UMBRELLA}"'})'
 	if [[ $? == "0" ]]; then
-		CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "allow" "2" "Allow URI Query, URL, User Agents, and IPs (Allow)"
+		CF_CREATE_RULE $ZONE_ID "$CF_CREATE_FILTER_ID" "allow" "2" "Allow URI Query, URL, User Agents, and IPs (Allow)"
 	fi
 	_separator
 
 	# --  Managed Challenge /wp-admin (Managed Challenge) - Priority 3
 	_creating "  Creating Managed Challenge /wp-admin (Managed Challenge) rule"	
-	CF_CREATE_FILTER '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\" and not http.request.uri.path contains \"/wp-admin/js/password-strength-meter.min.js\")'
+	CF_CREATE_FILTER $ZONE_ID '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\" and not http.request.uri.path contains \"/wp-admin/js/password-strength-meter.min.js\")'
 	if [[ $? == "0" ]]; then
-	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "managed_challenge" "3" "Managed Challenge /wp-admin (Managed Challenge)"
+	    CF_CREATE_RULE $ZONE_ID "$CF_CREATE_FILTER_ID" "managed_challenge" "3" "Managed Challenge /wp-admin (Managed Challenge)"
 	fi
 	_separator
 	
 	# --  Allow Good Bots and User Agent/URI/URL Query (Allow) - Priority 4
 	_creating "  Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	CF_CREATE_FILTER '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"WPUmbrella\")'
+	CF_CREATE_FILTER $ZONE_ID '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent eq \"Better Uptime Bot\") or (http.user_agent eq \"ShortPixel\") or (http.user_agent contains \"WPUmbrella\")'
 	if [[ $? == "0" ]]; then
-	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)"
+	    CF_CREATE_RULE $ZONE_ID "$CF_CREATE_FILTER_ID" "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)"
 	fi
 	_separator
 
 	# -- Challenge Outside of GEO (JS Challenge)	
 	_creating "  Challenge Outside of GEO (JS Challenge)"
-	CF_CREATE_FILTER '(not ip.geoip.country in {\"CA\" \"US\"})'
+	CF_CREATE_FILTER $ZONE_ID '(not ip.geoip.country in {\"CA\" \"US\"})'
 	if [[ $? == "0" ]]; then
-		CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "js_challenge" "5" "Challenge Outside of GEO (JS Challenge)"
+		CF_CREATE_RULE $ZONE_ID "$CF_CREATE_FILTER_ID" "js_challenge" "5" "Challenge Outside of GEO (JS Challenge)"
 	fi
 	_separator
 
