@@ -169,13 +169,14 @@ CF_CREATE_FILTER () {
 # -- CF_CREATE_RULE $CF_ZONEID $ACTION $PRIORITY $DESCRIPTION
 # ==================================================
 CF_CREATE_RULE () {
-	ID=$1
-	ACTION=$2
-	PRIORITY=$3
-	DESCRIPTION=$4
+	ZONE_ID=$1
+	ID=$2
+	ACTION=$3
+	PRIORITY=$4
+	DESCRIPTION=$5
 
 	echo " - Creating Rule with ID:$ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules"
+	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/firewall/rules"
     if [[ $DRYRUN == "1" ]]; then
         _dryrun "URL = ${CF_API_ENDPOINT}"
     else
