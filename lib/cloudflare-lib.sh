@@ -24,8 +24,7 @@ CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 # ==================================================
 function pre_flight_check () {
     if [[ -n $API_TOKEN ]]; then
-        _running "Found \$API_TOKEN via CLI using for authentication/."        
-        API_TOKEN=$CF_SPC_TOKEN
+        _running "Found \$API_TOKEN via CLI using for authentication/."          
     elif [[ -n $API_ACCOUNT ]]; then
         _running "Found \$API_ACCOUNT via CLI using as authentication."                
         if [[ -n $API_APIKEY ]]; then
@@ -47,8 +46,16 @@ function pre_flight_check () {
                 _debug "Found \$CF_SPC_ACCOUNT and \$CF_SPC_KEY in \$HOME/.cloudflare"
                 API_ACCOUNT=$CF_SPC_ACCOUNT
                 API_APIKEY=$CF_SPC_KEY
+            elif [[ $CF_ACCOUNT && $CF_KEY ]]; then
+                _debug "Found \$CF_ACCOUNT and \$CF_KEY in \$HOME/.cloudflare"
+                API_ACCOUNT=$CF_ACCOUNT
+                API_APIKEY=$CF_KEY
+            elif [[ $CF_ACCOUNT && $CF_TOKEN ]]; then
+                _debug "Found \$CF_ACCOUNT and \$CF_TOKEN in \$HOME/.cloudflare"
+                API_ACCOUNT=$CF_ACCOUNT
+                API_APIKEY=$CF_TOKEN
             else
-                _error "No \$CF_SPC_TOKEN exiting"
+                _error "No \$CF_SPC_TOKEN or \$CF_KEY missing..exiting"            
                 exit 1
             fi 
     else
