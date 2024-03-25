@@ -104,13 +104,14 @@ function usage_set_settings () {
 }
 
 # ==================================================
-# -- CF_CREATE_FILETER $CF_EXPRESSION
+# -- CF_CREATE_FILETER $ZONE_ID $CF_EXPRESSION
 # ==================================================
 CF_CREATE_FILTER () {
+	ZONE_ID=$1
 	CF_EXPRESSION=$1
-	echo "  - Creating Filter - ${CF_EXPRESSION} on ${CF_ZONEID}"
+	echo "  - Creating Filter - ${CF_EXPRESSION} on ${ZONE_ID}"
 	# -- create_filter curl
-	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/filters"
+	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/filters"
 	CF_CREATE_FILTER_CURL=$(curl -s -X POST ${CF_API_ENDPOINT} \
 	-H "X-Auth-Email: ${CF_ACCOUNT}" \
 	-H "X-Auth-Key: ${CF_TOKEN}" \
@@ -282,12 +283,13 @@ CF_DELETE_RULE () {
 }
 
 # ==================================================
-# -- Protect WordPress
+# -- CF_PROTECT_WP $ZONE_ID
 # ==================================================
 CF_PROTECT_WP () {
+	ZONE_ID=$1
 	# -- Block xmlrpc.php - Priority 1
 	_creating "  Creating - Block xml-rpc.php rule"
-	CF_CREATE_FILTER 'http.request.uri.path eq \"/xmlrpc.php\"'
+	CF_CREATE_FILTER $ZONE_ID 'http.request.uri.path eq \"/xmlrpc.php\"'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block)"
 	fi
@@ -468,7 +470,7 @@ elif [[ $CMD == "create-rules" ]]; then
 	if [[ -z $PROFILE ]]; then
 		_running "Missing profile name, using default for rules"
 		_get_zone_id $DOMAIN
-		CF_PROTECT_WP # @ISSUE needs to be migrated
+		CF_PROTECT_WP $CF_ZONE_ID # @ISSUE needs to be migrated
 	else
 		_running "Creating rules using profile $PROFILE"
 		cf_profile_create $PROFILE
