@@ -246,11 +246,12 @@ CF_DELETE_FILTER () {
 }
 
 # ==================================================
-# CF_GET_RULES
+# CF_GET_RULES $ZONE_ID
 # ==================================================
 CF_GET_RULES () {
+	local ZONE_ID=$1
     CF_GET_RULES_CURL=$(curl -s -X GET \
-    "https://api.cloudflare.com/client/v4/zones/${CF_ZONEID}/firewall/rules" \
+    "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/firewall/rules" \
     -H "X-Auth-Email: ${CF_ACCOUNT}" \
     -H "X-Auth-Key: ${CF_TOKEN}" \
     -H "Content-Type: application/json")
@@ -485,7 +486,7 @@ elif [[ $CMD == "custom-rules" ]]; then
 elif [[ $CMD == "get-rules" ]]; then
     _running "  Running Get rules"
     _get_zone_id $DOMAIN
-    CF_GET_RULES
+    CF_GET_RULES $CF_ZONE_ID
 # ================
 # -- delete-rules
 # ================
