@@ -246,7 +246,7 @@ CF_DELETE_FILTER () {
 }
 
 # ==================================================
-# CF_GET_RULES $ZONE_ID
+# CF_GET_RULES $CF_ZONE_ID
 # ==================================================
 CF_GET_RULES () {
 	local ZONE_ID=$1
@@ -478,7 +478,7 @@ elif [[ $CMD == "create-rules" ]]; then
 # ================
 elif [[ $CMD == "custom-rules" ]]; then
 	_running "Running custom-rules"
-	_get_zone_id$DOMAIN
+	_get_zone_id $DOMAIN
 	cf_custom_rules $PROFILE
 # ================
 # -- get-rules
@@ -500,7 +500,7 @@ elif [[ $CMD == "delete-rule" ]]; then
 elif [[ $CMD == "get-filters" ]]; then
 	_running "  Running Get filters"
 	_get_zone_id $DOMAIN
-	CF_GET_FILTERS
+	CF_GET_FILTERS $CF_ZONE_ID
 # ================
 # -- get-filter-id
 # ================
