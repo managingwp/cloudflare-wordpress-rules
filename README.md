@@ -98,3 +98,16 @@ do
     cloudflare-wordpress-rules.sh set-settings $domain challenge_ttl 86400
 done
 ```
+# Rules to Ruleset Change
+```
+curl https://api.cloudflare.com/client/v4/zones/{zone_id}/rulesets/{ruleset_id}/rules \
+--header "Authorization: Bearer <API_TOKEN>" \
+--header "Content-Type: application/json" \
+--data '{
+  "description": "My custom rule",
+  "expression": "(ip.geoip.country eq \"GB\" or ip.geoip.country eq \"FR\") and cf.threat_score > 10",
+  "action": "challenge"
+}'
+```
+
+# Change Log

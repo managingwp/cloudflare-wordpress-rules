@@ -1,0 +1,12 @@
+{
+    "result": [
+      {
+        "id": "3395f533afa54077a3221f16c7ffa7a5",
+        "expression": "(http.request.uri.path eq \"/wp-content/uploads/wp-activity-log/non_mirrored_logs.json\") or (http.request.uri.path eq \"/xmlrpc.php\")",
+        "paused": false
+      }
+    ],
+    "success": true,
+    "errors": [],
+    "messages": []
+  }

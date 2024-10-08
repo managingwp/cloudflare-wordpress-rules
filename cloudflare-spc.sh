@@ -10,6 +10,7 @@
 SCRIPT_NAME=cloudflare-spc
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
+API_URL="https://api.cloudflare.com"
 DEBUG="0"
 DRYRUN="0"
 
@@ -124,8 +125,7 @@ create_token () {
         _success "Zone ID found for $DOMAIN_NAME: $CF_ZONE_ID"
     fi
     local ZONE_ID_JSON=("com.cloudflare.api.account.zone.${CF_ZONE_ID}")
-    EXTRA=(-H 'Content-Type: application/json' \
-     --data '
+    EXTRA=('
  {
  	"name": "'${DOMAIN_NAME}' '${TOKEN_NAME}'",
  	"policies": [

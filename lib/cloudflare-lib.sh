@@ -20,6 +20,14 @@ CF_DEFAULTS_BROWSER_CHECK=("on" "off")
 CF_DEFAULTS_ALWAYS_USE_HTTPS=("on" "off")
 CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 
+
+# ==================================================
+# -- Test Files
+# ==================================================
+TEST_DIR="$SCRIPT_DIR/test"
+TEST_FILTER_RESPONSE="test/filter-response.json"
+TEST_RULE_RESPONSE="test/rule-response.json"
+
 # ==================================================
 # -- pre_flight_check - Check for .cloudflare credentials
 # ==================================================
@@ -74,7 +82,7 @@ function pre_flight_check () {
 
 # ==================================================
 # -- _cf_api <$METHOD> <$API_PATH> <${CURL_HEADERS[@]}>
-# -- returns $CURL_EXIT_CODE and $API_OUTPUT
+# -- returns $API_OUTPUT
 # ==================================================
 function _cf_api () {
     # -- Run cf_api with tokens
@@ -86,10 +94,9 @@ function _cf_api () {
     shift
     local API_PATH="$1"
     shift
-    local CURL_OUTPUT
+    local CURL_OUTPUT CURL_ERROR API_OUTPUT CURL_EXIT_CODE
     declare -a CURL_OPTS
     CURL_OPTS=()
-    CURL_OUTPUT=$(mktemp)
 
     _debug "METHOD: $METHOD API_PATH: $API_PATH CURL_OUTPUT: $CURL_OUTPUT"
 
@@ -122,8 +129,15 @@ function _cf_api () {
         CURL_OPTS+=(-H "Content-Type: application/json")
         FORMTYPE="data"        
         # -- Pass JSON via CURL_OPTS  
-    else
+    elif [[ $METHOD = "GET" ]]; then
         CURL_OPTS+=(--get)
+    elif [[ $METHOD = "DELETE" ]]; then
+        METHOD="DELETE"
+        FORMTYPE="data"
+        PROCESS_PARAMS="1"   
+    else
+        _error "Method $METHOD not supported"
+        return 1
     fi
 
     # -- Process parameters
@@ -142,30 +156,44 @@ function _cf_api () {
         _debug "Skipping processing parameters"
     fi
 	
-    _debug "Running curl -s -w "%{http_code}" --request "${METHOD}" --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]} ${CURL_OPTS[*]}" "${EXTRA[@]}""
+    _debug "Running curl -w \"%{http_code}\" --request ${METHOD} --url ${API_URL}${API_PATH} ${CURL_HEADERS[*]} ${CURL_OPTS[*]} --output $CURL_OUTPUT ${EXTRA[@]}"
     [[ $DEBUG == "1" ]] && set -x
-    CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$METHOD" \
+    CURL_OUTPUT=$(mktemp)
+    CURL_ERROR=$(mktemp)
+    HTTP_STATUS=$(curl -sS -w "%{http_code}" --request "$METHOD" \
         --url "${API_URL}${API_PATH}" \
         "${CURL_HEADERS[@]}" \
         "${CURL_OPTS[@]}" \
-        --output "$CURL_OUTPUT" "${EXTRA[@]}")
-    
+        --output "$CURL_OUTPUT" --stderr "$CURL_ERROR" "${EXTRA[@]}")
+    CURL_EXIT_CODE=$?
+
     [[ $DEBUG == "1" ]] && set +x
     API_OUTPUT=$(<"$CURL_OUTPUT")
+    CURL_ERROR_OUTPUT=$(<"$CURL_ERROR")
     _debug_json "$API_OUTPUT"
-    rm $CURL_OUTPUT 
+    rm "$CURL_OUTPUT"
 
 		
-	if [[ $CURL_EXIT_CODE == "200" ]]; then
+	if [[ $HTTP_STATUS == "200" ]]; then
         _debug "=============== SUCCESS ==============="
+        _debug "CF_ENDPOINT: $API_PATH CURL_EXIT_CODE: $CURL_EXIT_CODE HTTP_STATUS: $HTTP_STATUS"
 	    _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
         _debug "API_OUTPUT: $API_OUTPUT"
         echo "$API_OUTPUT"
 	else
         _debug "=============== FAIL ==============="
-        _debug "CF_ENDPOINT: $API_PATH CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        _debug "CF_ENDPOINT: $API_PATH"
+        _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        _debug "CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT"
+        _debug "HTTP_STATUS: $HTTP_STATUS"
         _debug "API_OUTPUT: $API_OUTPUT"
-        echo "$API_OUTPUT"
+
+        echo "CURL_EXIT_CODE: $CURL_EXIT_CODE CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT HTTP_STATUS: $HTTP_STATUS"
+        if [[ $HTTP_STATUS == "400" ]]; then
+            API_ERROR_MESSAGE=$(echo "$API_OUTPUT" | jq -r '.errors[0].message')
+            API_ERROR_CODE=$(echo "$API_OUTPUT" | jq -r '.errors[0].code')
+            echo "Message: $API_ERROR_MESSAGE Code: $API_ERROR_CODE"
+        fi
         return 1
     fi
 }
@@ -284,8 +312,8 @@ function _cf_settings_values () {
 function _get_zone_id () {
     _debug "function:${FUNCNAME[0]}"
     local DOMAIN=$1 API_OUTPUT QUIET=${2:-0}
-    _debug "Running _get_zone_id() with ${*}"    
-    local API_OUTPUT=$(_cf_api GET /client/v4/zones?name=${DOMAIN})
+    _debug "Running _get_zone_id() with ${*}"        
+    API_OUTPUT=$(_cf_api GET /client/v4/zones?name=${DOMAIN})
 
     if [[ $? == "0" ]]; then        
         CF_ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
@@ -333,21 +361,25 @@ function _convert_seconds () {
 # ==================================================
 # -- _cf_create_filter $ZONE_ID $EXPRESSION
 # ==================================================
-_cf_create_filter () {
-    local ZONE_ID=$1
-    _debug "function:${FUNCNAME[0]}"
-    _running "Creating filter for $ZONE_ID"
-    if [[ $DRYRUN == "1" ]]; then
-        echo "DRYRUN: Would have created filter for $ZONE_ID"
+_cf_create_filter () { 
+    local ZONE_ID=$1 EXPRESSION=$2 CF_API_RESPONSE CF_API_RESPONSE_EXIT_CODE
+    _debug "ZONE_ID: $ZONE_ID EXPRESSION: $EXPRESSION"
+
+    if [[ $DRY_RUN == "1" ]]; then
+        _debug "Using test file for filter creation, $TEST_FILTER_RESPONSE"
+        return 0
+    fi
+
+    CF_API_RESPONSE=$(_cf_api "POST-JSON" "/client/v4/zones/${ZONE_ID}/filters" "$(jq -n --arg expression "$EXPRESSION" '[{"expression": $expression}]')")
+    CF_API_RESPONSE_EXIT_CODE="$?"
+    
+    if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
+        CF_API_RESPONSE_FILTER_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
+        echo "$CF_API_RESPONSE_FILTER_ID"
+        _debug "Filter created successfully CF_API_RESPONSE_FILTER_ID: $CF_API_RESPONSE_FILTER_ID"
     else
-        _cf_api "POST" "/client/v4/zones/${ZONE_ID}/filters" "$(jq -n --arg expression "$EXPRESSION" '{"expression": $expression}')"
-        if [[ $CURL_EXIT_CODE == "200" ]]; then
-            _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
-            echo "Created filter for $ZONE_ID successfully"
-        else
-            _error "Error creating filter for $ZONE_ID"
-            exit 1
-        fi
+        echo "$CF_API_RESPONSE"
+        return 1
     fi
 }
 
@@ -356,22 +388,26 @@ _cf_create_filter () {
 # ==================================================
 _cf_create_rule () {
 	local ZONE_ID=$1 FILTER_ID=$2 ACTION=$3 PRIORITY=$4 DESCRIPTION=$5
+    local CF_API_RESPONSE CF_API_RESPONSE_FIREWALL_ID CF_API_RESPONSE_EXIT_CODE
+    _debug "ZONE_ID: $ZONE_ID FILTER_ID: $FILTER_ID ACTION: $ACTION PRIORITY: $PRIORITY DESCRIPTION: $DESCRIPTION"
 
-	echo " - Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"    
     if [[ $DRYRUN == "1" ]]; then
-        echo "DRYRUN: Would have created rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+        _debug "Using test file for filter creation, $TEST_RULE_RESPONSE"
     else
-        _debug "Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-        _cf_api "POST" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
-        "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" --arg priority "$PRIORITY" --arg description "$DESCRIPTION" '{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}')"
+        CF_API_RESPONSE=$(_cf_api "POST-JSON" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
+        "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" \
+        --arg priority "$PRIORITY" \
+        --arg description "$DESCRIPTION" '[{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}]')")
+        CF_API_RESPONSE_EXIT_CODE="$?"
 
         # -- Check if the rule was created
-        if [[ $CURL_EXIT_CODE == "200" ]]; then
-            _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
-            echo "Created rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
+        if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
+            CF_API_RESPONSE_FIREWALL_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
+            echo "$CF_API_RESPONSE_FILTER_ID"
+            _debug "Firewall rule created successfully CF_API_RESPONSE_FIREWALL_ID: $CF_API_RESPONSE_FIREWALL_ID"
         else
-            _error "Error creating rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-            exit 1
+            echo "$CF_API_RESPONSE"
+            return 1
         fi
 	fi
 }
@@ -382,7 +418,7 @@ _cf_create_rule () {
 function _apply_profile () {
     local ZONE_ID=$1 PROFILE_NAME=$2
     _debug "function:${FUNCNAME[0]}"
-    _running "Applying profile $PROFILE_NAME"
+    _running2 "Applying profile $PROFILE_NAME"
 
     # -- Check if profile exists under profiles/$PROFILE_NAME
     if [[ -f "profiles/$PROFILE_NAME" ]]; then
@@ -409,11 +445,10 @@ function _apply_profile () {
 # -- _get_domain_account_id $DOMAIN
 # ==================================================
 function _get_domain_account_id () {
-    DFUNC="function:${FUNCNAME[0]}"
     _debug "$DFUNC: Getting Account ID for $DOMAIN"
     local DOMAIN=$1
 
-    _running "Getting Account ID for $DOMAIN"
+    _running2 "Getting Account ID for $DOMAIN"
     _debug "$DFUNC: Running _cf_api GET /client/v4/zones?name=${DOMAIN}"
     API_OUTPUT=$(_cf_api "GET" "/client/v4/zones?name=${DOMAIN}")
     _debug "$DFUNC: API_OUTPUT: $API_OUTPUT"
@@ -430,10 +465,100 @@ function _get_domain_account_id () {
         fi
     else
         _error "$DFUNC: Couldn't get Account ID, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token" >&2
-        _debug "$DFUNC: API_OUTPUT: $API_OUTPUT"
-        _debug "$DFUNC: CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        _debug "API_OUTPUT: $API_OUTPUT"
+        _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
         return 1
     fi
 }
 
 
+# ==================================================
+# -- _cf_get_filters $ZONE_ID $OUTPUT_FORMAT
+# ==================================================
+function _cf_get_filters () {
+    local ZONE_ID=$1
+    local OUTPUT_FORMAT=${2:-""}
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Running _cf_get_filters() with ${*}"
+    _debug "ZONE_ID: $ZONE_ID OUTPUT_FORMAT: $OUTPUT_FORMAT"
+    API_OUTPUT=$(_cf_api "GET" "/client/v4/zones/${ZONE_ID}/filters")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
+
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        if [[ $OUTPUT_FORMAT == "json" ]]; then
+            echo "$API_OUTPUT"
+            return 0
+        else
+            FILTERS=$(echo $API_OUTPUT | jq -r '.result[] | .id + " " + .expression')
+            echo "$FILTERS"
+            return 0
+        fi
+    else
+        _error "Error getting filters"
+        return 1
+    fi
+}
+
+# ==================================================
+# -- _cf_delete_rule $RULE_ID
+# ==================================================
+function _cf_delete_rule () {
+    local RULE_ID=$1
+    _running2 "Deleting rule $RULE_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}"
+    API_OUTPUT=$(_cf_api "DELETE" "/client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
+
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        _success "Rule $RULE_ID deleted successfully"
+        return 0
+    else
+        _error "Error deleting rule $RULE_ID"
+        return 1
+    fi
+}
+
+# ==================================================
+# -- _cf_delete_filter $FILTER_ID
+# ==================================================
+function _cf_delete_filter () {
+    local FILTER_ID=$1
+    _running2 "Deleting filter $FILTER_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${CF_ZONE_ID}/filters/${FILTER_ID}"
+    API_OUTPUT=$(_cf_api "DELETE" "/client/v4/zones/${CF_ZONE_ID}/filters/${FILTER_ID}")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
+
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        _success "Filter $FILTER_ID deleted successfully"
+        return 0
+    else
+        _error "Error deleting filter $FILTER_ID"
+        return 1
+    fi
+}
+
+# ==================================================
+# -- _cf_delete_all_filters $ZONE_ID
+# ==================================================
+function _cf_delete_all_filters () {
+    local ZONE_ID=$1
+    _running "Deleting all filters for $ZONE_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${ZONE_ID}/filters"
+
+    # Get all filters
+    FILTER_JSON=($(_cf_get_filters "$ZONE_ID" json | jq -r '.result[] | .id'))
+
+    if [[ -z $FILTER_JSON ]]; then
+        _error "No filters found for $ZONE_ID"
+        return 1
+    fi
+    
+    for FILTER_ID in "${FILTER_JSON[@]}"; do
+        _running2 "Deleting filter $FILTER_ID"
+        _cf_delete_filter "$FILTER_ID"
+        CF_API_EXIT_CODE="$?"        
+    done
+}
