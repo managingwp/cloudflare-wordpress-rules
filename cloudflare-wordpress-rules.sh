@@ -79,6 +79,7 @@ CF_CREATE_FILTER () {
 	echo "  - Creating Filter - ${CF_EXPRESSION} on ${ZONE_ID}"
 	# -- create_filter curl
 	CF_API_ENDPOINT="https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/filters"
+	_debug "CF_API_ENDPOINT: $CF_API_ENDPOINT"
 	CF_CREATE_FILTER_CURL=$(curl -s -X POST ${CF_API_ENDPOINT} \
 	-H "X-Auth-Email: ${CF_ACCOUNT}" \
 	-H "X-Auth-Key: ${CF_TOKEN}" \
