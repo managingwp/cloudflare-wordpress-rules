@@ -77,13 +77,21 @@ function usage_set_settings () {
 # -- CF_PROTECT_WP $CF_ZONE_ID
 # ==================================================
 CF_PROTECT_WP () {
-	local CF_ZONE_ID=$1
+	local CF_ZONE_ID=$1 CF_CREATE_FILTER_ID CF_CREATE_RULE
 	# -- Block xmlrpc.php - Priority 1
-	_creating "Creating - Block xml-rpc.php rule - P1"
-	_cf_create_filter $CF_ZONE_ID '(http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")'
-	if [[ $? == "0" ]]; then
-	    _cf_create_rule $CF_ZONE_ID "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block) P1"
+	_creating "Creating Filter for - Block xml-rpc.php rule - P1"
+	CF_CREATE_FILTER_ID=$(_cf_create_filter $CF_ZONE_ID '(http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")')	
+	if [[ $? == "1" ]]; then 
+		_error "Failed to create filter - $CF_CREATE_FILTER_ID"
+		return 1
 	fi
+	
+	CF_CREATE_RULE=$(_cf_create_rule $CF_ZONE_ID "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block) P1")
+	if [[ $? == "1" ]]; then 
+		_error "Failed to create rule - $CF_CREATE_RULE"
+		return 1
+	fi
+	_creating "Creating Rule - Block xml-rpc.php rule - P1"
 	_separator
 
 	# -- Allow URI Query, URL, User Agents, and IPs (Allow) - Priority 2

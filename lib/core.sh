@@ -35,9 +35,10 @@ _dryrun () { echo -e "${CYAN}** DRYRUN: ${*$}{ECOL}"; }
 # =================================================================================================
 function _debug () { 
 	# Get the previous function name
-	local FUNCTION=$(caller 1 | awk '{print $2}')
+	local FUNCTION
+	FUNCTION=$(caller 1 | awk '{print $2}')
 	if [[ $DEBUG == "1" ]]; then
-		echo -e "${CYAN}** DEBUG: ${FUNCTION}:${*}${ECOL}" >&2
+		echo -e "${CYAN}** DEBUG: ${FUNCTION}: ${*}${ECOL}" >&2
 	fi
 }
 
@@ -45,8 +46,10 @@ function _debug () {
 # -- debug_jsons
 # =================================================================================================
 function _debug_json () {
+	local FUNCTION
+	FUNCTION=$(caller 1 | awk '{print $2}')
     if [[ $DEBUG_JSON == "1" ]]; then
-        echo -e "${CCYAN}** Outputting JSON ${*}${NC}" >&2
+        echo -e "${CCYAN}** DEBUG_JSON: $FUNCTION: ${*}${NC}" >&2
         echo "${@}" | jq >&2
     fi
 }
