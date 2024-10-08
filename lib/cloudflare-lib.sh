@@ -334,13 +334,13 @@ function _convert_seconds () {
 # -- _cf_create_filter $ZONE_ID $EXPRESSION
 # ==================================================
 _cf_create_filter () {
-    local ZONE_ID=$1
+    local ZONE_ID=$1 EXPRESSION=$2
     _debug "function:${FUNCNAME[0]}"
     _running "Creating filter for $ZONE_ID"
     if [[ $DRYRUN == "1" ]]; then
         echo "DRYRUN: Would have created filter for $ZONE_ID"
     else
-        _cf_api "POST" "/client/v4/zones/${ZONE_ID}/filters" "$(jq -n --arg expression "$EXPRESSION" '{"expression": $expression}')"
+        _cf_api "POST-JSON" "/client/v4/zones/${ZONE_ID}/filters" "$(jq -n --arg expression "$EXPRESSION" '{"expression": $expression}')"
         if [[ $CURL_EXIT_CODE == "200" ]]; then
             _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
             echo "Created filter for $ZONE_ID successfully"
@@ -356,6 +356,7 @@ _cf_create_filter () {
 # ==================================================
 _cf_create_rule () {
 	local ZONE_ID=$1 FILTER_ID=$2 ACTION=$3 PRIORITY=$4 DESCRIPTION=$5
+    _debug "ZONE_ID: $ZONE_ID FILTER_ID: $FILTER_ID ACTION: $ACTION PRIORITY: $PRIORITY DESCRIPTION: $DESCRIPTION"
 
 	echo " - Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"    
     if [[ $DRYRUN == "1" ]]; then

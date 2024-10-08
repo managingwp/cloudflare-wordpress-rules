@@ -34,8 +34,10 @@ _dryrun () { echo -e "${CYAN}** DRYRUN: ${*$}{ECOL}"; }
 # -- debug
 # =================================================================================================
 function _debug () { 
+	# Get the previous function name
+	local FUNCTION=$(caller 1 | awk '{print $2}')
 	if [[ $DEBUG == "1" ]]; then
-		echo -e "${CYAN}** DEBUG: ${*}${ECOL}" >&2
+		echo -e "${CYAN}** DEBUG: ${FUNCTION}:${*}${ECOL}" >&2
 	fi
 }
 
