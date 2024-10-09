@@ -34,6 +34,7 @@ usage () {
 	echo ""
 	echo "   get-rules <domain>                        - Get rules"
 	echo "   delete-rule <id>                          - Delete rule"
+	echo "   delete-all-rules <domain>                 - Delete all rules"
 	echo ""
 	echo "   get-filters <id>                          - Get Filters"
 	echo "   delete-filter <id>                        - Delete rule ID on domain"	

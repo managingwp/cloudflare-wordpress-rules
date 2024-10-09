@@ -129,8 +129,11 @@ function _cf_api () {
         CURL_OPTS+=(-H "Content-Type: application/json")
         FORMTYPE="data"        
         # -- Pass JSON via CURL_OPTS  
-    else
+    elif [[ $METHOD = "GET" ]]; then
         CURL_OPTS+=(--get)
+    else
+        _error "Method $METHOD not supported"
+        exit 1
     fi
 
     # -- Process parameters
@@ -181,12 +184,12 @@ function _cf_api () {
         _debug "HTTP_STATUS: $HTTP_STATUS"
         _debug "API_OUTPUT: $API_OUTPUT"
 
-        echo "CURL_EXIT_CODE: $CURL_EXIT_CODE"
-        echo "CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT"
-        echo "HTTP_STATUS: $HTTP_STATUS"
-        API_ERROR_MESSAGE=$(echo "$API_OUTPUT" | jq -r '.errors[0].message')
-        API_ERROR_CODE=$(echo "$API_OUTPUT" | jq -r '.errors[0].code')
-        echo "Message: $API_ERROR_MESSAGE Code: $API_ERROR_CODE"
+        echo "CURL_EXIT_CODE: $CURL_EXIT_CODE CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT HTTP_STATUS: $HTTP_STATUS"
+        if [[ $HTTP_STATUS == "400" ]]; then
+            API_ERROR_MESSAGE=$(echo "$API_OUTPUT" | jq -r '.errors[0].message')
+            API_ERROR_CODE=$(echo "$API_OUTPUT" | jq -r '.errors[0].code')
+            echo "Message: $API_ERROR_MESSAGE Code: $API_ERROR_CODE"
+        fi
         return 1
     fi
 }
@@ -387,8 +390,10 @@ _cf_create_rule () {
     if [[ $DRYRUN == "1" ]]; then
         _debug "Using test file for filter creation, $TEST_RULE_RESPONSE"
     else
-        CF_API_RESPONSE=$(_cf_api "JSON-POST" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
-        "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" --arg priority "$PRIORITY" --arg description "$DESCRIPTION" '{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}')")
+        CF_API_RESPONSE=$(_cf_api "POST-JSON" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
+        "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" \
+        --arg priority "$PRIORITY" \
+        --arg description "$DESCRIPTION" '[{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}]')")
         CF_API_RESPONSE_EXIT_CODE="$?"
 
         # -- Check if the rule was created
@@ -462,4 +467,22 @@ function _get_domain_account_id () {
     fi
 }
 
+# ==================================================
+# -- _cf_delete_rule $RULE_ID
+# ==================================================
+function _cf_delete_rule () {
+    local RULE_ID=$1
+    _running "Deleting rule $RULE_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}"
+    API_OUTPUT=$(_cf_api "DELETE" "/client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
 
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        _success "Rule $RULE_ID deleted successfully"
+        return 0
+    else
+        _error "Error deleting rule $RULE_ID"
+        return 1
+    fi
+}
