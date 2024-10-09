@@ -131,9 +131,13 @@ function _cf_api () {
         # -- Pass JSON via CURL_OPTS  
     elif [[ $METHOD = "GET" ]]; then
         CURL_OPTS+=(--get)
+    elif [[ $METHOD = "DELETE" ]]; then
+        METHOD="DELETE"
+        FORMTYPE="data"
+        PROCESS_PARAMS="1"   
     else
         _error "Method $METHOD not supported"
-        exit 1
+        return 1
     fi
 
     # -- Process parameters
@@ -308,8 +312,8 @@ function _cf_settings_values () {
 function _get_zone_id () {
     _debug "function:${FUNCNAME[0]}"
     local DOMAIN=$1 API_OUTPUT QUIET=${2:-0}
-    _debug "Running _get_zone_id() with ${*}"    
-    local API_OUTPUT=$(_cf_api GET /client/v4/zones?name=${DOMAIN})
+    _debug "Running _get_zone_id() with ${*}"        
+    API_OUTPUT=$(_cf_api GET /client/v4/zones?name=${DOMAIN})
 
     if [[ $? == "0" ]]; then        
         CF_ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
@@ -397,14 +401,14 @@ _cf_create_rule () {
         CF_API_RESPONSE_EXIT_CODE="$?"
 
         # -- Check if the rule was created
-    if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
-        CF_API_RESPONSE_FIREWALL_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
-        echo "$CF_API_RESPONSE_FILTER_ID"
-        _debug "Firewall rule created successfully CF_API_RESPONSE_FIREWALL_ID: $CF_API_RESPONSE_FIREWALL_ID"
-    else
-        echo "$CF_API_RESPONSE"
-        return 1
-    fi
+        if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
+            CF_API_RESPONSE_FIREWALL_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
+            echo "$CF_API_RESPONSE_FILTER_ID"
+            _debug "Firewall rule created successfully CF_API_RESPONSE_FIREWALL_ID: $CF_API_RESPONSE_FIREWALL_ID"
+        else
+            echo "$CF_API_RESPONSE"
+            return 1
+        fi
 	fi
 }
 
@@ -414,7 +418,7 @@ _cf_create_rule () {
 function _apply_profile () {
     local ZONE_ID=$1 PROFILE_NAME=$2
     _debug "function:${FUNCNAME[0]}"
-    _running "Applying profile $PROFILE_NAME"
+    _running2 "Applying profile $PROFILE_NAME"
 
     # -- Check if profile exists under profiles/$PROFILE_NAME
     if [[ -f "profiles/$PROFILE_NAME" ]]; then
@@ -444,7 +448,7 @@ function _get_domain_account_id () {
     _debug "$DFUNC: Getting Account ID for $DOMAIN"
     local DOMAIN=$1
 
-    _running "Getting Account ID for $DOMAIN"
+    _running2 "Getting Account ID for $DOMAIN"
     _debug "$DFUNC: Running _cf_api GET /client/v4/zones?name=${DOMAIN}"
     API_OUTPUT=$(_cf_api "GET" "/client/v4/zones?name=${DOMAIN}")
     _debug "$DFUNC: API_OUTPUT: $API_OUTPUT"
@@ -467,12 +471,41 @@ function _get_domain_account_id () {
     fi
 }
 
+
+# ==================================================
+# -- _cf_get_filters $ZONE_ID $OUTPUT_FORMAT
+# ==================================================
+function _cf_get_filters () {
+    local ZONE_ID=$1
+    local OUTPUT_FORMAT=${2:-""}
+    _debug "function:${FUNCNAME[0]}"
+    _debug "Running _cf_get_filters() with ${*}"
+    _debug "ZONE_ID: $ZONE_ID OUTPUT_FORMAT: $OUTPUT_FORMAT"
+    API_OUTPUT=$(_cf_api "GET" "/client/v4/zones/${ZONE_ID}/filters")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
+
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        if [[ $OUTPUT_FORMAT == "json" ]]; then
+            echo "$API_OUTPUT"
+            return 0
+        else
+            FILTERS=$(echo $API_OUTPUT | jq -r '.result[] | .id + " " + .expression')
+            echo "$FILTERS"
+            return 0
+        fi
+    else
+        _error "Error getting filters"
+        return 1
+    fi
+}
+
 # ==================================================
 # -- _cf_delete_rule $RULE_ID
 # ==================================================
 function _cf_delete_rule () {
     local RULE_ID=$1
-    _running "Deleting rule $RULE_ID"
+    _running2 "Deleting rule $RULE_ID"
     _debug "Running _cf_api DELETE /client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}"
     API_OUTPUT=$(_cf_api "DELETE" "/client/v4/zones/${CF_ZONE_ID}/firewall/rules/${RULE_ID}")
     _debug "API_OUTPUT: $API_OUTPUT"
@@ -485,4 +518,47 @@ function _cf_delete_rule () {
         _error "Error deleting rule $RULE_ID"
         return 1
     fi
+}
+
+# ==================================================
+# -- _cf_delete_filter $FILTER_ID
+# ==================================================
+function _cf_delete_filter () {
+    local FILTER_ID=$1
+    _running2 "Deleting filter $FILTER_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${CF_ZONE_ID}/filters/${FILTER_ID}"
+    API_OUTPUT=$(_cf_api "DELETE" "/client/v4/zones/${CF_ZONE_ID}/filters/${FILTER_ID}")
+    _debug "API_OUTPUT: $API_OUTPUT"
+    CF_API_EXIT_CODE="$?"
+
+    if [[ $CF_API_EXIT_CODE == "0" ]]; then
+        _success "Filter $FILTER_ID deleted successfully"
+        return 0
+    else
+        _error "Error deleting filter $FILTER_ID"
+        return 1
+    fi
+}
+
+# ==================================================
+# -- _cf_delete_all_filters $ZONE_ID
+# ==================================================
+function _cf_delete_all_filters () {
+    local ZONE_ID=$1
+    _running "Deleting all filters for $ZONE_ID"
+    _debug "Running _cf_api DELETE /client/v4/zones/${ZONE_ID}/filters"
+
+    # Get all filters
+    FILTER_JSON=($(_cf_get_filters "$ZONE_ID" json | jq -r '.result[] | .id'))
+
+    if [[ -z $FILTER_JSON ]]; then
+        _error "No filters found for $ZONE_ID"
+        return 1
+    fi
+    
+    for FILTER_ID in "${FILTER_JSON[@]}"; do
+        _running2 "Deleting filter $FILTER_ID"
+        _cf_delete_filter "$FILTER_ID"
+        CF_API_EXIT_CODE="$?"        
+    done
 }
