@@ -82,13 +82,15 @@ CF_PROTECT_WP () {
 	_creating "Creating Filter for - Block xml-rpc.php rule - P1"
 	CF_CREATE_FILTER_ID=$(_cf_create_filter $CF_ZONE_ID '(http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")')	
 	if [[ $? == "1" ]]; then 
-		_error "Failed to create filter - $CF_CREATE_FILTER_ID"
+		_error "Failed to create filter."
+		_error "$CF_CREATE_FILTER_ID"
 		return 1
 	fi
 	
 	CF_CREATE_RULE=$(_cf_create_rule $CF_ZONE_ID "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block) P1")
 	if [[ $? == "1" ]]; then 
-		_error "Failed to create rule - $CF_CREATE_RULE"
+		_error "Failed to create rule."
+		_error "$CF_CREATE_RULE"
 		return 1
 	fi
 	_creating "Creating Rule - Block xml-rpc.php rule - P1"

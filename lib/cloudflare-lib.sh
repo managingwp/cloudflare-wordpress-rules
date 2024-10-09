@@ -94,10 +94,9 @@ function _cf_api () {
     shift
     local API_PATH="$1"
     shift
-    local CURL_OUTPUT
+    local CURL_OUTPUT CURL_ERROR API_OUTPUT CURL_EXIT_CODE
     declare -a CURL_OPTS
     CURL_OPTS=()
-    CURL_OUTPUT=$(mktemp)
 
     _debug "METHOD: $METHOD API_PATH: $API_PATH CURL_OUTPUT: $CURL_OUTPUT"
 
@@ -150,30 +149,44 @@ function _cf_api () {
         _debug "Skipping processing parameters"
     fi
 	
-    _debug "Running curl -s -w "%{http_code}" --request "${METHOD}" --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]} ${CURL_OPTS[*]}" "${EXTRA[@]}""
+    _debug "Running curl -w \"%{http_code}\" --request ${METHOD} --url ${API_URL}${API_PATH} ${CURL_HEADERS[*]} ${CURL_OPTS[*]} --output $CURL_OUTPUT ${EXTRA[@]}"
     [[ $DEBUG == "1" ]] && set -x
-    CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$METHOD" \
+    CURL_OUTPUT=$(mktemp)
+    CURL_ERROR=$(mktemp)
+    HTTP_STATUS=$(curl -sS -w "%{http_code}" --request "$METHOD" \
         --url "${API_URL}${API_PATH}" \
         "${CURL_HEADERS[@]}" \
         "${CURL_OPTS[@]}" \
-        --output "$CURL_OUTPUT" "${EXTRA[@]}")    
+        --output "$CURL_OUTPUT" --stderr "$CURL_ERROR" "${EXTRA[@]}")
+    CURL_EXIT_CODE=$?
 
     [[ $DEBUG == "1" ]] && set +x
     API_OUTPUT=$(<"$CURL_OUTPUT")
+    CURL_ERROR_OUTPUT=$(<"$CURL_ERROR")
     _debug_json "$API_OUTPUT"
     rm "$CURL_OUTPUT"
 
 		
-	if [[ $CURL_EXIT_CODE == "200" ]]; then
+	if [[ $HTTP_STATUS == "200" ]]; then
         _debug "=============== SUCCESS ==============="
+        _debug "CF_ENDPOINT: $API_PATH CURL_EXIT_CODE: $CURL_EXIT_CODE HTTP_STATUS: $HTTP_STATUS"
 	    _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
         _debug "API_OUTPUT: $API_OUTPUT"
-        echo "$API_OUTPUT"        
+        echo "$API_OUTPUT"
 	else
         _debug "=============== FAIL ==============="
-        _debug "CF_ENDPOINT: $API_PATH CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        _debug "CF_ENDPOINT: $API_PATH"
+        _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        _debug "CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT"
+        _debug "HTTP_STATUS: $HTTP_STATUS"
         _debug "API_OUTPUT: $API_OUTPUT"
-        echo "$API_OUTPUT"
+
+        echo "CURL_EXIT_CODE: $CURL_EXIT_CODE"
+        echo "CURL_ERROR_OUTPUT: $CURL_ERROR_OUTPUT"
+        echo "HTTP_STATUS: $HTTP_STATUS"
+        API_ERROR_MESSAGE=$(echo "$API_OUTPUT" | jq -r '.errors[0].message')
+        API_ERROR_CODE=$(echo "$API_OUTPUT" | jq -r '.errors[0].code')
+        echo "Message: $API_ERROR_MESSAGE Code: $API_ERROR_CODE"
         return 1
     fi
 }
@@ -354,12 +367,11 @@ _cf_create_filter () {
     CF_API_RESPONSE_EXIT_CODE="$?"
     
     if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
-        CF_API_RESPONSE_FILTER_ID=$(echo $CF_API_RESPONSE | jq -r '.result[0].id')
+        CF_API_RESPONSE_FILTER_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
         echo "$CF_API_RESPONSE_FILTER_ID"
         _debug "Filter created successfully CF_API_RESPONSE_FILTER_ID: $CF_API_RESPONSE_FILTER_ID"
     else
-        _error "Error creating filter for $ZONE_ID"
-        _error "$CF_API_RESPONSE_FILTER_ID"
+        echo "$CF_API_RESPONSE"
         return 1
     fi
 }
@@ -369,23 +381,25 @@ _cf_create_filter () {
 # ==================================================
 _cf_create_rule () {
 	local ZONE_ID=$1 FILTER_ID=$2 ACTION=$3 PRIORITY=$4 DESCRIPTION=$5
+    local CF_API_RESPONSE CF_API_RESPONSE_FIREWALL_ID CF_API_RESPONSE_EXIT_CODE
     _debug "ZONE_ID: $ZONE_ID FILTER_ID: $FILTER_ID ACTION: $ACTION PRIORITY: $PRIORITY DESCRIPTION: $DESCRIPTION"
 
     if [[ $DRYRUN == "1" ]]; then
         _debug "Using test file for filter creation, $TEST_RULE_RESPONSE"
     else
-        _debug "Creating Rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-        CF_API_REPSONSE=$(_cf_api "JSON-POST" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
+        CF_API_RESPONSE=$(_cf_api "JSON-POST" "/client/v4/zones/${ZONE_ID}/firewall/rules" \
         "$(jq -n --arg filter "$FILTER_ID" --arg action "$ACTION" --arg priority "$PRIORITY" --arg description "$DESCRIPTION" '{"filter": {"id": $filter}, "action": $action, "priority": $priority, "description": $description}')")
+        CF_API_RESPONSE_EXIT_CODE="$?"
 
         # -- Check if the rule was created
-        if [[ $CURL_EXIT_CODE == "200" ]]; then
-            _success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
-            echo "Created rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-        else
-            _error "Error creating rule with ID:$ZONE_ID - FILTER_ID:$FILTER_ID - ACTION:$ACTION PRIORITY:$PRIORITY - DESCRIPTION:$DESCRIPTION"
-            exit 1
-        fi
+    if [ $CF_API_RESPONSE_EXIT_CODE -eq 0 ]; then
+        CF_API_RESPONSE_FIREWALL_ID=$(echo "$CF_API_RESPONSE" | jq -r '.result[0].id')
+        echo "$CF_API_RESPONSE_FILTER_ID"
+        _debug "Firewall rule created successfully CF_API_RESPONSE_FIREWALL_ID: $CF_API_RESPONSE_FIREWALL_ID"
+    else
+        echo "$CF_API_RESPONSE"
+        return 1
+    fi
 	fi
 }
 
