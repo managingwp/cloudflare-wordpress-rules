@@ -29,7 +29,7 @@ usage () {
 	echo "   --debug					- Debug mode" 
 	echo 
 	echo " Commands"
-	echo "   list-rulset-profiles                  -List available profiles"
+	echo "   list-ruleset-profiles                  -List available profiles"
 	echo "   create-ruleset-profile <profile>      - Create rulset based on profile for domain"
 	echo "                                              default  - Based on https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/cloudflare-protect-wordpress.md"
 	echo 
@@ -49,7 +49,7 @@ usage () {
 	echo
 	echo "Examples"
 	echo "   $SCRIPT_NAME -d domain.com delete-ruleset 32341983412384bv213v"
-	echo "   $SCRIPT_NAME -d create-ruleseet-profile default"
+	echo "   $SCRIPT_NAME -d create-ruleset-profile default"
 	echo ""
 	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
 	echo ""
@@ -104,8 +104,9 @@ function usage_set_settings () {
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # -- Commands
-_debug "ARGS: ${*}@"
-CMD=$1
+_debug "ARGS: ${*}"
+CMD="$1"
+_debug "CMD: $CMD"
 
 # -- Dryrun
 if [[ $DRYRUN = "1" ]]; then
@@ -124,6 +125,7 @@ fi
 
 # -- Check $CMD
 if [[ -z $CMD ]]; then
+	_debug "$CMD: $CMD"
 	usage
 	_error "No command provided"
 	exit 1
@@ -141,8 +143,8 @@ fi
 # ================
 # -- create-ruleset
 # ================
-if [[ $CMD == "list-rulset-profiles" ]]; then
-	_running "Running list-rulset-profiles on $DOMAIN"
+if [[ $CMD == "list-ruleset-profiles" ]]; then
+	_running "Running list-ruleset-profiles on $DOMAIN"
 	_cf_list_ruleset_profiles 
 elif [[ $CMD == "create-ruleset-profile" ]]; then
 	PROFILE=$3
@@ -213,7 +215,7 @@ elif [[ $CMD == "get-settings" ]]; then
 	_cf_get_settings $CF_ZONE_ID
 else
 	usage 
-	_error "No command provided"
+	_error "No command $CMD is not a valid command"
 	exit 1
 
 fi
