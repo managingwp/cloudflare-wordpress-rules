@@ -13,8 +13,10 @@ PROFILE_DIR="${SCRIPT_DIR}/profiles"
 RED="\033[0;31m"
 GREEN="\033[0;32m"
 CYAN="\033[0;36m"
+YELLOW="\033[0;93m"
 BLUEBG="\033[0;44m"
 YELLOWBG="\033[0;43m"
+YELLOW="\033[0;93m"
 GREENBG="\033[0;42m"
 DARKGREYBG="\033[0;100m"
 ECOL="\033[0;0m"
@@ -23,6 +25,7 @@ ECOL="\033[0;0m"
 _error () { echo -e "${RED}** ERROR ** - ${*} ${ECOL}"; }
 _success () { echo -e "${GREEN}** SUCCESS ** - ${*} ${ECOL}"; }
 _running () { echo -e "${BLUEBG} * ${*}${ECOL}"; }
+_warning () { echo -e "${YELLOW}** WARNING ** - ${*} ${ECOL}"; } # _warning
 _creating () { echo -e "${DARKGREYBG}${*}${ECOL}"; }
 _separator () { echo -e "${YELLOWBG}****************${ECOL}"; }
 _dryrun () { echo -e "${CYAN}** DRYRUN: ${*$}{ECOL}"; }
@@ -90,7 +93,39 @@ CF_GET_ZONEID () {
 			_error "Couldn't find domain $ZONE"
 			exit 1
 		else
-		    echo "  - Found $ZONE - ${CF_ZONEID}"
+			# Check to see if two ids are in CF_ZONEID, zones are separated by newlines
+			ZONES_RETURNED=$(echo "$CF_ZONEID" | wc -l)			
+			if [[ ZONES_RETURNED -gt 1 ]]; then
+				_warning "Found multiple zones for $ZONE"
+				# List each zone with a number, zoneid and account email
+				i=1
+				echo "$CF_ZONEID" | while read -r ZONE; do
+					ZONE_ID=$(echo "$ZONE" | awk '{print $1}')
+					ZONE_NAME=$(_cf_zone_account_email $ZONE_ID)
+					echo "$i - Zone ID: $ZONE_ID - $ZONE_NAME"
+					i=$((i+1))
+				done
+				echo
+
+				# Ask user to select the correct zone
+				read -p "Please select the correct zone id: " SELECTED_ZONE
+				# Make sure the selected zone is a number
+				if [[ ! $SELECTED_ZONE =~ ^[0-9]+$ ]]; then
+					_error "Invalid selection"
+					exit 1
+				fi
+				# Confirm selected zone is in the list
+				if [[ $SELECTED_ZONE -gt $ZONES_RETURNED ]]; then
+					_error "Invalid selection"
+					exit 1
+				fi
+				echo
+
+				# Set CF_ZONEID to the selected zone based on number
+				CF_ZONEID=$(echo "$CF_ZONEID" | awk -v SELECTED_ZONE=$SELECTED_ZONE 'NR==SELECTED_ZONE {print $1}')				
+			else
+				_success "Found Zone ID $CF_ZONEID for $ZONE"
+			fi		    
 		fi
 	fi
 }
@@ -290,7 +325,7 @@ cf_profile_create () {
 # --------------------
 CF_PROTECT_WP () {
 	# -- Block xmlrpc.php - Priority 1
-	_creating "  Creating - Block xml-rpc.php rule"
+	_creating "  Creating - Block xml-rpc.php rule on $DOMAIN - $ZONEID"
 	CF_CREATE_FILTER 'http.request.uri.path eq \"/xmlrpc.php\"'
 	if [[ $? == "0" ]]; then
 	    CF_CREATE_RULE "$CF_CREATE_FILTER_ID" "block" "1" "Block URI Query, URL, User Agents, and IPs (Block)"
@@ -414,6 +449,16 @@ CF_PROTECT_WP () {
 cf_create_profile () {
 	echo " * Creating profile $1"
 	
+}
+
+# -- _cf_zone_account_email
+_cf_zone_account_email () {
+	ZONE_ID=$1
+	CF_ZONE_ACCOUNT_EMAIL=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}" \
+	-H "X-Auth-Email: ${CF_ACCOUNT}" \
+	-H "X-Auth-Key: ${CF_TOKEN}" \
+	-H "Content-Type: application/json")
+	echo $CF_ZONE_ACCOUNT_EMAIL | jq -r '.result | "\(.name) \(.account.name)"'
 }
 
 # -------
