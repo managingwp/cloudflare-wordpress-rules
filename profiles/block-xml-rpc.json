@@ -1,0 +1,16 @@
+{
+  "profile": [
+    {
+      "name": "block-xml-rpc-and-more",
+      "description": "Block URI Query, URL, User Agents, and IPs (Block)"
+    }
+  ],
+  "clouflare_api": [
+    {
+      "filter": "(http.request.uri.query contains \"ical\" and cf.client.bot) or (http.request.uri.query contains \"eventDisplay\" and cf.client.bot) or (http.request.uri.path contains \"/events\" and cf.client.bot) or (http.request.uri.path eq \"/wp-content/uploads/wp-activity-log/non_mirrored_logs.json\") or (http.request.uri.path eq \"/xmlrpc.php\")",
+      "action": "block",
+      "priority": "1",
+      "profile_name": "Block URI Query, URL, User Agents, and IPs (Block)"
+    }
+  ]
+}

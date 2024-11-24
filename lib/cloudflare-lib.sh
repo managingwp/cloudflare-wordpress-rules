@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# ==================================================
+# =====================================
 # -- Cloudflare settings default
-# ==================================================
+# =====================================
 declare -A CF_SETTINGS
 
 # Add settings to the array
@@ -21,16 +21,16 @@ CF_DEFAULTS_ALWAYS_USE_HTTPS=("on" "off")
 CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 
 
-# ==================================================
+# =====================================
 # -- Test Files
-# ==================================================
+# =====================================
 TEST_DIR="$SCRIPT_DIR/test"
 TEST_FILTER_RESPONSE="test/filter-response.json"
 TEST_RULE_RESPONSE="test/rule-response.json"
 
-# ==================================================
+# =====================================
 # -- pre_flight_check - Check for .cloudflare credentials
-# ==================================================
+# =====================================
 function pre_flight_check () {
     if [[ -n $API_TOKEN ]]; then
         _running "Found \$API_TOKEN via CLI using for authentication/."          
@@ -80,10 +80,10 @@ function pre_flight_check () {
     done
 }
 
-# ==================================================
+# =====================================
 # -- _cf_api <$METHOD> <$API_PATH> <${CURL_HEADERS[@]}>
 # -- returns $API_OUTPUT
-# ==================================================
+# =====================================
 function _cf_api () {
     # -- Run cf_api with tokens
     _debug "function:${FUNCNAME[0]}"
@@ -198,9 +198,22 @@ function _cf_api () {
     fi
 }
 
-# ==================================================
+# =====================================
+# -- _check_valid_domain $DOMAIN
+# -- Check if domain is valid
+# =====================================
+function _check_valid_domain () {
+    CF_ZONE_ID=$(_get_zone_id $DOMAIN >&1)
+    EXIT_CODE=$?
+    _debug "main: CF_ZONE_ID: $CF_ZONE_ID EXIT_CODE: $EXIT_CODE"
+    if [[ $EXIT_CODE == "1" ]]; then
+        exit 1
+    fi
+}
+
+# =====================================
 # -- _cf_get_settings $CF_ZONEID
-# ==================================================
+# =====================================
 function _cf_get_settings () {
 	local CF_ZONE_ID=$1 SETTING_VALUE
 	_debug "function:${FUNCNAME[0]}"
@@ -220,9 +233,9 @@ function _cf_get_settings () {
     done
 }
 
-# ==================================================
+# =====================================
 # -- _cf_set_settings $CF_ZONEID $SETTING $VALUE
-# ==================================================
+# =====================================
 _cf_set_settings () {
 	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
 	_debug "function:${FUNCNAME[0]}"
@@ -239,9 +252,9 @@ _cf_set_settings () {
 	fi
 }
 
-# ==================================================
+# =====================================
 # -- _cf_check_setting $SETTING
-# ==================================================
+# =====================================
 function _cf_check_setting () {
     local SETTING=${1}
     _debug "function:${FUNCNAME[0]}"
@@ -257,9 +270,9 @@ function _cf_check_setting () {
 
 }
 
-# ==================================================
+# =====================================
 # -- _cf_check_setting_value $SETTING $VALUE
-# ==================================================
+# =====================================
 function _cf_check_setting_value () {
     # -- Array for each $SETTING and $VALUE is called $CF_SETTINGS_VALUES
     local SETTING=${1^^}
@@ -283,9 +296,9 @@ function _cf_check_setting_value () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _cf_settings_values $SETTING
-# ==================================================
+# =====================================
 function _cf_settings_values () {
     local SETTING=${1^^}
     _debug "function:${FUNCNAME[0]}"
@@ -306,9 +319,9 @@ function _cf_settings_values () {
 }
 
 
-# ==================================================
+# =====================================
 # -- _get_zone_id $DOMAIN
-# ==================================================
+# =====================================
 function _get_zone_id () {
     _debug "function:${FUNCNAME[0]}"
     local DOMAIN=$1 API_OUTPUT QUIET=${2:-0}
@@ -333,10 +346,10 @@ function _get_zone_id () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _convert_seconds $SECONDS
 # -- returns $HUMAN_TIME
-# ==================================================
+# =====================================
 function _convert_seconds () {
     local T=$1
     local D=$((T/60/60/24))
@@ -358,9 +371,9 @@ function _convert_seconds () {
     echo "$HUMAN_TIME"
 }
 
-# ==================================================
+# =====================================
 # -- _cf_create_filter $ZONE_ID $EXPRESSION
-# ==================================================
+# =====================================
 _cf_create_filter () { 
     local ZONE_ID=$1 EXPRESSION=$2 CF_API_RESPONSE CF_API_RESPONSE_EXIT_CODE
     _debug "ZONE_ID: $ZONE_ID EXPRESSION: $EXPRESSION"
@@ -383,9 +396,9 @@ _cf_create_filter () {
     fi
 }
 
-# ==================================================
+# =====================================
 # --_cf_create_rule $ZONE_ID $FILTER_ID $ACTION $PRIORITY $DESCRIPTION
-# ==================================================
+# =====================================
 _cf_create_rule () {
 	local ZONE_ID=$1 FILTER_ID=$2 ACTION=$3 PRIORITY=$4 DESCRIPTION=$5
     local CF_API_RESPONSE CF_API_RESPONSE_FIREWALL_ID CF_API_RESPONSE_EXIT_CODE
@@ -412,9 +425,9 @@ _cf_create_rule () {
 	fi
 }
 
-# ==================================================
+# =====================================
 # -- _apply_profile $ZONE_ID $PROFILE_NAME
-# ==================================================
+# =====================================
 function _apply_profile () {
     local ZONE_ID=$1 PROFILE_NAME=$2
     _debug "function:${FUNCNAME[0]}"
@@ -441,9 +454,9 @@ function _apply_profile () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _get_domain_account_id $DOMAIN
-# ==================================================
+# =====================================
 function _get_domain_account_id () {
     _debug "$DFUNC: Getting Account ID for $DOMAIN"
     local DOMAIN=$1
@@ -472,9 +485,9 @@ function _get_domain_account_id () {
 }
 
 
-# ==================================================
+# =====================================
 # -- _cf_get_filters $ZONE_ID $OUTPUT_FORMAT
-# ==================================================
+# =====================================
 function _cf_get_filters () {
     local ZONE_ID=$1
     local OUTPUT_FORMAT=${2:-""}
@@ -500,9 +513,9 @@ function _cf_get_filters () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _cf_delete_rule $RULE_ID
-# ==================================================
+# =====================================
 function _cf_delete_rule () {
     local RULE_ID=$1
     _running2 "Deleting rule $RULE_ID"
@@ -520,9 +533,9 @@ function _cf_delete_rule () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _cf_delete_filter $FILTER_ID
-# ==================================================
+# =====================================
 function _cf_delete_filter () {
     local FILTER_ID=$1
     _running2 "Deleting filter $FILTER_ID"
@@ -540,9 +553,9 @@ function _cf_delete_filter () {
     fi
 }
 
-# ==================================================
+# =====================================
 # -- _cf_delete_all_filters $ZONE_ID
-# ==================================================
+# =====================================
 function _cf_delete_all_filters () {
     local ZONE_ID=$1
     _running "Deleting all filters for $ZONE_ID"
