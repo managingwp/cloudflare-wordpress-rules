@@ -71,6 +71,7 @@ Options:
     -ak|--apikey [apikey]             - API Key to use for creating the new token.
     -d|--debug                        - Debug mode
     -dr|--dryrun                      - Dry run mode
+    -ao|--account-owned [accountid]   - Account owned token
 
 Environment variables:
     CF_SPC_ACCOUNT      - Cloudflare account email address
@@ -160,13 +161,15 @@ function cf_api() {
     fi
 	
     _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]}""
+    set -x
     CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$REQUEST" \
         --url "${API_URL}${API_PATH}" \
         "${CURL_HEADERS[@]}" \
         --output "$CURL_OUTPUT" "${EXTRA[@]}")
+    set +x
     API_OUTPUT=$(<"$CURL_OUTPUT")
     _debug_json "$API_OUTPUT"
-    rm $CURL_OUTPUT    
+    rm "$CURL_OUTPUT"
 
 		
 	if [[ $CURL_EXIT_CODE == "200" ]]; then
@@ -239,66 +242,114 @@ get_permissions () {
 # -- list_tokens
 list_tokens () {
     _debug "Running list_tokens"
-    cf_api GET /client/v4/user/tokens
+    if [[ $ACCOUNT_OWNED ]]; then
+        _running "Listing tokens for account owned"
+        cf_api GET /client/v4/accounts/${ACCOUNT_OWNED}/tokens
+    else
+        _running "Listing tokens for user"
+        cf_api GET /client/v4/user/tokens
+    fi
 }
 
 # -- create_token
 create_token () {
-    _debug "function:${FUNCNAME[0]}" 
+    _debug "function:${FUNCNAME[0]}"
+    if [[ -n $ACCOUNT_OWNED ]]; then
+        _running "Creating token for account owned"
+        CF_API_ACCOUNT="com.cloudflare.api.account.${ACCOUNT_OWNED}\":\"*"
+    else
+        _running "Creating token for user"
+        CF_API_ACCOUNT="com.cloudflare.api.account.*\":\"*"
+    fi
     echo "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"
     [[ -z $ZONE_ID ]] && get_zone_id || _debug "Using \$ZONE_ID via cli"
     ZONE_ID_JSON=("com.cloudflare.api.account.zone.${ZONE_ID}")
     EXTRA=(-H 'Content-Type: application/json' \
      --data '
  {
- 	"name": "'${DOMAIN_NAME}' '${TOKEN_NAME}'",
- 	"policies": [
-         {
- 			"effect": "allow",
- 			"resources": {
- 				"com.cloudflare.api.account.*": "*"
- 			},
- 			"permission_groups": [{
- 					"id": "e086da7e2179491d91ee5f35b3ca210a",
- 					"name": "Workers Scripts Write"
- 				},
- 				{
- 					"id": "c1fde68c7bcc44588cbb6ddbc16d6480",
- 					"name": "Account Settings Read"
- 				}
- 			]
- 		},
+  "name": "'${DOMAIN_NAME}' '${TOKEN_NAME}'",
+  "policies": [
+    {
+      "effect": "allow",
+      "resources": {
+        "'${CF_API_ACCOUNT}'"
+      },
+      "permission_groups": [
         {
- 			"effect": "allow",
- 			"resources": {
- 				"'"${ZONE_ID_JSON[@]}"'": "*"
- 			},
- 			"permission_groups": [{
- 					"id": "e17beae8b8cb423a99b1730f21238bed",
- 					"name": "Cache Purge"
- 				},
- 				{
- 					"id": "ed07f6c337da4195b4e72a1fb2c6bcae",
- 					"name": "Page Rules Write"
- 				},
- 				{
- 					"id": "3030687196b94b638145a3953da2b699",
- 					"name": "Zone Settings Write"
- 				},
- 				{
- 					"id": "e6d2666161e84845a636613608cee8d5",
- 					"name": "Zone Write"
- 				},
- 				{
- 					"id": "28f4b596e7d643029c524985477ae49a",
- 					"name": "Workers Routes Write"
- 				}
- 			]
- 		}
- 	],
- 	"condition": {}
- }')
-    cf_api POST /client/v4/user/tokens $EXTRA
+          "id": "e086da7e2179491d91ee5f35b3ca210a",
+          "name": "Workers Scripts Write"
+        },
+        {
+          "id": "c1fde68c7bcc44588cbb6ddbc16d6480",
+          "name": "Account Settings Read"
+        }
+      ]
+    },
+    {
+      "effect": "allow",
+      "resources": {
+        "'${ZONE_ID_JSON[@]}'": "*"
+      },
+      "permission_groups": [
+        {
+          "id": "e17beae8b8cb423a99b1730f21238bed",
+          "name": "Cache Purge"
+        },
+        {
+          "id": "ed07f6c337da4195b4e72a1fb2c6bcae",
+          "name": "Page Rules Write"
+        },
+        {
+          "id": "3030687196b94b638145a3953da2b699",
+          "name": "Zone Settings Write"
+        },
+        {
+          "id": "e6d2666161e84845a636613608cee8d5",
+          "name": "Zone Write"
+        },
+        {
+          "id": "28f4b596e7d643029c524985477ae49a",
+          "name": "Workers Routes Write"
+        },
+        {
+          "id": "9c88f9c5bce24ce7af9a958ba9c504db",
+          "name": "Zone Analytics Read"
+        },
+        {
+          "id": "c8fed203ed3043cba015a93ad1616f1f",
+          "name": "Zone Read"
+        },
+        {
+          "id": "3030687196b94b638145a3953da2b699",
+          "name": "Zone Settings Write"
+        },
+        {
+          "id": "82e64a83756745bbbb1c9c2701bf816b",
+          "name": "DNS Read"
+        },
+        {
+          "id": "e17beae8b8cb423a99b1730f21238bed",
+          "name": "Zone Cache Purge"
+        },
+        {
+          "id": "9ff81cbbe65c400b97d92c3c1033cab6",
+          "name": "Zone Cache Rules Edit"
+        },
+        {
+          "id": "0ac90a90249747bca6b047d97f0803e9",
+          "name": "Zone Transform Rules Write"
+        }
+      ]
+    }
+  ],
+  "condition": {}
+}')
+    if [[ -n $ACCOUNT_OWNED ]]; then
+        cf_api POST /client/v4/accounts/${ACCOUNT_OWNED}/tokens $EXTRA
+    else
+        cf_api POST /client/v4/user/tokens $EXTRA
+    fi
+    
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         NEW_API_TOKEN=$(echo $API_OUTPUT | jq '.result.value')
         echo "New API Token -- ${TOKEN_NAME}: ${NEW_API_TOKEN}"
@@ -353,7 +404,12 @@ case $key in
     API_APIKEY="$2"
     shift # past argument
     shift # past variable  
-    ;;  
+    ;;
+    -ao|--account-owned)
+    ACCOUNT_OWNED="$2"
+    shift # past argument
+    shift # past variable
+    ;;
     create-token|--create-token)
     CMD="create-token"
     shift # past argument

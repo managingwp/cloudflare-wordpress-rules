@@ -52,27 +52,48 @@ Configuration file for credentials:
 Version: 0.0.1
 ```
 ## Script cloudflare-spc.sh
-This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin.
+This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens.
 ### Usage
 ```
-Usage: ./cloudflare-spc.sh create <zone/domainname> <token-name> | list
-	Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
+Usage: ./cloudflare-spc.sh [create <zone> <token-name> | list]
 
-	create <zone> <token-name>         - Creates a token called <token name> for <zone>
-    list                               - Lists account tokens.
+Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
+
+Commands:
+    create-token <domain-name> <token-name> (-z|-a|-t|-ak)           - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
+    list -t [token] | -a [account] -ak [api-key]                     - Lists account tokens.
+    test-creds -t [token] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
+    test-token <token>                                               - Test created token against Cloudflare API.
+
+Options:
+    -z|--zone [zoneid]                - Set zoneid
+    -a|--account [name@email.com]     - Cloudflare account email address
+    -t|--token [token]                - API Token to use for creating the new token.
+    -ak|--apikey [apikey]             - API Key to use for creating the new token.
+    -d|--debug                        - Debug mode
+    -dr|--dryrun                      - Dry run mode
 
 Environment variables:
-    CF_ACCOUNT  -  email address (as -E option)
-    CF_TOKEN    -  API token (as -T option)
+    CF_SPC_ACCOUNT      - Cloudflare account email address
+    CF_SPC_KEY          - Cloudflare Global API Key
+    CF_SPC_TOKEN        - Cloudflare API token.
 
 Configuration file for credentials:
-    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT and CF_TOKEN defined.
+    Create a file in $HOME/.cloudflare with both CF_SPC_ACCOUNT and CF_SPC_KEY defined or CF_SPC_TOKEN. Only use a KEY or Token, not both.
 
-    CF_ACCOUNT=example@example.com
-    CF_TOKEN=<token>
+    CF_SPC_ACCOUNT=example@example.com
+    CF_SPC_KEY=<global api key>
+
+Version: 1.3.2 - DIR: /home/jtrask/git/cloudflare-wordpress-rules-dev
 ```
 
 # Changelog
+## Release 1.1.5
+### cloudflare-spc.sh
+* improvement(account-tokens): Added support for account owned tokens
+* improvement(account-owned-tokens): Added additional permissions
+* Added listing of account owned tokens.
+
 ## Release 1.1.4
 Updated user-agent for WP Umbrella to "WPUmbrella"
 
