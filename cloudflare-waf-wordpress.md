@@ -24,6 +24,7 @@ or (http.user_agent eq "ShortPixel")
 or (http.user_agent contains "WPUmbrella") 
 or (http.user_agent contains "Integrately") 
 or (http.user_agent contains "Uptime-Kuma") 
+or (http.user_agent contains "Let's Encrypt") 
 or (cf.client.bot)
 ```
 
