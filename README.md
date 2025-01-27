@@ -1,20 +1,20 @@
 # Cloudflare WordPress Rules
 This repository holds common Cloudflare WordPress Rules and supporting scripts.
 
-# [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
+# Cloudflare WAF Rules
+
+## [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
 * Contains all of the Cloudflare WAF expression rules that I've created.
 * It's regularly updated.
 * You can copy and paste the contents into the Cloudflare expression builder.
 
-# [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
+## [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
 * Contains Cloudflare cache rules expressions.
 
-# [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
-* Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
-* In beta, so use at your own risk.
-
 # Scripts
-## Script cloudflare-wordpress-rules.sh
+## [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
+* Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
+* It has support for profiles, but they are not yet functional.
 ### Usage
 ```
 Usage: cloudflare-wordpress-rules (-d|-dr) <domain.com> <command>
@@ -48,11 +48,11 @@ Configuration file for credentials:
 
     CF_ACCOUNT=example@example.com
     CF_TOKEN=<token>
-
-Version: 0.0.1
 ```
-## Script cloudflare-spc.sh
-This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens.
+
+## [cloudflare-spc.sh](cloudflare-spc.sh)
+* This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens.
+
 ### Usage
 ```
 Usage: ./cloudflare-spc.sh [create <zone> <token-name> | list]
@@ -83,11 +83,53 @@ Configuration file for credentials:
 
     CF_SPC_ACCOUNT=example@example.com
     CF_SPC_KEY=<global api key>
+```
 
-Version: 1.3.2 - DIR: /home/jtrask/git/cloudflare-wordpress-rules-dev
+## [cloudflare-turnstile.sh](cloudflare-turnstile.sh)
+* This script creates an a turnstile widget for Cloudflare.
+### Usage
+```
+Usage: ./cloudflare-turnstile.sh [create <zone> <name> | list]
+
+Creates appropriate Cloudflare turnstile api id and key.
+
+Commands:
+    create -z <domain-name> -tn <turnstile-name> (-z|-a|-t|-ak)                  - Creates a turnstile called <turnstile name> for <zone>, if <turnstile-name> blank then (zone)-spc used
+    list -t [turnstile sitekey] | -z [domain name] | -a [accountemail]           - Lists account turnstiles.
+    delete -t [turnstile sitekey] | -z [domain name] | -a [accountemail]         - Deletes a turnstile.
+    test-creds -t [turnstile sitekey] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
+
+Options:
+    -z|--zone [domain name]                - Zone domain name
+    -a|--account [name@email.com]          - Cloudflare account email address
+    -t|--turnstile [turnstile sitekey]     - Turnstile Sitekey
+    -tn|--turnstile-name [name]            - Turnstile Name
+    -ak|--apikey [apikey]                  - API Key to use for creating the new turnstile.
+    -d|--debug                             - Debug mode
+    -dr|--dryrun                           - Dry run mode
+
+Environment variables:
+    CF_TS_ACCOUNT      - Cloudflare account email address
+    CF_TS_KEY          - Cloudflare Global API Key
+    CF_TS_TOKEN        - Cloudflare API token.
+
+Configuration file for credentials:
+    Create a file in $HOME/.cloudflare with both CF_TS_ACCOUNT and CF_TS_KEY defined or CF_TS_TOKEN. Only use a KEY or Token, not both.
+
+    CF_TS_ACCOUNT=example@example.com
+    CF_TS_KEY=<global api key>    
+
 ```
 
 # Changelog
+## Release 1.2.0
+* enhance: Creating cf-inc.sh and cf-api-inc.sh files
+* enhance: Created cloudflare-turnstile.sh for turnstile widget creation
+* improvement: Created tests directory with example cloudflare API json results
+
+## Release 1.1.6
+* fix(readme): Updated readme formartting
+* fix(rulesv2): Added Let's Encrypt to useragent allow R2V2
 ## Release 1.1.5
 ### cloudflare-spc.sh
 * improvement(account-tokens): Added support for account owned tokens

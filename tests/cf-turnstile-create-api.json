@@ -1,0 +1,25 @@
+{
+	"result": {
+		"sitekey": "0xv3b4244236b4n56n345n345n",
+		"secret": "0xvb34b5234b53425b325v3",
+		"modified_on": "2025-01-27T20:53:50.546948Z",
+		"created_on": "2025-01-27T20:53:50.546948Z",
+		"mode": "non-interactive",
+		"domains": [
+			"domain.com"
+		],
+		"name": "domain.com",
+		"bot_fight_mode": false,
+		"region": "world",
+		"offlabel": false,
+		"ephemeral_id": false,
+		"clearance_level": "no_clearance"
+	},
+	"success": true,
+	"errors": [
+
+	],
+	"messages": [
+
+	]
+}
