@@ -1,0 +1,20 @@
+{
+  "result": {
+    "id": "2552c2b48c9c4d1aa4dbd71ac3c55aa2",
+    "paused": false,
+    "description": "Challenge Outside of GEO (JS Challenge)",
+    "action": "js_challenge",
+    "ref": "e14a1a61b4b9471cacbc39b8c41ec93d",
+    "priority": 5,
+    "filter": {
+      "id": "195d6ee08ead481092ad79fbb6dfd546",
+      "expression": "(not ip.geoip.country in {\"CA\" \"US\"})",
+      "paused": false
+    },
+    "created_on": "2025-02-01T17:18:34Z",
+    "modified_on": "2025-02-01T18:32:55Z"
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}

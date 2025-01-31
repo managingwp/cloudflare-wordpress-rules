@@ -1,0 +1,1 @@
+{ "result": null, "success": false, "errors": [ { "code": 10012, "message": "filters.api.not_entitled.max_rules" } ], "messages": [] }

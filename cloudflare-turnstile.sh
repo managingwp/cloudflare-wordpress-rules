@@ -12,7 +12,6 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
-ZONE_ID=""
 TURNSTILE_ID=""
 ZONE=""
 

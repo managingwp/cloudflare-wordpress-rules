@@ -1,0 +1,18 @@
+{
+  "name": "default2",
+  "description": "Managing WP v2 Cloudflare Rules",
+  "rules": [
+    {
+      "expression": "http.request.uri.path eq \"/xmlrpc.php\"",
+      "action": "block",
+      "priority": 1,
+      "description": "Block xml-rpc.php"
+    },
+    {
+      "expression": "http.request.uri.path eq \"/wp-login.php\"",
+      "action": "block",
+      "priority": 2,
+      "description": "Block wp-login.php"
+    }
+  ]
+}
