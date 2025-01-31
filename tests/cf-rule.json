@@ -1,0 +1,19 @@
+{
+    "result": {
+        "id": "99bb31ead8e442aba5bf12f950c4b8e0",
+        "paused": false,
+        "description": "Testing",
+        "action": "block",
+        "ref": "89d041efa82845f48a75915a3b49dffc",
+        "filter": {
+            "id": "cb8ac6255af74e3fa583ff13c4037fed",
+            "expression": "(http.request.version in {\"HTTP/1.0\" \"HTTP/1.1\" \"HTTP/1.2\" \"HTTP/2\" \"HTTP/3\"} and http.request.uri.path in {\"/contact/\" \"/contact\" \"/en/contact\" \"/sign-up\" \"/get-in-touch\"} and not http.user_agent contains \"Googlebot\" and not http.user_agent contains \"Bingbot\" and not http.user_agent contains \"DuckDuckBot\" and not http.user_agent contains \"facebot\" and not http.user_agent contains \"Slurp\" and not http.user_agent contains \"Alexa\")",
+            "paused": false
+        },
+        "created_on": "2025-01-31T10:48:56Z",
+        "modified_on": "2025-01-31T10:48:58Z"
+    },
+    "success": true,
+    "errors": [],
+    "messages": []
+}

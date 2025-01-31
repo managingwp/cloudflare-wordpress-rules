@@ -1,0 +1,12 @@
+{
+    "result": [
+      {
+        "id": "a74f2eae3ad54abba663084026b1e6d7",
+        "expression": "http.request.uri.path eq \"/xmlrpc.php\"",
+        "paused": false
+      }
+    ],
+    "success": true,
+    "errors": [],
+    "messages": []
+  }
