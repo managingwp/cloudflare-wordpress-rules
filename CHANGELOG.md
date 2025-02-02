@@ -1,4 +1,11 @@
+## Release 2.0.1
+* improvement(doc): Updated README.md
+* improvement(profiles): Added mwp-rules-v1.json as an example
+* fix: Addd /profiles to .gitignore for custom profile creation
+
+
 ## Release 2.0.0
+* doc: Created CHANGELOG.md and command to generate it
 * fix: Removed $ZONE_ID which is unused
 * refactor: Moving cwr general commands into cf-inc.sh
 * refactor: Clean-up and refactor to pass $ZONE_ID for functions

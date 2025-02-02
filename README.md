@@ -1,56 +1,106 @@
 # Cloudflare WordPress Rules
-This repository holds common Cloudflare WordPress Rules and supporting scripts.
+This repository holds common Cloudflare WordPress Rules and support scripts for other actions such as creating API tokens for the Super Page Cache for Cloudflare WordPress plugin and creating a turnstile widget for Cloudflare.
 
-# Cloudflare WAF Rules
+# Files
+| File | Description |
+| --- | --- |
+| [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md) | Contains all of the Cloudflare WAF expression rules that I've created. |
+| [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md) | Contains Cloudflare cache rules expressions. |
+| [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API. |
+| [cloudflare-spc.sh](cloudflare-spc.sh) | This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens. |
+| [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | This script creates an a turnstile widget for Cloudflare. |
 
-## [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md)
-* Contains all of the Cloudflare WAF expression rules that I've created.
-* It's regularly updated.
-* You can copy and paste the contents into the Cloudflare expression builder.
+# Authentication File .cloudflare
+The .cloudflare file should be placed in the user's home directory. 
 
-## [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md)
-* Contains Cloudflare cache rules expressions.
-
-# Scripts
-## [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
-* Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API.
-* It has support for profiles, but they are not yet functional.
-### Usage
+## Example .cloudflare file
 ```
-Usage: cloudflare-wordpress-rules (-d|-dr) <domain.com> <command>
+# For cloudflare-wordpress-rules.sh
+CF_ACOUNT="example@domain.com"
+CF_KEY="global api key"
+#or
+CF_TOKEN="api token"
 
-Options
-   -d                         - Debug mode
-   -dr                        - Dry run, don't send to Cloudflare
+# For cloudflare-spc.sh
+CF_SPC_ACCOUNT="example@domain.com"
+CF_SPC_KEY="global api key"
+#or
+CF_SPC_TOKEN="api token"
 
-Commands
-   create-rules <profile>     - Create rules on domain
-   create-cache-rules         - Not implemented yet, coming soon.
-   get-rules                  - Get rules
-   delete-rule                - Delete rule
-   delete-filter <id>         - Delete rule ID on domain
-   get-filters                - Get Filters
-   get-filter-id <id>         - Get Filter <id>
+# For cloudflare-turnstile.sh
+CF_TS_ACCOUNT="example@domain.com"
+CF_TS_KEY="global api key"
+#or
+CF_TS_TOKEN="api token"
+```
 
-Profiles - * Not yet functional*
-   protect-wp                 - The 5 golden rules, see https://github.com/managingwp/cloudflare-wordpress-rules
+# [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
+## Usage
+```
+Usage: cloudflare-wordpress-rules -d <domain> -c <command>
+
+ Commands
+   create-rules-v1                     - Create rules on domain using v1 rules
+
+   create-rules-profile <profile>      - Create rules on domain using profile
+   list-profiles                       - List profiles
+
+   list-rules                          - List rules
+   delete-rule <id>                    - Delete rule
+   delete-rules                        - Delete all rules
+
+   list-filters <id>                   - Get Filters
+   delete-filter <id>                  - Delete rule ID on domain
+   delete-filters                      - Delete all filters
+
+ Options
+   --debug                                  - Debug mode
+   -dr                                 - Dry run, don't send to Cloudflare
+
+ Profiles - See profiles directory for example.
+   default                             - Default using v2 rules.
 
 Examples
-   cloudflare-wordpress-rules testdomain.com delete-filter 32341983412384bv213v
-   cloudflare-wordpress-rules testdomian.com create-rules
+   cloudflare-wordpress-rules -d domain.com -c delete-filter 32341983412384bv213v
+   cloudflare-wordpress-rules -d domain.com -c create-rules
 
-Environment variables:
-    CF_ACCOUNT  -  email address (as -E option)
-    CF_TOKEN    -  API token (as -T option)
+Cloudflare API Credentials should be placed in $HOME/.cloudflare
+```
+## Examples
+```
+cloudflare-wordpress-rules -d domain.com -c create-rules-v1
+cloudflare-wordpress-rules -d domain.com -c create-rules-profile default
+cloudflare-wordpress-rules -d domain.com -c list-profiles
+cloudflare-wordpress-rules -d domain.com -c list-rules
+cloudflare-wordpress-rules -d domain.com -c delete-rule 1234567890
+```
+## Profiles
+Profiles are stored in the profiles directory. They are JSON files that contain the rules to be created. The profile name is the filename without the .json extension.
 
-Configuration file for credentials:
-    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT and CF_TOKEN defined.
-
-    CF_ACCOUNT=example@example.com
-    CF_TOKEN=<token>
+```
+{
+  "rules": [
+    {
+      "action": "block",
+      "description": "Block bad bots",
+      "filter": {
+        "expression": "(http.user_agent contains \"WPScan\")",
+        "paused": false
+      }
+    },
+    {
+      "action": "block",
+      "description": "Block bad bots",
+      "filter": {
+        "expression": "(http.user_agent contains \"WPSpider\")",
+        "paused": false
+      }
+    }
+  ]
+}
 ```
 
-## [cloudflare-spc.sh](cloudflare-spc.sh)
+# [cloudflare-spc.sh](cloudflare-spc.sh)
 * This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens.
 
 ### Usage
@@ -121,6 +171,8 @@ Configuration file for credentials:
 
 ```
 
+# Changelog
+Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
 ## Release 2.0.0
 * fix: Removed $ZONE_ID which is unused
 * refactor: Moving cwr general commands into cf-inc.sh
