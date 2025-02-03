@@ -1,3 +1,8 @@
+## Release 2.0.2
+* improvement: Ask to delete all rules, versus one by one.
+* improvement: Created profile with mwp-rules-v2 including event calendars bot blocking
+
+
 ## Release 2.0.1
 * improvement(doc): Updated README.md
 * improvement(profiles): Added mwp-rules-v1.json as an example

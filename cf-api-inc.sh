@@ -468,7 +468,8 @@ function cf_delete_rules_action () {
     ZONE_ID=$2
     OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
 	_running2 "Deleting all rules on ${OBJECT}"
-	# -- Get a list of all rules
+	
+    # -- Get a list of all rules
 	ZONE_RULES=$(cf_list_rules $ZONE_ID)
 
 	# -- Loop through all rules and delete
@@ -482,31 +483,42 @@ function cf_delete_rules_action () {
 		echo ""
 		echo "$ZONE_RULES" | jq -r '.result[] | "\(.id) \(.description)"' | awk '{print "#" NR, $0}'
 		echo ""
-
-		# -- Loop through all rules
-		_debug "Looping through rules to get filter ID's"
-		for RULE_ID in $(echo $ZONE_RULES | jq -r '.result[].id'); do
-            _debug "Rule ID: $RULE_ID"
-			RULE_OUTPUT=$(cf_get_rule $ZONE_ID $RULE_ID | jq -r '.result | [.id, .description, .filter.id] | join("|")')
-            _debug "Rule Output: $RULE_OUTPUT"
-			# Get Rule Data, each on new line
-			while IFS='|' read -r RULE_ID2 DESCRIPTION FILTER_ID; do
-				_debug "Rule ID: $RULE_ID2 - Description: $DESCRIPTION - Filter ID: $FILTER_ID"
-				FILTER_ID_DELETE=$FILTER_ID
-				FILTER_DESCRIPTION=$DESCRIPTION
-			done <<< "$RULE_OUTPUT"
-            _running3 "Rule: $RULE_ID Filter: $FILTER_ID_DELETE Description: $FILTER_DESCRIPTION"
-            read -p "  - Delete rule? $RULE_ID (y|n)" yn
-            case $yn in
-                [Yy]* )
+        
+        # -- Ask user if they want to delete all rules at once
+        read -p "Do you want to delete all rules at once? (y|n) " delete_all
+        if [[ $delete_all == [Yy]* ]]; then
+            for RULE_ID in $(echo $ZONE_RULES | jq -r '.result[].id'); do
                 cf_delete_rule $ZONE_ID $RULE_ID
-                cf_delete_filter $ZONE_ID $FILTER_ID_DELETE
-                echo
-                ;;
-                [Nn]* ) exit;;
-                * ) echo "Please answer yes or no.";;
-            esac
-		done
+                FILTER_ID=$(echo $ZONE_RULES | jq -r --arg RULE_ID "$RULE_ID" '.result[] | select(.id == $RULE_ID) | .filter.id')
+                cf_delete_filter $ZONE_ID $FILTER_ID
+            done
+            _success "All rules deleted."
+		else
+            # -- Loop through all rules
+            _debug "Looping through rules to get filter ID's"
+            for RULE_ID in $(echo $ZONE_RULES | jq -r '.result[].id'); do
+                _debug "Rule ID: $RULE_ID"
+                RULE_OUTPUT=$(cf_get_rule $ZONE_ID $RULE_ID | jq -r '.result | [.id, .description, .filter.id] | join("|")')
+                _debug "Rule Output: $RULE_OUTPUT"
+                # Get Rule Data, each on new line
+                while IFS='|' read -r RULE_ID2 DESCRIPTION FILTER_ID; do
+                    _debug "Rule ID: $RULE_ID2 - Description: $DESCRIPTION - Filter ID: $FILTER_ID"
+                    FILTER_ID_DELETE=$FILTER_ID
+                    FILTER_DESCRIPTION=$DESCRIPTION
+                done <<< "$RULE_OUTPUT"
+                _running3 "Rule: $RULE_ID Filter: $FILTER_ID_DELETE Description: $FILTER_DESCRIPTION"
+                read -p "  - Delete rule? $RULE_ID (y|n)" yn
+                case $yn in
+                    [Yy]* )
+                    cf_delete_rule $ZONE_ID $RULE_ID
+                    cf_delete_filter $ZONE_ID $FILTER_ID_DELETE
+                    echo
+                    ;;
+                    [Nn]* ) exit;;
+                    * ) echo "Please answer yes or no.";;
+                esac
+            done
+        fi
 	fi
 }
 

@@ -167,13 +167,25 @@ Configuration file for credentials:
     Create a file in $HOME/.cloudflare with both CF_TS_ACCOUNT and CF_TS_KEY defined or CF_TS_TOKEN. Only use a KEY or Token, not both.
 
     CF_TS_ACCOUNT=example@example.com
-    CF_TS_KEY=<global api key>    
-
+    CF_TS_KEY=<global api key>
 ```
 
 # Changelog
 Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
+<!--- CHANGELOG --->
+## Release 2.0.2
+* improvement: Ask to delete all rules, versus one by one.
+* improvement: Created profile with mwp-rules-v2 including event calendars bot blocking
+
+
+## Release 2.0.1
+* improvement(doc): Updated README.md
+* improvement(profiles): Added mwp-rules-v1.json as an example
+* fix: Addd /profiles to .gitignore for custom profile creation
+
+
 ## Release 2.0.0
+* doc: Created CHANGELOG.md and command to generate it
 * fix: Removed $ZONE_ID which is unused
 * refactor: Moving cwr general commands into cf-inc.sh
 * refactor: Clean-up and refactor to pass $ZONE_ID for functions
@@ -270,3 +282,5 @@ Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:spac
 * ca0b3e6 Create cloudflare-protect-wordpress.rules
 * f3c5be1 Update README.md
 * f920d51 Initial commit
+
+<!--- END CHANGELOG --->
