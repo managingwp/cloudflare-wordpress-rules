@@ -99,7 +99,9 @@ function test-token () {
 }
 
 # =====================================
-# -- get_zone_id
+# -- get_zone_id $DOMAIN_NAME
+# -- Returns: message
+# -- Get domain zoneid
 # =====================================
 function get_zone_id () {
     _debug "function:${FUNCNAME[0]}"
@@ -123,10 +125,14 @@ function get_zone_id () {
 
 # =====================================
 # -- get_zone_idv2 $DOMAIN_NAME
+# -- Returns: var($ZONE_ID)
+# -- Get domain zoneid
 # =====================================
-function get_zone_idv2 () {
+function get_zone_idv2 () {    
     DOMAIN_NAME=$1
+    [[ -z $DOMAIN_NAME ]] && _error "Missing domain name" && exit 1
     _debug "function:${FUNCNAME[0]}"
+    _debug "Getting zone_id for ${DOMAIN_NAME}"
     cf_api GET /client/v4/zones?name=${DOMAIN_NAME}
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
@@ -228,6 +234,7 @@ function get_account_id_from_zone () {
     cf_api GET /client/v4/zones/${ZONE_ID}
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         ACCOUNT_ID=$(echo $API_OUTPUT | jq -r '.result.account.id' )
+        _debug "Account ID: $ACCOUNT_ID"
         if [[ $ACCOUNT_ID != "null" ]]; then
             echo $ACCOUNT_ID
         else

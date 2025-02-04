@@ -173,9 +173,14 @@ Configuration file for credentials:
 # Changelog
 Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
 <!--- CHANGELOG --->
+## Release 2.0.3
+* refactor(spc): Refactored cloudflare-spc command
+
+
 ## Release 2.0.2
 * improvement: Ask to delete all rules, versus one by one.
 * improvement: Created profile with mwp-rules-v2 including event calendars bot blocking
+* improvement: Created generate-readme.sh to generate/add CHANGELOG.md to README.md
 
 
 ## Release 2.0.1
