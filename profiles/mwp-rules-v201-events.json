@@ -1,25 +1,16 @@
-# Rules V2
-## Changelog
-### V201 - 2025-02-05
-* Updated R2 to include more blogvault IP's and user agents, missed some from json.
-### V2 - 12-16-2024
-* Initial version
-# Rules Data
-## R1V201 - Block URI Query, URL, User Agents, and IPs (Block)
-* Action: Block 
-```
-(http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")
-```
-
-## R2V201 -  Allow URI Query, URL, User Agents, and IPs (Allow)
-* Action: Skip
-* WAF components to skip
-  * All remaining custom rules
-  * All rate limiting rules
-  * All managed rules
-  * All Super Bot Fight Mode Rules
-```
-(ip.src in {
+{
+  "name": "default",
+  "description": "Managing WP v201 Cloudflare Rules + Event Calendar",
+  "rules": [
+    {
+      "description": "R1V201 - Block URI Query, URL, User Agents, and IPs (Block)",
+      "expression": "(http.request.uri.path eq \"/wp-content/uploads/wp-activity-log/non_mirrored_logs.json\") or (http.request.uri.path eq \"/xmlrpc.php\") or (http.request.uri.query contains \"ical\" and cf.client.bot) or (http.request.uri.query contains \"eventDisplay\" and cf.client.bot) or (http.request.uri.path contains \"/events\" and cf.client.bot)",
+      "action": "block",
+      "priority": 1
+    },
+    {
+      "description": "R2V201 -  Allow URI Query, URL, User Agents, and IPs (Allow)",
+      "expression": "(ip.src in {
 88.99.145.111 88.99.145.112 195.201.197.31 136.243.130.174 144.76.236.242 
 136.243.130.52 116.202.131.150 116.202.233.15 116.202.193.3 168.119.2.157 
 49.12.124.233 88.99.146.248 139.180.140.55 104.248.114.9 192.81.221.63 
@@ -57,30 +48,32 @@
 78.141.208.186 78.141.213.247 82.196.7.193 95.179.147.205 
 95.179.213.78 95.179.217.204
 }) 
-or (http.request.uri.query contains "bvVersion") 
-or (http.request.uri.query contains "wc-api=wc_shipstation") 
-or (http.user_agent contains "Zapier") 
-or (http.user_agent contains "Metorik API Client") 
-or (http.user_agent contains "Wordfence Central API") 
-or (http.user_agent contains "Better Uptime Bot") 
-or (http.user_agent contains "ShortPixel") 
-or (http.user_agent contains "umbrella bot") 
-or (http.user_agent contains "Integrately") 
-or (http.user_agent contains "Let's Encrypt")
-or (http.user_agent contains "Uptime-Kuma")
-or (cf.client.bot) 
-
-
-```
-
-## R3V201 – Managed Challenge /wp-admin (Managed Challenge)
-* Action: Managed Challenge
-```
-(http.request.uri.path contains "/wp-login.php") or (http.request.uri.path contains "/wp-admin/" and http.request.uri.path ne "/wp-admin/admin-ajax.php" and not http.request.uri.path contains "/wp-admin/js/password-strength-meter.min.js")
-```
-
-## R4V201 – Challenge Outside of GEO (JS Challenge)
-* Action: JS Challenge
-```
-(not ip.geoip.country in {"CA" "US"})
-```
+or (http.request.uri.query contains \"bvVersion\") 
+or (http.request.uri.query contains \"wc-api=wc_shipstation\") 
+or (http.user_agent contains \"Zapier\") 
+or (http.user_agent contains \"Metorik API Client\") 
+or (http.user_agent contains \"Wordfence Central API\") 
+or (http.user_agent contains \"Better Uptime Bot\") 
+or (http.user_agent contains \"ShortPixel\") 
+or (http.user_agent contains \"umbrella bot\") 
+or (http.user_agent contains \"Integrately\") 
+or (http.user_agent contains \"Let's Encrypt\")
+or (http.user_agent contains \"Uptime-Kuma\")
+or (cf.client.bot)",
+      "action": "allow",
+      "priority": 2      
+    },
+    {
+      "description": "R3V201 – Managed Challenge /wp-admin (Managed Challenge)",
+      "expression": "(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\" and not http.request.uri.path contains \"/wp-admin/js/password-strength-meter.min.js\")",
+      "action": "managed_challenge",
+      "priority": 3      
+    },
+    {
+      "description": "R4V201 – Challenge Outside of GEO (JS Challenge)",
+      "expression": "(not ip.geoip.country in {\"CA\" \"US\"})",
+      "action": "js_challenge",
+      "priority": 4
+    }
+  ]
+}

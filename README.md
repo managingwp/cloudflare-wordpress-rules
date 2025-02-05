@@ -173,6 +173,12 @@ Configuration file for credentials:
 # Changelog
 Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
 <!--- CHANGELOG --->
+## Release 2.0.4
+* improvement: Updated Managing WP rules to v201.
+* fix: Fixed issue with MWP rules .md and json differing.
+* improvement: Created profiles-archive of older profiles.
+
+
 ## Release 2.0.3
 * refactor(spc): Refactored cloudflare-spc command
 
