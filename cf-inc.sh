@@ -1,6 +1,10 @@
-# ==================================
+# =============================================================================
+# -- cf-inc.sh - v2.1 - Cloudflare Includes
+# =============================================================================
+
+# =============================================================================
 # -- Variables
-# ==================================
+# =============================================================================
 REQUIRED_APPS=("jq" "column")
 
 # ==================================
@@ -16,29 +20,61 @@ CCYAN=$(tput setaf 6)
 CGRAY=$(tput setaf 7)
 CDARKGRAY=$(tput setaf 8)
 
-# ==================================
+# =============================================================================
 # -- Core Functions
-# ==================================
+# =============================================================================
 
+# =====================================
 # -- messages
-_error () { echo -e "${CRED}** ERROR ** - ${*} ${NC}" >&2; } # _error
-_warning () { echo -e "${CYELLOW}** WARNING ** - ${*} ${NC}"; } # _warning
-_success () { echo -e "${CGREEN}** SUCCESS ** - ${*} ${NC}"; } # _success
-_running () { echo -e "${CBLUEBG}${*}${NC}"; } # _running
-_running2 () { echo -e " * ${CGRAY}${*}${NC}"; } # _running
-_running3 () { echo -e " ** ${CDARKGRAY}${*}${NC}"; } # _running
-_creating () { echo -e "${CGRAY}${*}${NC}"; }
-_separator () { echo -e "${CYELLOWBG}****************${NC}"; }
-_dryrun () { echo -e "${CCYAN}** DRYRUN: ${*$}${NC}"; }
+# =====================================
 
-# Print debug to error output
-_debug () {
-    if [[ $DEBUG == "1" ]]; then
-        # Print ti stderr
-        echo -e "${CCYAN}** DEBUG ** - ${*}${NC}" >&2
-    fi
+_error () { [[ $QUIET == "0" ]] && echo -e "${CRED}** ERROR ** - ${*} ${NC}" >&2; } 
+_warning () { [[ $QUIET == "0" ]] && echo -e "${CYELLOW}** WARNING ** - ${*} ${NC}" >&2; }
+_success () { [[ $QUIET == "0" ]] && echo -e "${CGREEN}** SUCCESS ** - ${*} ${NC}"; }
+_running () { [[ $QUIET == "0" ]] && echo -e "${CBLUEBG}${*}${NC}"; }
+_running2 () { [[ $QUIET == "0" ]] && echo -e " * ${CGRAY}${*}${NC}"; }
+_running3 () { [[ $QUIET == "0" ]] && echo -e " ** ${CDARKGRAY}${*}${NC}"; }
+_creating () { [[ $QUIET == "0" ]] && echo -e "${CGRAY}${*}${NC}"; }
+_separator () { [[ $QUIET == "0" ]] && echo -e "${CYELLOWBG}****************${NC}"; }
+_dryrun () { [[ $QUIET == "0" ]] && echo -e "${CCYAN}** DRYRUN: ${*$}${NC}"; }
+_quiet () { [[ $QUIET == "1" ]] && echo -e "${*}"; }
+
+# =====================================
+# -- debug - ( $MESSAGE, $LEVEL)
+# =====================================
+function _debug () {
+    local DEBUG_MSG DEBUG_MSG_OUTPUT PREV_CALLER PREV_CALLER_NAME		
+	DEBUG_MSG="${*}"
+
+	# Get previous calling function
+	PREV_CALLER=$(caller 1)
+	PREV_CALLER_NAME=$(echo "$PREV_CALLER" | awk '{print $2}')
+
+	if [ "$DEBUG" = "1" ]; then
+		if [[ $DEBUG_CURL_OUTPUT = "1" ]]; then
+			DEBUG_MSG_OUTPUT+="CURL_OUTPUT: $CURL_OUTPUT_GLOBAL"
+		fi
+		# -- Check if DEBUG_MSG is an array
+        if [[ "$(declare -p "$arg" 2>/dev/null)" =~ "declare -a" ]]; then
+			DEBUG_MSG_OUTPUT+="Array contents:"
+			for item in "${arg[@]}"; do
+			    DEBUG_MSG_OUTPUT+="${item}"
+			done               
+            echo -e "${CCYAN}** DEBUG: ${PREV_CALLER_NAME}: ARRAY: ${DEBUG_MSG_OUTPUT}${NC}" >&2    
+		else
+		    echo -e "${CCYAN}** DEBUG: ${PREV_CALLER_NAME}: ${DEBUG_MSG}${NC}" >&2
+        fi
+	fi
+
+	if [[ $DEBUG_FILE == "1" ]]; then
+		DEBUG_FILE_PATH="$HOME/cloudflare-cli-debug.log"
+		echo -e "${PREV_CALLER_NAME}:${DEBUG_MSG_OUTPUT}" >> "$DEBUG_FILE_PATH"
+	fi
 }
 
+# =====================================
+# -- _debug_json $*
+# =====================================
 #  Print JSON debug to file
 # TODO - Should be removed.
 _debug_json () {
@@ -48,12 +84,34 @@ _debug_json () {
 }
 
 # =====================================
-# -- pre_flight_checkv2 $PRE_TAG
+# -- _pre_flight_check
 # -- Check for .cloudflare credentials based on script
 # =====================================
-function pre_flight_checkv2 () {
+function _pre_flight_check () {
     # -- PRE_TAG is the script, either CF_TS, CF_SPC or CF_
     local PRE_TAG=$1
+    [[ -z $PRE_TAG ]] && PRE_TAG="CF_"
+
+    # -- Check cloudflare creds
+    _debug "Checking for Cloudflare credentials"
+    _check_cloudflare_creds $PRE_TAG
+
+    # -- Check required
+    _debug "Checking for required apps"
+    _check_required_apps
+
+    # -- Check bash
+    _debug "Checking for bash version"
+    _check_bash
+}
+
+# =====================================
+# -- _check_cloudflare_creds $PRE_TAG
+# -- Check for .cloudflare credentials
+# =====================================
+function _check_cloudflare_creds () {
+    # -- PRE_TAG is the script, either CF_TS, CF_SPC or CF_
+    local PRE_TAG=$1    
 
     if [[ -n $API_TOKEN ]]; then
         _running "Found \$API_TOKEN via CLI using for authentication/."        
@@ -93,53 +151,13 @@ function pre_flight_checkv2 () {
             exit 1
         fi
     fi
-
-    # -- Check required
-    check_required_apps
 }
 
 # =====================================
-# -- pre_flight_check - Check for .cloudflare credentials
-# =====================================
-function pre_flight_check () {
-    if [[ -n $API_TOKEN ]]; then
-        _running "Found \$API_TOKEN via CLI using for authentication/."        
-        API_TOKEN=$CF_SPC_TOKEN
-    elif [[ -n $API_ACCOUNT ]]; then
-        _running "Found \$API_ACCOUNT via CLI using as authentication."                
-        if [[ -n $API_APIKEY ]]; then
-            _running "Found \$API_APIKEY via CLI using as authentication."                        
-        else
-            _error "Found API Account via CLI, but no API Key found, use -ak...exiting"
-            exit 1
-        fi
-    elif [[ -f "$HOME/.cloudflare" ]]; then
-            _debug "Found .cloudflare file."
-            # shellcheck source=$HOME/.cloudflare
-            source "$HOME/.cloudflare"
-            
-            # If $CF_SPC_ACCOUNT and $CF_SPC_KEY are set, use them.
-            if [[ $CF_SPC_TOKEN ]]; then
-                _debug "Found \$CF_SPC_TOKEN in \$HOME/.cloudflare"
-                API_TOKEN=$CF_SPC_TOKEN
-            elif [[ $CF_SPC_ACCOUNT && $CF_SPC_KEY ]]; then
-                _debug "Found \$CF_SPC_ACCOUNT and \$CF_SPC_KEY in \$HOME/.cloudflare"
-                API_ACCOUNT=$CF_SPC_ACCOUNT
-                API_APIKEY=$CF_SPC_KEY
-            else
-                _error "No \$CF_SPC_TOKEN exiting"
-                exit 1
-            fi 
-    else
-        _error "Can't find \$HOME/.cloudflare, and no CLI options provided."
-    fi
-}
-
-# =====================================
-# -- check_required_apps
+# -- _check_required_apps $REQUIRED_APPS
 # -- Check for required apps
 # =====================================
-function check_required_apps () {
+function _check_required_apps () {
     for app in "${REQUIRED_APPS[@]}"; do
         if ! command -v $app &> /dev/null; then
             _error "$app could not be found, please install it."
@@ -148,6 +166,16 @@ function check_required_apps () {
     done
 
     _debug "All required apps found."
+}
+
+# ===============================================
+# -- _check_bash - check version of bash
+# ===============================================
+function _check_bash () {
+	# - Check bash version and _die if not at least 4.0
+	if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+		_die "Sorry, you need at least bash 4.0 to run this script." 1
+	fi
 }
 
 # =====================================

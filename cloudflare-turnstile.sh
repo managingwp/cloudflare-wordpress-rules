@@ -12,13 +12,17 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
+QUIET="0"
 TURNSTILE_ID=""
 ZONE=""
 
 
-# -- Include cf-inc.sh
+# ==================================
+# -- Include cf-inc.sh and cf-api-inc.sh
+# ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
-source "$SCRIPT_DIR/cf-api-inc.sh"
+source "$SCRIPT_DIR/cf-inc-api.sh"
+
 
 # ==================================
 # -- Usage
@@ -38,6 +42,7 @@ Commands:
 Options:
     -z|--zone [domain name]                - Zone domain name
     -a|--account [name@email.com]          - Cloudflare account email address
+    -aid|--account-id [account id]         - Cloudflare account id
     -t|--turnstile [turnstile sitekey]     - Turnstile Sitekey
     -tn|--turnstile-name [name]            - Turnstile Name
     -ak|--apikey [apikey]                  - API Key to use for creating the new turnstile.
@@ -57,88 +62,6 @@ Configuration file for credentials:
 
 Version: $VERSION - DIR: $SCRIPT_DIR
 "
-}
-
-# ==================================
-# -- Functions
-# ==================================
-
-# ==================================
-# -- create_turnstile $DOMAIN_NAME $ACCOUNT_ID $TURNSTILE_NAME
-# -- Create a turnstile id for site.
-# ==================================
-#curl https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/challenges/widgets \
-#    -H 'Content-Type: application/json' \
-#    -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-#    -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
-#    -d '{
-#      "domains": [
-#        "203.0.113.1",
-#        "cloudflare.com",
-#        "blog.example.com"
-#      ],
-#      "mode": "non-interactive",
-#      "name": "blog.cloudflare.com login form",
-#      "clearance_level": "no_clearance"
-#    }'
-#
-function create_turnstile () {
-    DOMAIN_NAME=$1
-    ACCOUNT_ID=$2
-    TURNSTILE_NAME=$3
-    _debug "function:${FUNCNAME[0]}"    
-    EXTRA=(-H 'Content-Type: application/json' \
-     --data 
-    '{
-        "domains": [
-            "'$DOMAIN_NAME'"
-        ],
-        "mode": "non-interactive",
-        "name": "'$TURNSTILE_NAME'",
-        "clearance_level": "no_clearance"
-        }')
-    cf_api POST /client/v4/accounts/${ACCOUNT_ID}/challenges/widgets $EXTRA
-    if [[ $CURL_EXIT_CODE == "200" ]]; then
-        json2_keyval $API_OUTPUT        
-    else        
-        echo "$MESG - $API_OUTPUT"
-        exit 1
-    fi
-}
-
-# ==================================
-# -- list_turnstile $ACCOUNT_ID
-# -- List all turnstile tokens
-# ==================================
-function list_turnstile () {
-    local ACCOUNT_ID=$1
-    _debug "function:${FUNCNAME[0]}"    
-    cf_api GET /client/v4/accounts/${ACCOUNT_ID}/challenges/widgets
-    if [[ $CURL_EXIT_CODE == "200" ]]; then
-        json2_keyval_array "$API_OUTPUT"
-    else
-        _error "Couldn't get turnstile list, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token"
-        echo "$MESG - $API_OUTPUT"
-        exit 1
-    fi
-}
-
-# ==================================
-# -- delete_turnstile $ACCOUNT_ID $TURNSTILE_ID
-# -- Delete a turnstile token
-# ==================================
-function delete_turnstile () {
-    local ACCOUNT_ID=$1
-    local TURNSTILE_ID=$2
-    _debug "function:${FUNCNAME[0]}"    
-    cf_api DELETE /client/v4/accounts/${ACCOUNT_ID}/challenges/widgets/${TURNSTILE_ID}
-    if [[ $CURL_EXIT_CODE == "200" ]]; then
-        _running "Deleted turnstile $TURNSTILE_ID"
-    else
-        _error "Couldn't delete turnstile, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token"
-        echo "$MESG - $API_OUTPUT"
-        exit 1
-    fi
 }
 
 # ==================================
@@ -191,6 +114,11 @@ case $key in
     shift # past argument
     shift # past variable  
     ;;
+    -aid|--account-id)
+    ACCOUNT_ID="$2"
+    shift # past argument
+    shift # past variable
+    ;;
     create|--create)
     CMD="create_turnstile"
     shift # past argument
@@ -232,23 +160,35 @@ fi
 
 # -- pre-flight check
 _debug "Pre-flight_check"
-[[ $CMD != "test-token" ]] && pre_flight_check
+[[ $CMD != "test-token" ]] && _pre_flight_check
 
 # -- Run
 _running "Running: $CMD"
+# ===========================================
+# -- Create Turnstile
+# ===========================================
 if [[ $CMD == 'create_turnstile' ]]; then
     [[ -z $ZONE ]] && { usage;_error "Please specify a domain name using -z"; exit 1;} # No domain, exit
     _running2 "Getting account id from zone ${ZONE}"
-    ACCOUNT_ID=$(get_account_id_from_domain $ZONE)
-    [[ -z $ACCOUNT_ID ]] && { usage;_error "No account id found"; exit 1;} # No account id, exit
+    if [[ -z $ACCOUNT_ID ]]; then
+        _cf_zone_accountid $ZONE
+        [[ $? -ne 0 ]] && { _error "Error getting account id from zone ${ZONE}"; exit 1;} # Error getting account id
+        [[ -z $ACCOUNT_ID ]] && { usage;_error "No account id found"; exit 1;} # No account id, exit
+    fi
+        
     _running2 "Creating turnstile for $ZONE under $ACCOUNT_ID"
     [[ -z $TURNSTILE_NAME ]] && TURNSTILE_NAME="${ZONE}"
     create_turnstile $ZONE $ACCOUNT_ID $TURNSTILE_NAME
+# ============================================
+# -- List Turnstile
+# ============================================
 elif [[ $CMD == 'list_turnstile' ]]; then
     if [[ -n $ZONE ]]; then
         _running2 "Getting account id from zone ${ZONE}"        
-        ACCOUNT_ID=$(get_account_id_from_domain $ZONE)
+        _cf_zone_accountid $ZONE
+        [[ $? -ne 0 ]] && { _error "Error getting account id from zone ${ZONE}"; exit 1;} # Error getting account id
         [[ -z $ACCOUNT_ID ]] && { usage;_error "No account id found"; exit 1;} # No account id, exit
+        _cf_list_turnstile $ACCOUNT_ID
     elif [[ -n $CF_ACCOUNT_EMAIL ]]; then
         ACCOUNT_ID=$(get_account_id_from_email $CF_ACCOUNT)
         [[ -z $ACCOUNT_ID ]] && { usage;_error "No account id found"; exit 1;} # No account id, exit
@@ -263,7 +203,7 @@ elif [[ $CMD == "delete_turnstile" ]]; then
     [[ -z $TURNSTILE_ID ]] && { usage;_error "Please specify a turnstile id using -t"; exit 1;} # No turnstile id, exit
     if [[ -n $ZONE ]]; then
         _running2 "Getting account id from zone ${ZONE}"        
-        ACCOUNT_ID=$(get_account_id_from_domain $ZONE)
+        ACCOUNT_ID=$(_cf_zone_accountid $ZONE)
         [[ -z $ACCOUNT_ID ]] && { usage;_error "No account id found"; exit 1;} # No account id, exit
     elif [[ -n $CF_ACCOUNT_EMAIL ]]; then
         ACCOUNT_ID=$(get_account_id_from_email $CF_ACCOUNT)

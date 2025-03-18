@@ -17,7 +17,7 @@ PROFILE_DIR="${SCRIPT_DIR}/profiles"
 # -- Include cf-inc.sh and cf-api-inc.sh
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
-source "$SCRIPT_DIR/cf-api-inc.sh"
+source "$SCRIPT_DIR/cf-inc-api.sh"
 
 # ==================================
 # -- usage

@@ -15,9 +15,11 @@ DEBUG="0"
 DRYRUN="0"
 REQUIRED_APPS=("jq" "column")
 
-# -- Include cf-inc.sh
+# ==================================
+# -- Include cf-inc.sh and cf-api-inc.sh
+# ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
-source "$SCRIPT_DIR/cf-api-inc.sh"
+source "$SCRIPT_DIR/cf-inc-api.sh"
 
 # ==================================
 # -- Usage
