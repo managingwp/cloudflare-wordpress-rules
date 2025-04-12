@@ -88,7 +88,7 @@ _debug_json () {
 # -- Check for .cloudflare credentials based on script
 # =====================================
 function _pre_flight_check () {
-    # -- PRE_TAG is the script, either CF_TS, CF_SPC or CF_
+    # -- PRE_TAG is the script, either CF_TS_, CF_SPC_ or CF_
     local PRE_TAG=$1
     [[ -z $PRE_TAG ]] && PRE_TAG="CF_"
 

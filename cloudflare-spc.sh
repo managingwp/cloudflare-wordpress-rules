@@ -10,10 +10,9 @@
 SCRIPT_NAME=cloudflare-spc
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
-API_URL="https://api.cloudflare.com"
 DEBUG="0"
 DRYRUN="0"
-REQUIRED_APPS=("jq" "column")
+QUIET="0"
 
 # ==================================
 # -- Include cf-inc.sh and cf-api-inc.sh
@@ -31,21 +30,22 @@ usage () {
 Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
 
 Commands:
-    create -d <domain-name> -tn <token-name> (-ao z|-a|-t|-ak)           - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
-    list -d <domain-name> | -ae [account-email] | -at [api-key]                     - Lists account tokens.
-    test-token <token>                                         - Test created token against Cloudflare API.
+    create -d <domain-name> -tn <token-name>        - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
+    list -d <domain-name>                           - Lists account tokens.
+    test-token <token>                              - Test created token against Cloudflare API.
 
-Main Options:
+Options:
     -d|--domain [domain name]              - Set zoneid
     -tn|--token-name [token name]          - Set token name
 
 Additional Options:
-    -ao|--account-owned                    - Account owned token
-    -ae|--account-email [name@email.com]         - Cloudflare account email address
-    -ak|--api-key [apikey]                  - API Key to use for creating the new token.
-    -at|--account-token [token]                     - API Token to use for creating the new token.
-    --debug                                - Debug mode
-    --dryrun                               - Dry run mode
+    -ao|--account-owned                        - Account owned token
+    -ae|--account-email [name@email.com]       - Cloudflare account email address
+    -ak|--api-key [apikey]                     - API Key to use for creating the new token.
+    -at|--account-token [token]                - API Token to use for creating the new token.
+    --debug                                    - Debug mode
+    --debug-json                               - Debug JSON output
+    --dryrun                                   - Dry run mode
 
 Environment variables:
     CF_SPC_ACCOUNT      - Cloudflare account email address
@@ -62,33 +62,42 @@ Version: $VERSION - DIR: $SCRIPT_DIR
 "
 }
 
-# ==================================
+# =============================================================================
 # -- Functions
-# ==================================
+# =============================================================================
 
-# -- list_tokens
+# ==================================
+# -- list_tokens $DOMAIN_NAME
+# ===================================
 list_tokens () {
     _debug "Running list_tokens"
     if [[ $ACCOUNT_OWNED ]]; then        
-        _running "Listing tokens for account owned"
-        cf_api GET /client/v4/accounts/${ACCOUNT_OWNED}/tokens
+        _running2 "Listing tokens for $DOMAIN_NAME"        
+        _cf_zone_accountid $DOMAIN_NAME
+        _running3 "Found AccountID: $ACCOUNT_ID for $DOMAIN_NAME"
+        cf_api GET /client/v4/accounts/${ACCOUNT_ID}/tokens
+        echo "$API_OUTPUT" | jq '.result[] | {id: .id, name: .name, created_at: .created_at, modified_at: .modified_at}'
     else
-        _running "Listing tokens for user"
+        _running2 "Listing tokens for user"
         cf_api GET /client/v4/user/tokens
+        echo "$API_OUTPUT" | jq '.result[] | {id: .id, name: .name, created_at: .created_at, modified_at: .modified_at}'
     fi
 }
 
 # ==================================
-# -- create_token $ZONE_ID
+# -- create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME
 # ==================================
 create_token () {
     _debug "function:${FUNCNAME[0]}"
-    ZONE_ID=${1}
+    local ZONE_ID=${1}
+    local DOMAIN_NAME=${2}
+    local TOKEN_NAME=${3}
+    
     _debug "Creating token for $DOMAIN_NAME with id $ZONE_ID"
     if [[ -n $ACCOUNT_OWNED ]]; then
       if [[ -z $ACCOUNT_OWNED_ID ]]; then
         _running2 "Getting account id for account owned"
-        ACCOUNT_OWNED_ID=$(get_account_id_from_zone $ZONE_ID)
+        ACCOUNT_OWNED_ID=$(_cf_get_account_id_from_zone $ZONE_ID)
         if [[ -z $ACCOUNT_OWNED_ID ]]; then
           _error "No account id found for $ZONE_ID"
           exit 1
@@ -102,8 +111,8 @@ create_token () {
         _running "Creating token for user"
         CF_API_ACCOUNT="com.cloudflare.api.account.*\":\"*"
     fi
-    _running2 "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"
-    [[ -z $ZONE_ID ]] && get_zone_id || _debug "Using \$ZONE_ID via cli"
+    
+    _running2 "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"    
     ZONE_ID_JSON=("com.cloudflare.api.account.zone.${ZONE_ID}")
     EXTRA=(-H 'Content-Type: application/json' \
      --data '
@@ -186,9 +195,9 @@ create_token () {
   "condition": {}
 }')
     if [[ -n $ACCOUNT_OWNED ]]; then
-        cf_api POST /client/v4/accounts/${ACCOUNT_OWNED_ID}/tokens $EXTRA
+        cf_api POST /client/v4/accounts/${ACCOUNT_OWNED_ID}/tokens "${EXTRA[@]}"
     else
-        cf_api POST /client/v4/user/tokens $EXTRA
+        cf_api POST /client/v4/user/tokens "${EXTRA[@]}"
     fi
     
     if [[ $CURL_EXIT_CODE == "200" ]]; then
@@ -261,6 +270,11 @@ case $key in
     DEBUG="1"
     shift # past argument
     ;;
+    --debug-json)
+    DEBUG="1"
+    DEBUG_CURL_OUTPUT="1"
+    shift # past argument
+    ;;
     -dr|--dryrun)
     DRYRUN="1"
     shift # past argument
@@ -285,23 +299,22 @@ fi
 # Get zone ID for domain.com and set TOKEN_NAME
 _running "Running $CMD on $DOMAIN_NAME"
 
-
 # -- pre-flight check
 _debug "Pre-flight_check"
-[[ $CMD != "test-token" ]] && pre_flight_check SPC
+_pre_flight_check CF_SPC_
 
 # -- Run
-if [[ $CMD == 'create-token' ]]; then        
+if [[ $CMD == 'create' ]]; then        
     [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit    
-    ZONE_ID=$(get_zone_idv2 $DOMAIN_NAME)
+    ZONE_ID=$(_cf_zone_id $DOMAIN_NAME) # Get zone id
     _debug "ZONE_ID: $ZONE_ID"    
     [[ -z $ZONE_ID ]] && { usage;_error "No zone id found for $DOMAIN_NAME"; exit 1;} # No zone id, exit
     
     _running2 "Creating token for $DOMAIN_NAME with id $ZONE_ID"
     [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
-    create_token $ZONE_ID    
+    create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME  
 elif [[ $CMD == 'list' ]]; then
-    list_tokens
+    list_tokens $DOMAIN_NAME
 elif [[ $CMD == 'test-creds' ]]; then
     [[ $2 ]] && test_creds $2 || test_creds
 elif [[ $CMD == 'test-token' ]]; then

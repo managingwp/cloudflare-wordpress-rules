@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =================================================================================================
-# cf-api-inc v1.2
+# cf-api-inc v1.4
 # =================================================================================================
 
 # =====================================
@@ -8,6 +8,7 @@
 # =====================================
 API_LIB_VERSION="1.1"
 API_URL="https://api.cloudflare.com"
+DEBUG_CURL_OUTPUT="0"
 typeset -gA cf_api_functions
 echo "Cloudflare API Library v${API_LIB_VERSION}"
 
@@ -102,6 +103,7 @@ function cf_api() {
     fi
     _debug "API_PATH: $API_PATH"
 
+    # -- Create headers for curl
     if [[ -n $API_TOKEN ]]; then
         CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
         _debug "Using \$API_TOKEN as 'Authorization: Bearer'. \$CURL_HEADERS: ${CURL_HEADERS[*]}"        
@@ -113,17 +115,19 @@ function cf_api() {
         exit 1
     fi
 
+    # -- Create temporary file for curl output
     CURL_OUTPUT=$(mktemp)
 
     # -- Start API Call
     _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]}" --output $CURL_OUTPUT ${EXTRA[*]}"
     [[ $DEBUG == "1" ]] && set -x
-    CURL_EXIT_CODE=$(curl -s -w "%{http_code}" --request "$REQUEST" \
+    CURL_EXIT_CODE=$(curl -s --output "$CURL_OUTPUT" -w "%{http_code}" --request "$REQUEST" \
         --url "${API_URL}${API_PATH}" \
         "${CURL_HEADERS[@]}" \
-        --output "$CURL_OUTPUT" "${EXTRA[*]}")
+        "${EXTRA[@]}")
     [[ $DEBUG == "1" ]] && set +x
     API_OUTPUT=$(<"$CURL_OUTPUT")
+    _debug "CURL_EXIT_CODE: $CURL_EXIT_CODE"
     _debug_json "$API_OUTPUT"
     rm "$CURL_OUTPUT"
 
@@ -159,13 +163,17 @@ parse_cf_error () {
 }
 
 # =====================================
-# -- debug_jsons
+# -- debug_json
 # =====================================
 cf_api_functions[_debug_jsons]="Output JSON"
-_debug_json () {
-    if [[ $DEBUG_JSON == "1" ]]; then
-        echo -e "${CCYAN}** Outputting JSON ${*}${NC}"
-        echo "${@}" | jq
+function _debug_json() {
+    _debug "function:${FUNCNAME[0]} DEBUG_CURL_OUTPUT=$DEBUG_CURL_OUTPUT"
+    if [[ $DEBUG_CURL_OUTPUT == "1" ]]; then
+        _debug "******** Outputting JSON ********"
+        _debug "${*}"
+        _debug "******** Outputting JSON ********"
+    else
+        _debug "Not outputting JSON, use -DC"
     fi
 }
 
@@ -730,7 +738,7 @@ _get_account_id_from_creds () {
 # =====================================
 cf_api_functions[_cf_zone_accountid]="Get account ID from zone"
 _cf_zone_accountid() {
-    _debug "function:${FUNCNAME[0]} - $@"
+    _debug "function:${FUNCNAME[0]} - ${*}"
     local DOMAIN_NAME=$1
     local ACCOUNTS_RETURNED=""
     local ACCOUNT_NAME=""
@@ -768,10 +776,10 @@ _cf_zone_accountid() {
 }
 
 # =====================================
-# -- get_account_id_from_zone $ZONE_ID
+# -- _cf_get_account_id_from_zone $ZONE_ID
 # =====================================
-cf_api_functions[get_account_id_from_zone]="Get account ID from zone"
-function get_account_id_from_zone () {
+cf_api_functions[_cf_get_account_id_from_zone]="Get account ID from zone"
+function _cf_get_account_id_from_zone () {
     ZONE_ID=$1
     _debug "function:${FUNCNAME[0]}"
     _debug "Getting account_id for ${ZONE_ID}"
@@ -1632,6 +1640,8 @@ function _cf_get_member_id_from_email () {
         exit
     fi
 }
+
+
 
 
 # ==================================================================================
