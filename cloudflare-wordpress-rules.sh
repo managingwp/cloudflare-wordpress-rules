@@ -19,6 +19,7 @@ PROFILE_DIR="${SCRIPT_DIR}/profiles"
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
+source "$SCRIPT_DIR/cf-inc-old.sh"
 
 # ==================================
 # -- usage
@@ -39,6 +40,12 @@ usage () {
 	echo "   list-filters <id>                   - Get Filters"
 	echo "   delete-filter <id>                  - Delete rule ID on domain"
 	echo "   delete-filters                      - Delete all filters"
+	echo 
+	echo "   set-settings <domain> <setting> <value>   - Set security settings on domain"
+	echo "         security_level"
+	echo "         challenge_ttl"
+	echo "         browser_integrity_check"
+	echo "         always_use_https"
 	echo 
 	echo " Options"
 	echo "   --debug                                  - Debug mode"
@@ -434,6 +441,17 @@ elif [[ $CMD == "delete-filter" ]]; then
 # =====================================
 elif [[ $CMD == "delete-filters" ]]; then
 	cf_delete_filters_action $DOMAIN $ZONE_ID
+# ================
+# -- set-settings
+# ================
+elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
+	_running "  Running Set settings"
+	_cf_set_settings $ZONE_ID $@
+# ================
+# -- get-settings
+# ================
+elif [[ $CMD == "get-settings" ]]; then	
+	_cf_get_settings $ZONE_ID
 else
     usage
     _error "No command provided"
