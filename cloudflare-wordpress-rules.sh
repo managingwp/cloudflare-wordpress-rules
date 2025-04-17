@@ -11,6 +11,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
+QUIET="0"
 PROFILE_DIR="${SCRIPT_DIR}/profiles"
 
 # ==================================
@@ -338,7 +339,7 @@ ID=$3
 
 # -- pre-flight check
 _debug "Pre-flight_check"
-[[ $CMD != "test-token" ]] && pre_flight_checkv2 "CF_"
+[[ $CMD != "test-token" ]] && _pre_flight_check "CF_"
 
 # -- Dryrun
 if [[ $DRYRUN = "1" ]]; then
@@ -364,10 +365,12 @@ if [[ -z $DOMAIN ]]; then
     _error "No domain provided"
     exit 1
 else
-    ZONE_ID=$(get_zone_idv2 $DOMAIN)
+    ZONE_ID=$(_cf_zone_id $DOMAIN)	
 	if [[ -z $ZONE_ID ]]; then
 		_error "No zone ID found for $DOMAIN"
 		exit 1
+	else
+		_running2 "Zone ID found: $ZONE_ID"
 	fi
 fi
 

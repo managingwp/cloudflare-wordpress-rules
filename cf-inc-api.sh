@@ -250,16 +250,17 @@ function _cf_zone_id () {
     if [[ $CURL_EXIT_CODE == "200" ]]; then
         ZONE_ID=$(echo $API_OUTPUT | jq -r '.result[0].id' )
         if [[ $ZONE_ID != "null" ]]; then
+            _debug "Zone ID: $ZONE_ID"
             echo $ZONE_ID
         else
             _debug "Couldn't get ZoneID, using -z to provide ZoneID or give access read:zone access to your token"
             _debug "$MESG - $AP_OUTPUT"
-            exit 1
+            return 1
         fi
     else
         _debug "Couldn't get ZoneID, curl exited with $CURL_EXIT_CODE, check your \$CF_TOKEN or -t to provide a token"
         _debug "$MESG - $AP_OUTPUT"
-        exit 1
+        return 1
     fi
 }
 
