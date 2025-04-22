@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ---------------
 # A script to create the necessary Cloudflare rules for the Super Page Cache for Cloudflare WordPress Plugin
 # ---------------
@@ -13,12 +13,15 @@ VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
 QUIET="0"
+FIRST_ONE="0"
+CSV="0"
 
 # ==================================
 # -- Include cf-inc.sh and cf-api-inc.sh
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
+source "$SCRIPT_DIR/cf-inc-spc.sh"
 
 # ==================================
 # -- Usage
@@ -30,9 +33,13 @@ usage () {
 Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
 
 Commands:
-    create -d <domain-name> -tn <token-name>        - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
-    list -d <domain-name>                           - Lists account tokens.
+    create -d <domain> -tn <token-name>             - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
+    create-file <file>                              - Creates tokens for all domains in <file> (one domain per line)
+    list -d <domain>                                - Lists account tokens.
+    
+    token-exists -d <domain> -tn <token-name>       - Check if token exists for domain
     test-token <token>                              - Test created token against Cloudflare API.
+    test-perms -d <domain> -ao                     - Check permissions for account owned token
 
 Options:
     -d|--domain [domain name]              - Set zoneid
@@ -46,6 +53,8 @@ Additional Options:
     --debug                                    - Debug mode
     --debug-json                               - Debug JSON output
     --dryrun                                   - Dry run mode
+    --first-one                                - Only run first action in automation steps like create-file
+    --csv                                      - CSV output
 
 Environment variables:
     CF_SPC_ACCOUNT      - Cloudflare account email address
@@ -61,154 +70,6 @@ Configuration file for credentials:
 Version: $VERSION - DIR: $SCRIPT_DIR
 "
 }
-
-# =============================================================================
-# -- Functions
-# =============================================================================
-
-# ==================================
-# -- list_tokens $DOMAIN_NAME
-# ===================================
-list_tokens () {
-    _debug "Running list_tokens"
-    if [[ $ACCOUNT_OWNED ]]; then        
-        _running2 "Listing tokens for $DOMAIN_NAME"        
-        _cf_zone_accountid $DOMAIN_NAME
-        _running3 "Found AccountID: $ACCOUNT_ID for $DOMAIN_NAME"
-        cf_api GET /client/v4/accounts/${ACCOUNT_ID}/tokens
-        echo "$API_OUTPUT" | jq '.result[] | {id: .id, name: .name, created_at: .created_at, modified_at: .modified_at}'
-    else
-        _running2 "Listing tokens for user"
-        cf_api GET /client/v4/user/tokens
-        echo "$API_OUTPUT" | jq '.result[] | {id: .id, name: .name, created_at: .created_at, modified_at: .modified_at}'
-    fi
-}
-
-# ==================================
-# -- create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME
-# ==================================
-create_token () {
-    _debug "function:${FUNCNAME[0]}"
-    local ZONE_ID=${1}
-    local DOMAIN_NAME=${2}
-    local TOKEN_NAME=${3}
-    
-    _debug "Creating token for $DOMAIN_NAME with id $ZONE_ID"
-    if [[ -n $ACCOUNT_OWNED ]]; then
-      if [[ -z $ACCOUNT_OWNED_ID ]]; then
-        _running2 "Getting account id for account owned"
-        ACCOUNT_OWNED_ID=$(_cf_get_account_id_from_zone $ZONE_ID)
-        if [[ -z $ACCOUNT_OWNED_ID ]]; then
-          _error "No account id found for $ZONE_ID"
-          exit 1
-        fi
-      fi
-
-      _debug "Creating token for id $ZONE_ID using account id $ACCOUNT_OWNED_ID"
-      CF_API_ACCOUNT="com.cloudflare.api.account.${ACCOUNT_OWNED_ID}\":\"*"
-
-    else
-        _running "Creating token for user"
-        CF_API_ACCOUNT="com.cloudflare.api.account.*\":\"*"
-    fi
-    
-    _running2 "Adding persmissions to $DOMAIN_NAME aka $ZONE_ID"    
-    ZONE_ID_JSON=("com.cloudflare.api.account.zone.${ZONE_ID}")
-    EXTRA=(-H 'Content-Type: application/json' \
-     --data '
- {
-  "name": "'${DOMAIN_NAME}' '${TOKEN_NAME}'",
-  "policies": [
-    {
-      "effect": "allow",
-      "resources": {
-        "'${CF_API_ACCOUNT}'"
-      },
-      "permission_groups": [
-        {
-          "id": "e086da7e2179491d91ee5f35b3ca210a",
-          "name": "Workers Scripts Write"
-        },
-        {
-          "id": "c1fde68c7bcc44588cbb6ddbc16d6480",
-          "name": "Account Settings Read"
-        }
-      ]
-    },
-    {
-      "effect": "allow",
-      "resources": {
-        "'${ZONE_ID_JSON[@]}'": "*"
-      },
-      "permission_groups": [
-        {
-          "id": "e17beae8b8cb423a99b1730f21238bed",
-          "name": "Cache Purge"
-        },
-        {
-          "id": "ed07f6c337da4195b4e72a1fb2c6bcae",
-          "name": "Page Rules Write"
-        },
-        {
-          "id": "3030687196b94b638145a3953da2b699",
-          "name": "Zone Settings Write"
-        },
-        {
-          "id": "e6d2666161e84845a636613608cee8d5",
-          "name": "Zone Write"
-        },
-        {
-          "id": "28f4b596e7d643029c524985477ae49a",
-          "name": "Workers Routes Write"
-        },
-        {
-          "id": "9c88f9c5bce24ce7af9a958ba9c504db",
-          "name": "Zone Analytics Read"
-        },
-        {
-          "id": "c8fed203ed3043cba015a93ad1616f1f",
-          "name": "Zone Read"
-        },
-        {
-          "id": "3030687196b94b638145a3953da2b699",
-          "name": "Zone Settings Write"
-        },
-        {
-          "id": "82e64a83756745bbbb1c9c2701bf816b",
-          "name": "DNS Read"
-        },
-        {
-          "id": "e17beae8b8cb423a99b1730f21238bed",
-          "name": "Zone Cache Purge"
-        },
-        {
-          "id": "9ff81cbbe65c400b97d92c3c1033cab6",
-          "name": "Zone Cache Rules Edit"
-        },
-        {
-          "id": "0ac90a90249747bca6b047d97f0803e9",
-          "name": "Zone Transform Rules Write"
-        }
-      ]
-    }
-  ],
-  "condition": {}
-}')
-    if [[ -n $ACCOUNT_OWNED ]]; then
-        cf_api POST /client/v4/accounts/${ACCOUNT_OWNED_ID}/tokens "${EXTRA[@]}"
-    else
-        cf_api POST /client/v4/user/tokens "${EXTRA[@]}"
-    fi
-    
-    if [[ $CURL_EXIT_CODE == "200" ]]; then
-        NEW_API_TOKEN=$(echo $API_OUTPUT | jq '.result.value')
-        echo "New API Token -- ${TOKEN_NAME}: ${NEW_API_TOKEN}"
-    else        
-        echo "$MESG - $API_OUTPUT"
-        exit 1
-    fi
-}
-
 
 # ==================================
 # -- Arguments
@@ -279,6 +140,14 @@ case $key in
     DRYRUN="1"
     shift # past argument
     ;;
+    --first-one)
+    FIRST_ONE=1
+    shift # past argument
+    ;;
+    --csv)
+    QUIET="1"
+    shift # past argument
+    ;;
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     shift # past argument
@@ -305,20 +174,72 @@ _pre_flight_check CF_SPC_
 
 # -- Run
 if [[ $CMD == 'create' ]]; then        
-    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit    
-    ZONE_ID=$(_cf_zone_id $DOMAIN_NAME) # Get zone id
-    _debug "ZONE_ID: $ZONE_ID"    
-    [[ -z $ZONE_ID ]] && { usage;_error "No zone id found for $DOMAIN_NAME"; exit 1;} # No zone id, exit
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    _cf_spc_create_token "$DOMAIN_NAME" "$TOKEN_NAME"
+elif [[ $CMD == 'create-file' ]]; then
+    FILE="$1"
+    [[ -z $FILE ]] && { usage;_error "Please specify a file"; exit 1;} # No file, exit
+    [[ ! -f $FILE ]] && { usage;_error "File not found: $FILE"; exit 1;} # File not found, exit
+    _debug "FILE: $FILE"        
+    _running "Creating tokens for all domains in $FILE"
+    echo
+    cat "$FILE"
+    echo
     
-    _running2 "Creating token for $DOMAIN_NAME with id $ZONE_ID"
-    [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
-    create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME  
+    _running2 "Are you sure you want to create tokens for all domains in $FILE? (y/n)"
+    read -r -p "Are you sure? (y/n) " -n 1 -s
+    echo  
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        _success "Creating tokens for all domains in $FILE"
+        _debug "User confirmed"        
+    else
+        _error "Existing"
+        _debug "User cancelled"
+        exit 1
+    fi
+    [[ $? -ne 0 ]] && { _error "Aborting"; exit 1;} # User cancelled, exit
+    
+    # -- Look through domains in file
+    while IFS= read -r DOMAIN_NAME; do
+        _running "Creating token for $DOMAIN_NAME"
+        [[ -z $DOMAIN_NAME ]] && { _error "No domain name found in file"; continue;} # No domain name, skip        
+        [[ $DOMAIN_NAME =~ ^#.*$ ]] && { _debug "Skipping comment: $DOMAIN_NAME"; continue;} # Skip comments
+        _debug "Creating toking for $DOMAIN_NAME"
+        _cf_spc_create_token "$DOMAIN_NAME" 
+        if [[ $? -ne 0 ]]; then
+          _error "Error creating token for $DOMAIN_NAME"; 
+          [[ $FIRST_ONE == 1 ]] && { _debug "First one only"; exit 1;} # Only run first action
+          continue
+        fi
+        [[ $FIRST_ONE == 1 ]] && { _debug "First one only"; exit 1;} # Only run first action
+    done < "$1"
+    _running2 "Finished creating tokens for all domains in $FILE"
+# ==================================
+# -- List tokens
+# ==================================
 elif [[ $CMD == 'list' ]]; then
     list_tokens $DOMAIN_NAME
-elif [[ $CMD == 'test-creds' ]]; then
-    [[ $2 ]] && test_creds $2 || test_creds
+# ==================================
+# -- token-exists
+# ==================================
+elif [[ $CMD == 'token-exists' ]]; then
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    [[ -z $TOKEN_NAME ]] && { usage;_error "Please specify a token name"; exit 1;} # No token name, exit
+    _cf_spc_token_exists "$DOMAIN_NAME" "$TOKEN_NAME"
+# ==================================
+# -- test-token
+# ===================================
 elif [[ $CMD == 'test-token' ]]; then
-    test_token $1
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    [[ -z $TOKEN_NAME ]] && { usage;_error "Please specify a token name"; exit 1;} # No token name, exit
+    _cf_spc_test_token "$DOMAIN_NAME" "$TOKEN_NAME"
+# ==================================
+# -- test-perms
+# ==================================
+elif [[ $CMD == 'test-perms' ]]; then
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    _cf_spc_test_perms "$DOMAIN_NAME" "$ACCOUNT_OWNED"
 else
     usage
     if [[ -z $CMD ]]; then

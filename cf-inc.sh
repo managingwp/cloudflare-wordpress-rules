@@ -174,7 +174,8 @@ function _check_required_apps () {
 function _check_bash () {
 	# - Check bash version and _die if not at least 4.0
 	if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-		_die "Sorry, you need at least bash 4.0 to run this script." 1
+		_error "Sorry, you need at least bash 4.0 to run this script. Current version is ${BASH_VERSION}"
+        exit 1
 	fi
 }
 

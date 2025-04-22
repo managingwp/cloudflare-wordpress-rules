@@ -1,0 +1,13 @@
+{
+    "name": "network-isp-block",
+    "description": "Block known Network ISP but not known bots.",
+    "date": "2025-05-16",
+    "version": "1.0",
+    "rules": [
+        {
+            "description": "Netwkork ISP Block",            
+            "expression": "(http.request.uri.path eq \"/xmlrpc.php\")",
+            "action": "block",
+            "priority": 1
+        },
+}

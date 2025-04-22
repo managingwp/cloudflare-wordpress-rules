@@ -1,0 +1,9 @@
+{
+    "action": "allow",
+    "description": "R2V201 -  Allow URI Query, URL, User Agents, and IPs (Allow)",
+    "filter": {
+      "expression": "(ip.src in {__IP_LIST__} or ___UA_LIST___ or ___QUERY_LIST___ or (cf.client.bot)",
+      "action": "allow",
+      "priority": 2
+    }
+}

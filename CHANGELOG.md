@@ -1,3 +1,71 @@
+## Release 2.0.9
+* refactor: Brought in cf-inc-refactor.sh for reference
+* enhance: Added ipblocks-ua template for rule R2
+* fix: Renamed files
+* improvement: Created ipblocks-ua-qs method
+* fix: Updated .gitignore to only skip .json within profiles directory
+* fix: Errors with tyepset and declare
+* fix: Profiles with incorrect json
+* improvement: Created print-profiles command
+* feat(profile): Added block-event-calendar.json
+* style: Added .shellcheckrc
+* enhance: Added ips for blogvault and wp-umbrella, as well as useragents and querystrings for ipblocks-ua-qs
+* refactor: Shifted old code into cf-inc-old.sh
+* fix: Fixed shellcheck errors
+* refactor: Fixed shellcheck errors in cf-in-api.sh increased to v1.5
+* fix: Increase version number for cf-inc-api.sh properly.
+* test: Added cf-settings.json
+* fix: Changed WP Umbrella User Agent to WPUmbrella
+* refactor: Moved settings based api commands to cf-inc-api.sh
+* fix: Small adjustments
+* refactor: Removed settings from cf-inc-old.sh
+* refactor: Removed create-rules-v1
+* refactor: Renamed create-rules-profile to create-rules
+* refactor: Moved rules and profile functions to cf-inc-wp.sh
+* Added some debugging
+* Reverted shellcheck code.
+* chore: Removed unecessary files and updated README.md
+* docs: Updated cloudflare-waf-wordpress.md
+* Small fixes
+* feat: Created update-rule function
+* Small changes
+* fix(profile): Added profile data for rule_number and rule_version
+* improvement: Added code for upgrading the default rule
+* Added test-perms
+* chore: Moved ipblocks-ua-qs to it's own folder.
+* chore: Moving archives around
+* improvement(rules): Updated default to include Infusionsoft useragent.
+* fix: Moved generate-readme.sh to bin and updated paths
+* chore: Moved scripts into /bin
+* chore: Created default.md for default.json
+
+
+## Release 2.0.8
+* fix(core): Brought back set-settings
+
+
+## Release 2.0.7
+* fix(core): Merged code without testing.
+
+
+## Release 2.0.6
+* improvement(cf-api): Udpated cf-inc-api.sh to v1.4
+* docs(cf-inc): Fixed documentation.
+* refactor(cloudflare-spc): Refactored some aspects of cloudflare-spc
+
+
+## Release 2.0.5
+* improvement(inc): Updated cf-inc.sh
+* improvement(core): Updated inc files formatting
+* refactor(core): Moved api commands to cf-api-inc.sh
+* improvement(api): Updated cf-inc-api.sh to v1.1
+* improvement(api): Updated API file location
+* improvement(api): Updated cfi-in-api.sh location
+* improvement(api): Updated cf-inc-api.sh to 1.2
+* improvement(core): Updated cf-inc.sh to 2.1
+* improvement(cf-turnstile): Updated create command to handle multiple accounts
+
+
 ## Release 2.0.4
 * improvement: Updated Managing WP rules to v201.
 * fix: Fixed issue with MWP rules .md and json differing.
