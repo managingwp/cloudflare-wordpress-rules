@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =================================================================================================
-# cf-api-inc v1.6
+# cf-api-inc v1.6.0
 # =================================================================================================
 
 # =====================================
@@ -767,6 +767,7 @@ get_permissions () {
 # ==================================
 cf_api_functions["cf_create_filter_json"]="Create WAF filter"
 function cf_create_filter_json() {
+    _debug "function:${FUNCNAME[0]} - ${*}"
     local ZONE_ID=$1
     local JSON=$2
     _debug "Creating Filter - ZONE_ID: $ZONE_ID - JSON: $JSON"
