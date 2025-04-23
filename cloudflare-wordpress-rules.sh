@@ -28,29 +28,29 @@ usage () {
 	echo "Usage: $SCRIPT_NAME -d <domain> -c <command>"
 	echo 
 	echo " Commands"
-	echo "   create-rules-v1                     - Create rules on domain using v1 rules"
 	echo
-	echo "   create-rules-profile <profile>      - Create rules on domain using profile"
-	echo "   list-profiles                       - List profiles"
-	echo "   print-profile <profile>             - Print rules from profile"
+	echo "   create-rules-profile <profile>             - Create rules on domain using profile"
+	echo "   list-profiles                              - List profiles"
+	echo "   print-profile <profile>                    - Print rules from profile"
 	echo
-	echo "   list-rules                          - List rules"
-	echo "   delete-rule <id>                    - Delete rule"
-	echo "   delete-rules                        - Delete all rules"
+	echo "   list-rules                                 - List rules"
+	echo "   delete-rule <id>                           - Delete rule"
+	echo "   delete-rules                               - Delete all rules"
 	echo
-	echo "   list-filters <id>                   - Get Filters"
-	echo "   delete-filter <id>                  - Delete rule ID on domain"
-	echo "   delete-filters                      - Delete all filters"
+	echo "   list-filters <id>                          - Get Filters"
+	echo "   delete-filter <id>                         - Delete rule ID on domain"
+	echo "   delete-filters                             - Delete all filters"
 	echo 
-	echo "   set-settings <domain> <setting> <value>   - Set security settings on domain"
+	echo "   get-settings <domain>                      - Get security settings on domain"
+	echo "   set-settings <domain> <setting> <value>    - Set security settings on domain"
 	echo "         security_level"
 	echo "         challenge_ttl"
 	echo "         browser_integrity_check"
 	echo "         always_use_https"
 	echo 
 	echo " Options"
-	echo "   --debug                                  - Debug mode"
-	echo "   -dr                                 - Dry run, don't send to Cloudflare"
+	echo "   --debug                 - Debug mode"
+	echo "   -dr                     - Dry run, don't send to Cloudflare"
 	echo 
 	echo " Profiles - See profiles directory for example."
 	echo "   default                             - Default using v2 rules."
@@ -230,7 +230,14 @@ function cf_print_profile () {
 		;;
         --debug)
         # shellcheck disable=SC2034
-        DEBUG="1"
+        DEBUG=1    
+        shift # past argument        
+        ;;
+        --debug-json)
+        # shellcheck disable=SC2034
+        DEBUG=1
+        # shellcheck disable=SC2034
+        DEBUG_JSON=1
         shift # past argument
         ;;
         -dr|--dryrun)
