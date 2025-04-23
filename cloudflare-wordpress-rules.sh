@@ -95,7 +95,7 @@ cf_profile_create () {
 		fi
 
 		# -- Read JSON file
-		cf_create_rules_profile $ZONE_ID $PROFILE_FILE
+		cf_create_rules_profile "$ZONE_ID" "$PROFILE_FILE"
 	fi
 }
 
@@ -126,16 +126,16 @@ function cf_create_rules_profile () {
         FILTER_DATA="{\"expression\":\"${expression}\"}"
         _debug "Filter payload: $FILTER_DATA"
         
-        CF_CREATE_FILTER_ID=$(cf_create_filter_json "$ZONE_ID" "$FILTER_DATA")
-        if [[ $? -ne 0 ]]; then
+        if ! cf_create_filter_json "$ZONE_ID" "$FILTER_DATA"; then
             _error "Failed to create filter for $description"
             continue
         fi
 
         # Create rule using filter ID
-        CF_CREATE_RULE_ID=$(CF_CREATE_RULE "$ZONE_ID" "$CF_CREATE_FILTER_ID" "$action" "$priority" "$description")
-        if [[ $? -ne 0 ]]; then
+        #CF_CREATE_RULE_ID=$(CF_CREATE_RULE "$ZONE_ID" "$CF_CREATE_FILTER_ID" "$action" "$priority" "$description")
+        if ! CF_CREATE_RULE "$ZONE_ID" "$CF_CREATE_FILTER_ID" "$action" "$priority" "$description"; then
             _error "Failed to create rule"
+            echo "$CF_CREATE_RULE_ID"
             continue
         fi
 
@@ -159,11 +159,11 @@ cf_list_profiles () {
 	i=1
 	OUTPUT+="#\tFile\tName\tDescription\n"
 	OUTPUT+="--\t----\t----\t-----------\n"
-	for FILE in $PROFILE_DIR/*.json; do
+	for FILE in "$PROFILE_DIR"/*.json; do
 		_debug "Processing file: $FILE"		
-		PROFILE_FILE=$(basename $FILE)
-		PROFILE_NAME=$(jq -r '.name' $FILE)
-		PROFILE_DESC=$(jq -r '.description' $FILE)
+		PROFILE_FILE=$(basename "$FILE")
+		PROFILE_NAME=$(jq -r '.name' "$FILE")
+		PROFILE_DESC=$(jq -r '.description' "$FILE")
 		OUTPUT+="$i\t$PROFILE_FILE\t$PROFILE_NAME\t$PROFILE_DESC\n"
 		i=$((i+1))
 	done
@@ -184,18 +184,19 @@ function cf_print_profile () {
     fi
     
     # Get rule count
-    local RULE_COUNT=$(jq '.rules | length' "$PROFILE_FILE")
+    local RULE_COUNT
+	RULE_COUNT=$(jq '.rules | length' "$PROFILE_FILE")
     _running2 "Found $RULE_COUNT rules in profile $PROFILE_NAME"
     
     # Loop through each rule
-    for ((i=0; i<$RULE_COUNT; i++)); do
+    for ((i=0; i<RULE_COUNT; i++)); do
         # Extract rule details
-        local DESCRIPTION=$(jq -r ".rules[$i].description" "$PROFILE_FILE")
-        local ACTION=$(jq -r ".rules[$i].action" "$PROFILE_FILE")
-        local PRIORITY=$(jq -r ".rules[$i].priority" "$PROFILE_FILE")
-        
+        local DESCRIPTION ACTION PRIORITY EXPRESSION
+		DESCRIPTION=$(jq -r ".rules[$i].description" "$PROFILE_FILE")
+		ACTION=$(jq -r ".rules[$i].action" "$PROFILE_FILE")        
+		PRIORITY=$(jq -r ".rules[$i].priority" "$PROFILE_FILE")        
         # Extract and unescape expression
-        local EXPRESSION=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" | sed 's/\\"/"/g')
+		EXPRESSION=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" | sed 's/\\"/"/g')
         
         # Print rule details
         echo -e "\n${CYELLOW}Rule $((i+1)) - $DESCRIPTION (Priority: $PRIORITY, Action: $ACTION)${NC}"
@@ -205,138 +206,6 @@ function cf_print_profile () {
     done
 }
 
-# ================================
-# -- CF_PROTECT_WP $ZONE_ID
-# ================================
-function CF_PROTECT_WP () {
-	local ZONE_ID=$1
-	# -- Block xmlrpc.php - Priority 1
-	_running2 "Creating - Block xml-rpc.php rule on $DOMAIN - $ZONE_ID"
-	CF_CREATE_FILTER_ID=$(CF_CREATE_FILTER $ZONE_ID 'http.request.uri.path eq \"/xmlrpc.php\"')
-	[[ $? == "1" ]] && exit 1
-	CF_CREATE_RULE_ID=$(CF_CREATE_RULE $ZONE_ID $CF_CREATE_FILTER_ID "block" "1" "Block xml-rpc.php")
-	[[ $? == "1" ]] && exit 1
-	_success "Completed Block xml-rpc.php rule - $CF_CREATE_RULE_ID"
-
-	_separator
-
-	# -- Allow URI Query, URL, User Agents, and IPs (Allow) - Priority 2
-	_running2 "  Creating - Allow URI Query, URL, User Agents, and IPs (Allow)"
-    BLOG_VAULT_IPS_A=(" 88.99.145.111
-88.99.145.112
-195.201.197.31
-136.243.130.174
-144.76.236.242
-136.243.130.52
-116.202.131.150
-116.202.233.15
-116.202.193.3
-168.119.2.157
-49.12.124.233
-88.99.146.248
-139.180.140.55
-104.248.114.9
-192.81.221.63
-45.63.10.187
-45.76.137.73
-45.76.183.23
-159.223.99.132
-198.211.127.63
-45.76.126.238
-159.223.105.100
-161.35.121.79
-208.68.38.165
-147.182.131.77
-174.138.35.170
-149.28.228.237
-45.77.106.232
-140.82.15.60
-108.61.142.158
-45.77.220.240
-67.205.160.142
-137.184.156.126
-157.245.142.130
-159.223.127.73
-198.211.127.43
-198.211.123.140
-82.196.0.67
-188.166.158.7
-46.101.79.124
-192.248.168.22
-78.141.225.57
-95.179.214.63
-104.238.190.161
-95.179.208.185
-95.179.220.182
-66.135.5.151
-45.32.7.254
-149.28.227.238
-8.9.37.67
-149.28.231.28
-142.132.211.19
-142.132.211.18
-142.132.211.17
-159.223.166.150
-167.172.146.73
-143.198.184.39
-161.35.123.156
-147.182.139.65
-198.211.125.219
-185.14.187.177
-192.81.222.35
-209.97.131.196
-209.97.135.165
-104.238.170.64
-78.141.244.3
-217.69.0.229
-45.63.115.86
-108.61.123.152
-45.32.144.195
-140.82.12.121
-45.77.99.218
-45.63.11.48
-149.28.45.216
-209.222.10.118")
-	BLOG_VAULT_IPS_B=$(echo $BLOG_VAULT_IPS_A|tr "\n" " ")
-    WP_UMBRELLA="141.95.192.2"
-    echo '(ip.src in { '"${BLOG_VAULT_IPS_B}"' '"${WP_UMBRELLA}"'})'
-
-	CF_CREATE_FILTER_ID=$(CF_CREATE_FILTER $ZONE_ID '(ip.src in { '"${BLOG_VAULT_IPS_B}"' }) or (ip.src in {'"${WP_UMBRELLA}"'})')
-	[[ $? == "1" ]] && exit 1
-	CF_CREATE_RULE_ID=$(CF_CREATE_RULE $ZONE_ID $CF_CREATE_FILTER_ID "allow" "2" "Allow URI Query, URL, User Agents, and IPs (Allow)")
-	[[ $? == "1" ]] && exit 1
-	_success "Completed  - Allow URI Query, URL, User Agents, and IPs (Allow)"
-	_separator
-
-	# --  Managed Challenge /wp-admin (Managed Challenge) - Priority 3
-	_creating "  Creating Managed Challenge /wp-admin (Managed Challenge) rule"
-	CF_CREATE_FILTER_ID=$(CF_CREATE_FILTER $ZONE_ID '(http.request.uri.path contains \"/wp-login.php\") or (http.request.uri.path contains \"/wp-admin/\" and http.request.uri.path ne \"/wp-admin/admin-ajax.php\" and not http.request.uri.path contains \"/wp-admin/js/password-strength-meter.min.js\")')
-	[[ $? == "1" ]] && exit 1
-	CF_CREATE_RULE_ID=$(CF_CREATE_RULE $ZONE_ID $CF_CREATE_FILTER_ID "managed_challenge" "3" "Managed Challenge /wp-admin (Managed Challenge)")
-	[[ $? == "1" ]] && exit 1
-	_success "Completed Managed Challenge /wp-admin (Managed Challenge)"
-	_separator
-
-	# --  Allow Good Bots and User Agent/URI/URL Query (Allow) - Priority 4
-	_creating "  Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	CF_CREATE_FILTER_ID=$(CF_CREATE_FILTER $ZONE_ID '(cf.client.bot) or (http.user_agent contains \"Metorik API Client\") or (http.user_agent contains \"Wordfence Central API\") or (http.request.uri.query contains \"wc-api=wc_shipstation\") or (http.user_agent contains \"Better Uptime Bot\") or (http.user_agent contains \"ShortPixel\") or (http.user_agent contains \"WPUmbrella\")')
-	[[ $? == "1" ]] && exit 1
-	CF_CREATE_RULE_ID=$(CF_CREATE_RULE $ZONE_ID $CF_CREATE_FILTER_ID "allow" "4" "Allow Good Bots and User Agent/URI/URL Query (Allow)")
-	[[ $? == "1" ]] && exit 1
-	_success "Completed Allow Good Bots and User Agent/URI/URL Query (Allow)"
-	_separator
-
-    # -- Challenge Outside of GEO (JS Challenge)
-    _creating "  Challenge Outside of GEO (JS Challenge)"
-	CF_CREATE_FILTER_ID=$(CF_CREATE_FILTER $ZONE_ID '(not ip.geoip.country in {\"CA\" \"US\"})')
-	[[ $? == "1" ]] && exit 1
-	CF_CREATE_RULE_ID=$(CF_CREATE_RULE $ZONE_ID $CF_CREATE_FILTER_ID "js_challenge" "5" "Challenge Outside of GEO (JS Challenge)")
-	[[ $? == "1" ]] && exit 1
-	_success "Completed Challenge Outside of GEO (JS Challenge)"
-    _separator
-
-    _success "  Completed Protect WP profile"
-}
 
 # =============================================================================
 # -- main
@@ -360,6 +229,7 @@ function CF_PROTECT_WP () {
 		shift # past variable
 		;;
         --debug)
+        # shellcheck disable=SC2034
         DEBUG="1"
         shift # past argument
         ;;
@@ -377,8 +247,6 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # -- Commands
 _debug "ARGS: ${*}@"
-PROFILE=$3
-ID=$3
 
 # -- pre-flight check
 _debug "Pre-flight_check"
@@ -398,7 +266,7 @@ fi
 
 # -- Show usage if no domain provided
 if [[ -n $DOMAIN ]]; then
-    ZONE_ID=$(_cf_zone_id $DOMAIN)	
+    ZONE_ID=$(_cf_zone_id "$DOMAIN")	
 	if [[ -z $ZONE_ID ]]; then
 		_error "No zone ID found for $DOMAIN"
 		exit 1
@@ -412,14 +280,14 @@ _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
 # -- create-rules-v1
 # =====================================
 if [[ $CMD == "create-rules-v1" ]]; then        
-    CF_PROTECT_WP $ZONE_ID
+    CF_PROTECT_WP "$ZONE_ID"
 # =====================================
 # -- create-rules-profile
 # =====================================
 elif [[ $CMD == "create-rules-profile" ]]; then
 	PROFILE=$1
 	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
-    cf_profile_create $DOMAIN $ZONE_ID $PROFILE
+    cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
 # =====================================
 # -- list-profiles
 # =====================================
@@ -434,30 +302,30 @@ elif [[ $CMD == "print-profile" ]]; then
 	PROFILE=$1
 	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
 	_running2 "Printing rules from profile $PROFILE"
-	cf_print_profile $PROFILE
+	cf_print_profile "$PROFILE"
 	exit 0
 # =====================================
 # -- list-rules
 # =====================================
 elif [[ $CMD == "list-rules" ]]; then
-    cf_list_rules_action $DOMAIN $ZONE_ID
+    cf_list_rules_action "$DOMAIN" "$ZONE_ID"
 # =====================================
 # -- delete-rules
 # =====================================
 elif [[ $CMD == "delete-rules" ]]; then
-    cf_delete_rules_action $DOMAIN $ZONE_ID
+    cf_delete_rules_action "$DOMAIN" "$ZONE_ID"
 # =====================================
 # -- delete-rule
 # =====================================
 elif [[ $CMD == "delete-rule" ]]; then
     RULE_ID=$1
 	[[ $RULE_ID == "" ]] && _error "No rule ID provided" && exit 1
-	cf_delete_rule_action $DOMAIN $ZONE_ID $RULE_ID
+	cf_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
 # =====================================
 # -- list-filters
 # =====================================
 elif [[ $CMD == "list-filters" ]]; then
-    cf_list_filters_action $DOMAIN $ZONE_ID
+    cf_list_filters_action "$DOMAIN" "$ZONE_ID"
 # =====================================
 # -- get-filter
 # =====================================
@@ -469,7 +337,7 @@ elif [[ $CMD == "get-filter" ]]; then
         _error "No filter ID provided"
         exit 1
     else
-        CF_GET_FILTER $ZONE_ID $FILTER_ID
+        CF_GET_FILTER "$ZONE_ID" "$FILTER_ID"
     fi
 # =====================================
 # -- delete-filter
@@ -477,23 +345,23 @@ elif [[ $CMD == "get-filter" ]]; then
 elif [[ $CMD == "delete-filter" ]]; then
 	FILTER_ID=$1
     [[ $FILTER_ID == "" ]] && _error "No filter ID provided" && exit 1
-	cf_delete_filter_action $DOMAIN $ZONE_ID $FILTER_ID
+	cf_delete_filter_action "$DOMAIN" "$ZONE_ID" "$FILTER_ID"
 # =====================================
 # -- delete-filters
 # =====================================
 elif [[ $CMD == "delete-filters" ]]; then
-	cf_delete_filters_action $DOMAIN $ZONE_ID
+	cf_delete_filters_action "$DOMAIN" "$ZONE_ID"
 # ================
 # -- set-settings
 # ================
 elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
 	_running "  Running Set settings"
-	_cf_set_settings $ZONE_ID $@
+	_cf_set_settings "$ZONE_ID" "$@"
 # ================
 # -- get-settings
 # ================
 elif [[ $CMD == "get-settings" ]]; then	
-	_cf_get_settings $ZONE_ID
+	_cf_get_settings "$ZONE_ID"
 else
     usage
     _error "No command provided"
