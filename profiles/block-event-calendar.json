@@ -1,0 +1,16 @@
+{
+  "profile": [
+    {
+      "name": "block-event-calendar",
+      "description": "Block Event Calendar"
+    }
+  ],
+  "clouflare_api": [
+    {
+      "filter": "(http.request.uri.query contains \"ical\" and cf.client.bot) or (http.request.uri.query contains \"eventDisplay\" and cf.client.bot) or (http.request.uri.path contains \"/events\" and cf.client.bot)",
+      "action": "block",
+      "priority": "1",
+      "profile_name": "Block URI Query, URL, User Agents, and IPs (Block) P1"
+    }
+  ]
+}
