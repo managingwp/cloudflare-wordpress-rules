@@ -29,7 +29,7 @@ usage () {
 	echo 
 	echo " Commands"
 	echo
-	echo "   create-rules-profile <profile>             - Create rules on domain using profile"
+	echo "   create-rules <profile>                     - Create rules on domain using profile"
 	echo "   list-profiles                              - List profiles"
 	echo "   print-profile <profile>                    - Print rules from profile"
 	echo
@@ -53,7 +53,7 @@ usage () {
 	echo "   -dr                     - Dry run, don't send to Cloudflare"
 	echo 
 	echo " Profiles - See profiles directory for example."
-	echo "   default                             - Default using v2 rules."
+	echo "   default                             - Default profile"
 	echo 
 	echo "Examples"
 	echo "   $SCRIPT_NAME -d domain.com -c delete-filter 32341983412384bv213v"
@@ -284,16 +284,15 @@ fi
 
 _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
 # =====================================
-# -- create-rules-v1
+# -- create-rules
 # =====================================
-if [[ $CMD == "create-rules-v1" ]]; then        
-    CF_PROTECT_WP "$ZONE_ID"
-# =====================================
-# -- create-rules-profile
-# =====================================
-elif [[ $CMD == "create-rules-profile" ]]; then
-	PROFILE=$1
-	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
+if [[ $CMD == "create-rules" ]]; then
+    PROFILE=$1
+    if [[ -z $PROFILE ]]; then
+        _error "No profile provided"
+        cf_list_profiles
+        exit 1
+    fi
     cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
 # =====================================
 # -- list-profiles
