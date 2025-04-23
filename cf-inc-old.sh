@@ -2,7 +2,7 @@
 # ==================================================
 # -- Cloudflare settings default
 # ==================================================
-declare -a CF_SETTINGS
+declare -A CF_SETTINGS
 
 # Add settings to the array
 CF_SETTINGS["security_level"]="Security Level"
@@ -61,20 +61,34 @@ function _convert_seconds () {
 # -- _cf_get_settings $CF_ZONEID
 # ==================================================
 function _cf_get_settings () {	
-	_debug "function:${FUNCNAME[0]} - ${*}"
-    local CF_ZONE_ID=$1
-    local SETTING_VALUE
+    _debug "function:${FUNCNAME[0]} - ${*}"
+    local CF_ZONE_ID=$1    
 
     # -- Get Zone Settings
+    cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings"
+    _debug "API_OUTPUT: $API_OUTPUT CURL_EXIT_CODE: $CURL_EXIT_CODE"
+
+    # -- Process each setting we're interested in
     for SETTING in "${!CF_SETTINGS[@]}"; do
-        cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}"
-        _debug "API_OUTPUT: $API_OUTPUT CURL_EXIT_CODE: $CURL_EXIT_CODE"
-        SETTING_VALUE=$(echo $API_OUTPUT | jq -r '.result.value')
-        if [[ $SETTING == "challenge_ttl" ]]; then
-            SETTING_VALUE=$(_convert_seconds $SETTING_VALUE)
-        else
-            SETTING_VALUE=$(echo $API_OUTPUT | jq -r '.result.value')
+        _debug "Processing setting: $SETTING"
+        # Extract the value for this specific setting ID from the results array
+        SETTING_VALUE=$(echo "$API_OUTPUT" | jq -r --arg id "$SETTING" '.result[] | select(.id==$id) | .value')
+        _debug "Setting value: $SETTING_VALUE"
+        
+        # If value is empty (setting not found), continue to next setting
+        if [[ -z "$SETTING_VALUE" ]]; then
+            _debug "Setting $SETTING not found in API response"
+            continue
         fi
+        
+        # Apply special formatting for certain settings
+        if [[ $SETTING == "challenge_ttl" ]]; then
+            if [[ "$SETTING_VALUE" =~ ^[0-9]+$ ]]; then
+                HUMAN_TIME=$(_convert_seconds "$SETTING_VALUE")
+                SETTING_VALUE="$SETTING_VALUE ($HUMAN_TIME)"
+            fi
+        fi
+        
         echo "${CF_SETTINGS[$SETTING]}: $SETTING_VALUE"
     done
 }
