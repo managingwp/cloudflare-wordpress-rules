@@ -9,7 +9,7 @@
 API_LIB_VERSION="1.1"
 API_URL="https://api.cloudflare.com"
 DEBUG_CURL_OUTPUT="0"
-typeset -gA cf_api_functions
+declare -a cf_api_functions
 echo "Cloudflare API Library v${API_LIB_VERSION}"
 
 # =============================================================================

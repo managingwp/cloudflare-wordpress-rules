@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
 # A script to create Cloudflare WAF rules
 # =============================================================================
@@ -32,6 +32,7 @@ usage () {
 	echo
 	echo "   create-rules-profile <profile>      - Create rules on domain using profile"
 	echo "   list-profiles                       - List profiles"
+	echo "   print-profile <profile>             - Print rules from profile"
 	echo
 	echo "   list-rules                          - List rules"
 	echo "   delete-rule <id>                    - Delete rule"
@@ -158,7 +159,8 @@ cf_list_profiles () {
 	i=1
 	OUTPUT+="#\tFile\tName\tDescription\n"
 	OUTPUT+="--\t----\t----\t-----------\n"
-	for FILE in $PROFILE_DIR/*.json; do				
+	for FILE in $PROFILE_DIR/*.json; do
+		_debug "Processing file: $FILE"		
 		PROFILE_FILE=$(basename $FILE)
 		PROFILE_NAME=$(jq -r '.name' $FILE)
 		PROFILE_DESC=$(jq -r '.description' $FILE)
@@ -167,6 +169,40 @@ cf_list_profiles () {
 	done
 
 	echo -e "$OUTPUT" | column -t -s $'\t'
+}
+
+# =====================================
+# -- cf_print_profile $PROFILE_NAME
+# -- Print rules from profile
+# =====================================
+function cf_print_profile () {
+    PROFILE_NAME=$1
+    PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+    if [[ ! -f $PROFILE_FILE ]]; then
+        _error "Profile file not found: $PROFILE_FILE"
+        return 1
+    fi
+    
+    # Get rule count
+    local RULE_COUNT=$(jq '.rules | length' "$PROFILE_FILE")
+    _running2 "Found $RULE_COUNT rules in profile $PROFILE_NAME"
+    
+    # Loop through each rule
+    for ((i=0; i<$RULE_COUNT; i++)); do
+        # Extract rule details
+        local DESCRIPTION=$(jq -r ".rules[$i].description" "$PROFILE_FILE")
+        local ACTION=$(jq -r ".rules[$i].action" "$PROFILE_FILE")
+        local PRIORITY=$(jq -r ".rules[$i].priority" "$PROFILE_FILE")
+        
+        # Extract and unescape expression
+        local EXPRESSION=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" | sed 's/\\"/"/g')
+        
+        # Print rule details
+        echo -e "\n${CYELLOW}Rule $((i+1)) - $DESCRIPTION (Priority: $PRIORITY, Action: $ACTION)${NC}"
+        echo -e "${CGREEN}Expression:${NC}"
+        echo "$EXPRESSION"
+        echo -e "${CCYAN}$(printf '=%.0s' {1..80})${NC}"
+    done
 }
 
 # ================================
@@ -360,18 +396,8 @@ if [[ -z $CMD ]]; then
     exit 1
 fi
 
-if [[ $CMD == "list-profiles" ]]; then
-	_running2 "Listing profiles"
-	cf_list_profiles
-	exit 0
-fi
-
 # -- Show usage if no domain provided
-if [[ -z $DOMAIN ]]; then
-    usage
-    _error "No domain provided"
-    exit 1
-else
+if [[ -n $DOMAIN ]]; then
     ZONE_ID=$(_cf_zone_id $DOMAIN)	
 	if [[ -z $ZONE_ID ]]; then
 		_error "No zone ID found for $DOMAIN"
@@ -394,6 +420,22 @@ elif [[ $CMD == "create-rules-profile" ]]; then
 	PROFILE=$1
 	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
     cf_profile_create $DOMAIN $ZONE_ID $PROFILE
+# =====================================
+# -- list-profiles
+# =====================================
+elif [[ $CMD == "list-profiles" ]]; then
+	_running2 "Listing profiles"
+	cf_list_profiles
+	exit 0
+# =====================================
+# -- print-profile
+# =====================================
+elif [[ $CMD == "print-profile" ]]; then
+	PROFILE=$1
+	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
+	_running2 "Printing rules from profile $PROFILE"
+	cf_print_profile $PROFILE
+	exit 0
 # =====================================
 # -- list-rules
 # =====================================

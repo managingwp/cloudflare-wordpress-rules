@@ -1,7 +1,7 @@
 # ==================================================
 # -- Cloudflare settings default
 # ==================================================
-declare -A CF_SETTINGS
+declare -a CF_SETTINGS
 
 # Add settings to the array
 CF_SETTINGS["security_level"]="Security Level"
