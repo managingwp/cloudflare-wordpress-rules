@@ -1,6 +1,5 @@
 # Cloudflare WordPress Rules
-This repository holds common Cloudflare WordPress Rules and support scripts for other actions such as creating API tokens for the Super Page Cache for Cloudflare WordPress plugin and creating a turnstile widget for Cloudflare.
-
+This repository provides a bash script for the creation of Cloudflare WAF rules for WordPress specific sites. It also provides a script for creating API tokens and turnstile widgets for Cloudflare.
 # Files
 | File | Description |
 | --- | --- |

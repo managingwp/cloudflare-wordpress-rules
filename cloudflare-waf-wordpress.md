@@ -2,16 +2,16 @@
 ## Changelog
 ### V201 - 2025-02-05
 * Updated R2 to include more blogvault IP's and user agents, missed some from json.
-### V2 - 12-16-2024
+### V2 - 2024-12-16
 * Initial version
 # Rules Data
-## R1V201 - Block URI Query, URL, User Agents, and IPs (Block)
+## R1V202 - Block URI Query, URL, User Agents, and IPs (Block)
 * Action: Block 
 ```
 (http.request.uri.path eq "/wp-content/uploads/wp-activity-log/non_mirrored_logs.json") or (http.request.uri.path eq "/xmlrpc.php")
 ```
 
-## R2V201 -  Allow URI Query, URL, User Agents, and IPs (Allow)
+## R2V202 -  Allow URI Query, URL, User Agents, and IPs (Allow)
 * Action: Skip
 * WAF components to skip
   * All remaining custom rules
