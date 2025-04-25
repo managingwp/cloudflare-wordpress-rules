@@ -12,7 +12,7 @@
 ```
 
 # Rule 3 – Managed Challenge /wp-admin (Managed Challenge)
-* Action: Managed Challenge
+* Action: Managed Challengex
 ```
 (http.request.uri.path contains "/wp-login.php") or (http.request.uri.path contains "/wp-admin/" and http.request.uri.path ne "/wp-admin/admin-ajax.php")
 ```
