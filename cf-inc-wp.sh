@@ -147,9 +147,95 @@ function cf_update_rules_profile () {
         existing_rule=$(cf_list_rules "$ZONE_ID" | jq -r --arg desc "$description" '.result[] | select(.description == $desc)')
         if [[ -n $existing_rule ]]; then
             _success "Rule already exists: $description"
+            echo "Not implementing yet"
             continue
         else
             _error "Rule not found: $description"
+        fi
+    done
+}
+
+# =====================================
+# -- cf_upgrade_rules_default $DOMAIN_NAME $ZONE_ID $PROFILE_NAME
+# -- Upgrade rules based on a profile
+# =====================================
+function cf_upgrade_rules_default () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
+    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+
+    _running2 "Upgrading rules on $OBJECT"
+
+    # -- Check if profile dir exists
+    [[ ! -d $PROFILE_DIR ]] && _error "$PROFILE_DIR doesn't exist, failing" && exit 1
+
+    # -- Check if profile exists    
+    [[ ! -f $PROFILE_FILE ]] && _error "PROFILE_FILE doesn't exist, failing" && exit 1
+    _running2 "Profile file found: $PROFILE_FILE upgrading rules."
+
+    # -- Get existing rules
+    local EXISTING_RULES
+    # Go through rules and get the rule ID, and description separated by a comma
+    EXISTING_RULES="$(cf_list_rules "$ZONE_ID")"    
+    if [[ -z $EXISTING_RULES ]]; then
+        _error "No existing rules found on $DOMAIN"
+        return 1
+    fi
+    RULE_IDS=$(echo "$EXISTING_RULES" | jq -r '.result[] | .id')
+    # -- Go through each rule can check if it can be updated
+    for RULE_ID in $RULE_IDS; do
+        # -- Get Description from $EXISTING_RULES
+        DESCRIPTION=$(echo "$EXISTING_RULES" | jq -r --arg RULE_ID "$RULE_ID" '.result[] | select(.id == $RULE_ID) | .description')
+        _running3 "Processing: $DESCRIPTION"
+        
+        # -- Take the first part of the description and check if it exists in the profile, should be R1V###        
+        RULE_PREFIX=$(echo "$DESCRIPTION" | cut -d' ' -f1)
+        _debug "Rule prefix: $RULE_PREFIX"
+
+        # Parse rule prefix format: R#V### (example: R1V201)
+        # Rule format validation
+        if [[ "$RULE_PREFIX" =~ ^R([0-9]+)V([0-9]{3})$ ]]; then
+            # Extract using bash regex capture groups
+            RULE_NUMBER="${BASH_REMATCH[1]}"
+            RULE_VERSION="${BASH_REMATCH[2]}"
+            _success "Rule Number: $RULE_NUMBER Version: $RULE_VERSION"
+        else
+            _error "Invalid rule prefix format: '$RULE_PREFIX' - expected format R#V### (e.g., R1V201)"
+            continue
+        fi
+
+        # -- Check if rule exists in the profile, based on the rule number.
+        # -- Get the rule number from the profile
+        PROFILE_RULE_NUMBER=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_id == $RULE_NUMBER) | .rule_id' "$PROFILE_FILE")
+        if [[ -z $PROFILE_RULE_NUMBER ]]; then
+            _error "Rule $RULE_NUMBER not found in profile $PROFILE_NAME"
+            continue
+        fi
+        _success "Rule $RULE_NUMBER found in profile $PROFILE_NAME"
+        
+        # -- Get the rule version from the profile, based on the rule number.
+        PROFILE_RULE_VERSION=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_id == $RULE_NUMBER) | .rule_version' "$PROFILE_FILE")
+        if [[ -z $PROFILE_RULE_VERSION ]]; then
+            _error "Rule $RULE_NUMBER version not found in profile $PROFILE_NAME"
+            continue
+        fi
+        _success "Rule $RULE_NUMBER version $PROFILE_RULE_VERSION found in profile $PROFILE_NAME"
+        # -- Check if the rule version is different from the existing rule version
+        if [[ "$RULE_VERSION" != "$PROFILE_RULE_VERSION" ]]; then
+            _success "Rule version $RULE_VERSION is different from profile version $PROFILE_RULE_VERSION"
+            # -- Update the rule
+            # -- Get the rule ID from the existing rules
+            RULE_ID=$(echo "$EXISTING_RULES" | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.result[] | select(.description | startswith($RULE_NUMBER)) | .id')
+            if [[ -z $RULE_ID ]]; then
+                _error "Rule ID not found for rule $RULE_NUMBER"
+                continue
+            fi
+            _success "Updating rule $RULE_NUMBER with ID $RULE_ID"
+            # -- Update the rule            
+        else
+            _success "Rule version $RULE_VERSION is the same as profile version $PROFILE_RULE_VERSION"
         fi
     done
 }

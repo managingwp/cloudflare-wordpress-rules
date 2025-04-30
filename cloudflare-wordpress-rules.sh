@@ -32,6 +32,8 @@ usage () {
 	echo
 	echo "   create-rules <profile>                     - Create rules on domain using profile"
 	echo "   update-rules <profile>                     - Update rules on domain using profile"
+	echo "   upgrade-default-rules                      - Upgrade MWP default rules on domain"
+	echo
 	echo "   list-profiles                              - List profiles"
 	echo "   print-profile <profile>                    - Print rules from profile"
 	echo
@@ -164,6 +166,12 @@ elif [[ $CMD == "update-rules" ]]; then
         exit 1
     fi
     cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
+# =====================================
+# -- upgrade-default-rules
+# =====================================
+elif [[ $CMD == "upgrade-default-rules" ]]; then
+    PROFILE="default"
+    cf_upgrade_rules_default "$DOMAIN" "$ZONE_ID" "$PROFILE"
 # =====================================
 # -- list-profiles
 # =====================================
