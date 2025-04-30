@@ -226,12 +226,7 @@ function cf_upgrade_rules_default () {
         if [[ "$RULE_VERSION" != "$PROFILE_RULE_VERSION" ]]; then
             _success "Rule version $RULE_VERSION is different from profile version $PROFILE_RULE_VERSION"
             # -- Update the rule
-            # -- Get the rule ID from the existing rules
-            RULE_ID=$(echo "$EXISTING_RULES" | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.result[] | select(.description | startswith($RULE_NUMBER)) | .id')
-            if [[ -z $RULE_ID ]]; then
-                _error "Rule ID not found for rule $RULE_NUMBER"
-                continue
-            fi
+            # -- Get the rule ID from the existing rules            
             _success "Updating rule $RULE_NUMBER with ID $RULE_ID"
             # -- Update the rule            
         else
