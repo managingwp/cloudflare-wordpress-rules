@@ -31,6 +31,7 @@ usage () {
 	echo " Commands"
 	echo
 	echo "   create-rules <profile>                     - Create rules on domain using profile"
+	echo "   update-rules <profile>                     - Update rules on domain using profile"
 	echo "   list-profiles                              - List profiles"
 	echo "   print-profile <profile>                    - Print rules from profile"
 	echo
@@ -152,6 +153,17 @@ if [[ $CMD == "create-rules" ]]; then
         exit 1
     fi
     cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+# =====================================
+# -- update-rules
+# =====================================
+elif [[ $CMD == "update-rules" ]]; then
+    PROFILE=$1
+    if [[ -z $PROFILE ]]; then
+        _error "No profile provided"
+		cf_list_profiles    
+        exit 1
+    fi
+    cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
 # =====================================
 # -- list-profiles
 # =====================================

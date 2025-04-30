@@ -84,6 +84,75 @@ function cf_create_rules_profile () {
         _success "Created rule: $description"
     done
 }
+# =====================================
+# -- cf_update_rules $DOMAIN_NAME $ZONE_ID $PROFILE_NAME
+# -- Update rules based on a profile
+# =====================================
+cf_update_rules () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
+
+    _running2 "Updating rules on $OBJECT"
+
+    # -- Check if profile dir exists
+    if [[ ! -d $PROFILE_DIR ]]; then
+        _error "$PROFILE_DIR doesn't exist, failing"
+        exit 1
+    fi
+
+    # -- Check if profile exists
+    PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+    if [[ ! -f $PROFILE_FILE ]]; then
+        _error "PROFILE_FILE doesn't exist, failing"
+        exit 1
+    else		
+        _running2 "Profile file found: $PROFILE_FILE reating rules on $OBJECT"
+        if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
+            _error "Invalid JSON in $PROFILE_FILE"
+            return 1
+        fi
+
+        # -- Read JSON file
+        cf_update_rules_profile "$ZONE_ID" "$PROFILE_FILE"
+    fi
+}
+
+
+
+# =====================================
+# -- cf_update_rules_profile $ZONE_ID $RULES_FILE 
+# -- Update rules from a JSON file
+# =====================================
+function cf_update_rules_profile () {
+    local ZONE_ID=$1
+    local RULES_FILE=$2
+
+    if [[ ! -f "$RULES_FILE" ]]; then
+        _error "Rules file not found: $RULES_FILE"
+        return 1
+    fi
+
+    # Read each rule from JSON file
+    jq -c '.rules[]' "$RULES_FILE" | while read -r rule; do
+        # Extract and escape properties
+        expression=$(echo "$rule" | jq -r '.expression' | sed 's/"/\\"/g')
+        action=$(echo "$rule" | jq -r '.action')
+        priority=$(echo "$rule" | jq -r '.priority')
+        description=$(echo "$rule" | jq -r '.description')
+
+        _running3 "Verifying rule: $description"
+        # Check if rule already exists
+        existing_rule=$(cf_list_rules "$ZONE_ID" | jq -r --arg desc "$description" '.result[] | select(.description == $desc)')
+        if [[ -n $existing_rule ]]; then
+            _success "Rule already exists: $description"
+            continue
+        else
+            _error "Rule not found: $description"
+        fi
+    done
+}
 
 # =====================================
 # -- cf_list_profiles
@@ -112,6 +181,7 @@ cf_list_profiles () {
 
 	echo -e "$OUTPUT" | column -t -s $'\t'
 }
+
 
 # =====================================
 # -- cf_print_profile $PROFILE_NAME
