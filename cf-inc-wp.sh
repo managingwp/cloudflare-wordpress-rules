@@ -208,7 +208,7 @@ function cf_upgrade_rules_default () {
 
         # -- Check if rule exists in the profile, based on the rule number.
         # -- Get the rule number from the profile
-        PROFILE_RULE_NUMBER=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_id == $RULE_NUMBER) | .rule_id' "$PROFILE_FILE")
+        PROFILE_RULE_NUMBER=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .rule_id' "$PROFILE_FILE")
         if [[ -z $PROFILE_RULE_NUMBER ]]; then
             _error "Rule $RULE_NUMBER not found in profile $PROFILE_NAME"
             continue
@@ -216,7 +216,7 @@ function cf_upgrade_rules_default () {
         _success "Rule $RULE_NUMBER found in profile $PROFILE_NAME"
         
         # -- Get the rule version from the profile, based on the rule number.
-        PROFILE_RULE_VERSION=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_id == $RULE_NUMBER) | .rule_version' "$PROFILE_FILE")
+        PROFILE_RULE_VERSION=$(jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .rule_version' "$PROFILE_FILE")
         if [[ -z $PROFILE_RULE_VERSION ]]; then
             _error "Rule $RULE_NUMBER version not found in profile $PROFILE_NAME"
             continue
@@ -224,17 +224,51 @@ function cf_upgrade_rules_default () {
         _success "Rule $RULE_NUMBER version $PROFILE_RULE_VERSION found in profile $PROFILE_NAME"
         # -- Check if the rule version is different from the existing rule version
         if [[ "$RULE_VERSION" != "$PROFILE_RULE_VERSION" ]]; then
-            _success "Rule version $RULE_VERSION is different from profile version $PROFILE_RULE_VERSION"
-            # -- Update the rule
-            # -- Get the rule ID from the existing rules            
-            _success "Updating rule $RULE_NUMBER with ID $RULE_ID"
-            # -- Update the rule            
+            _warning "Rule version $RULE_VERSION is different from profile version $PROFILE_RULE_VERSION, updating rule"            
+            # -- Delete the existing rule
+            cf_update_rule_profile "$ZONE_ID" "$RULE_ID" "$RULE_NUMBER" "$PROFILE"            
         else
             _success "Rule version $RULE_VERSION is the same as profile version $PROFILE_RULE_VERSION"
         fi
     done
 }
 
+# =====================================
+# -- cf_update_rule_profile $ZONE_ID $RULE_ID $RULE_NUMBER $PROFILE_NAME
+# -- Update a rule based on a profile
+# =====================================
+function cf_update_rule_profile () {
+    local ZONE_ID=$1
+    local RULE_ID=$2
+    local RULE_NUMBER=$3
+    local PROFILE_NAME=$4    
+
+    _running2 "Updating RULE_ID:$RULE_ID on ZONE_ID:$ZONE_ID using PROFILE_NAME:$PROFILE_NAME and RULE_NUMBER:$RULE_NUMBER"
+    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+
+    # -- Update Description
+    local PROFILE_DESCRIPTION
+    PROFILE_DESCRIPTION=$(cat $PROFILE_FILE | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .description')
+    _debug "Profile description: $PROFILE_DESCRIPTION"
+    [[ -z $PROFILE_DESCRIPTION ]] && _error "Description not found for rule $RULE_NUMBER in profile $PROFILE_NAME" && return 1
+    _running3 "Description found for rule $RULE_NUMBER in profile $PROFILE_NAME: $PROFILE_DESCRIPTION"
+
+    # -- Update Action
+    local PROFILE_ACTION
+    PROFILE_ACTION=$(cat $PROFILE_FILE | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .action')
+    [[ -z $PROFILE_ACTION ]] && _error "Action not found for rule $RULE_NUMBER in profile $PROFILE_NAME" && return 1
+    _running3 "Action found for rule $RULE_NUMBER in profile $PROFILE_NAME: $PROFILE_ACTION"
+    # -- Update Priority
+    local PROFILE_PRIORITY
+    PROFILE_PRIORITY=$(cat $PROFILE_FILE | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .priority')
+    [[ -z $PROFILE_PRIORITY ]] && _error "Priority not found for rule $RULE_NUMBER in profile $PROFILE_NAME" && return 1
+    _running3 "Priority found for rule $RULE_NUMBER in profile $PROFILE_NAME: $PROFILE_PRIORITY"
+    # -- Update Expression
+    local PROFILE_EXPRESSION
+    PROFILE_EXPRESSION=$(cat $PROFILE_FILE | jq -r --arg RULE_NUMBER "$RULE_NUMBER" '.rules[] | select(.rule_number == $RULE_NUMBER) | .expression')
+    [[ -z $PROFILE_EXPRESSION ]] && _error "Expression not found for rule $RULE_NUMBER in profile $PROFILE_NAME" && return 1
+    _running3 "Expression found for rule $RULE_NUMBER in profile $PROFILE_NAME: $PROFILE_EXPRESSION"
+}
 # =====================================
 # -- cf_list_profiles
 # -- List profiles

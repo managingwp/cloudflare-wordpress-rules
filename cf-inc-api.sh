@@ -1245,6 +1245,80 @@ function cf_delete_filter () {
 }
 
 # =============================================================================
+# -- Cloudflare WAF Rulesets
+# =============================================================================
+
+# =====================================
+# -- cf_list_rulesets $ZONE_ID
+# -- List all rulesets
+# =====================================
+cf_api_functions["cf_list_rulesets"]="List all rulesets"
+function cf_list_rulesets () {
+    local ZONE_ID=$1
+    _debug "Getting rulesets on $ZONE_ID"
+    cf_api GET /client/v4/zones/${ZONE_ID}/rulesets
+    if [[ $CURL_EXIT_CODE == "200" ]]; then
+        echo $API_OUTPUT | jq -r
+    else
+        _error "ERROR: $MESG - $API_OUTPUT"
+        exit 1
+    fi
+}
+
+# =====================================
+# -- cf_get_ruleset $ZONE_ID $RULESET_ID
+# -- Get ruleset
+# =====================================
+cf_api_functions["cf_get_ruleset"]="Get ruleset"
+function cf_get_ruleset () {
+    local ZONE_ID=$1
+    local RULESET_ID=$2
+    _debug "Getting ruleset $RULESET_ID on $ZONE_ID"
+    cf_api GET /client/v4/zones/${ZONE_ID}/rulesets/${RULESET_ID}
+    if [[ $CURL_EXIT_CODE == "200" ]]; then
+        echo $API_OUTPUT | jq -r
+    else
+        _error "ERROR: $MESG - $API_OUTPUT"
+        exit 1
+    fi
+}
+
+# =====================================
+# -- cf_get_ruleset_fw_custom_id $ZONE_ID
+# -- Get ruleset http_request_firewall_custom ID
+# =====================================
+cf_api_functions["cf_get_ruleset_fw_custom_id"]="Get ruleset http_request_firewall_custom ID"
+function cf_get_ruleset_fw_custom_id () {
+    local ZONE_ID=$1
+    local PHASE="http_request_firewall_custom"
+    
+    _debug "Getting ruleset $PHASE on $ZONE_ID"
+    cf_api GET /client/v4/zones/${ZONE_ID}/rulesets
+    [[ $CURL_EXIT_CODE -ne 200 ]] && _error "Couldn't get data from ruleset endpoint" && exit 1
+    FIREWALL_CUSTOM=$(echo $API_OUTPUT | jq -r --arg PHASE "$PHASE" '.result[] | select(.phase == $PHASE) | .id')
+    [[ -z $FIREWALL_CUSTOM ]] && _error "Couldn't get ruleset for $PHASE" && exit 1
+    _debug "Ruleset ID: $FIREWALL_CUSTOM"
+    echo "$FIREWALL_CUSTOM"
+}
+
+# =====================================
+# -- cf_get_ruleset_fw_custom $ZONE_ID
+# -- Get ruleset http_request_firewall_custom
+# =====================================
+cf_api_functions["cf_get_ruleset_fw_custom"]="Get ruleset http_request_firewall_custom"
+function cf_get_ruleset_fw_custom () {
+    local ZONE_ID=$1    
+    
+    _debug "Getting ruleset $PHASE on $ZONE_ID"
+    FIREWALL_CUSTOM=$(cf_get_ruleset_fw_custom_id $ZONE_ID)
+    [[ -z $FIREWALL_CUSTOM ]] && _error "Couldn't get ruleset for $PHASE" && exit 1
+    _debug "Ruleset ID: $FIREWALL_CUSTOM"
+    # -- Get Ruleset Data
+    cf_get_ruleset $ZONE_ID $FIREWALL_CUSTOM
+    [[ $CURL_EXIT_CODE -ne 200 ]] && _error "Couldn't get data from ruleset endpoint" && exit 1    
+}
+
+# =============================================================================
 # -- Cloudflare Tenant Commands
 # =============================================================================
 

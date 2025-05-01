@@ -44,6 +44,11 @@ usage () {
 	echo "   list-filters <id>                          - Get Filters"
 	echo "   delete-filter <id>                         - Delete rule ID on domain"
 	echo "   delete-filters                             - Delete all filters"
+	echo
+	echo "Ruleset Commands"
+	echo "   list-rulesets                              - List rulesets"
+	echo "   get-ruleset <id>                           - Get ruleset ID on domain"
+	echo "   get-ruleset-fw-custom                      - Get http_request_firewall_custom ruleset"
 	echo 
 	echo "   get-settings <domain>                      - Get security settings on domain"
 	echo "   set-settings <domain> <setting> <value>    - Set security settings on domain"
@@ -235,6 +240,32 @@ elif [[ $CMD == "delete-filter" ]]; then
 # =====================================
 elif [[ $CMD == "delete-filters" ]]; then
 	cf_delete_filters_action "$DOMAIN" "$ZONE_ID"
+
+# =====================================
+# -- list-rulesets
+# =====================================
+elif [[ $CMD == "list-rulesets" ]]; then
+	_running2 "Listing rulesets"
+	cf_list_rulesets "$ZONE_ID"
+# =====================================
+# -- get-ruleset
+# =====================================
+elif [[ $CMD == "get-ruleset" ]]; then
+	RULESET_ID=$1
+	_running2 "Getting ruleset ID $RULESET_ID"
+	if [[ -z $RULESET_ID ]]; then
+		usage
+		_error "No ruleset ID provided"
+		exit 1
+	else
+		cf_get_ruleset "$ZONE_ID" "$RULESET_ID"
+	fi
+# =====================================
+# -- get-ruleset-fw-custom
+# =====================================
+elif [[ $CMD == "get-ruleset-fw-custom" ]]; then	
+	_running2 "Getting http_request_firewall_custom ruleset"
+	cf_get_ruleset_fw_custom "$ZONE_ID"	
 # ================
 # -- set-settings
 # ================
