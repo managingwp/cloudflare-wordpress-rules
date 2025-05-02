@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ---------------
 # A script to create the necessary Cloudflare rules for the Super Page Cache for Cloudflare WordPress Plugin
 # ---------------
@@ -31,6 +31,7 @@ Creates appropriate api token and permissions for the Super Page Cache for Cloud
 
 Commands:
     create -d <domain-name> -tn <token-name>        - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
+    create-file <file>                              - Creates tokens for all domains in <file> (one domain per line)
     list -d <domain-name>                           - Lists account tokens.
     test-token <token>                              - Test created token against Cloudflare API.
 
@@ -98,6 +99,7 @@ create_token () {
       if [[ -z $ACCOUNT_OWNED_ID ]]; then
         _running2 "Getting account id for account owned"
         ACCOUNT_OWNED_ID=$(_cf_get_account_id_from_zone $ZONE_ID)
+        _debug "ACCOUNT_OWNED_ID: $ACCOUNT_OWNED_ID"
         if [[ -z $ACCOUNT_OWNED_ID ]]; then
           _error "No account id found for $ZONE_ID"
           exit 1
@@ -313,6 +315,24 @@ if [[ $CMD == 'create' ]]; then
     _running2 "Creating token for $DOMAIN_NAME with id $ZONE_ID"
     [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
     create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME  
+elif [[ $CMD == 'create-file' ]]; then
+    FILE="$1"
+    [[ -z $FILE ]] && { usage;_error "Please specify a file"; exit 1;} # No file, exit
+    [[ ! -f $FILE ]] && { usage;_error "File not found: $FILE"; exit 1;} # File not found, exit
+    _debug "FILE: $FILE"
+    _running2 "Creating tokens for all domains in $FILE"
+    while IFS= read -r DOMAIN_NAME; do
+        [[ -z $DOMAIN_NAME ]] && { _error "No domain name found in file"; continue;} # No domain name, skip
+        # -- Skip comments
+        [[ $DOMAIN_NAME =~ ^#.*$ ]] && { _debug "Skipping comment: $DOMAIN_NAME"; continue;} # Skip comments
+        _debug "Creating toking for $DOMAIN_NAME"
+        ZONE_ID=$(_cf_zone_id $DOMAIN_NAME) # Get zone id
+        _debug "ZONE_ID: $ZONE_ID"    
+        [[ -z $ZONE_ID ]] && { usage;_error "No zone id found for $DOMAIN_NAME"; exit 1;} # No zone id, exit
+        [[ -z $TOKEN_NAME ]] && TOKEN_NAME="${DOMAIN_NAME}-spc" # Set default token.
+        create_token $ZONE_ID $DOMAIN_NAME $TOKEN_NAME
+    done < "$1"
+    _running2 "Finished creating tokens for all domains in $FILE"
 elif [[ $CMD == 'list' ]]; then
     list_tokens $DOMAIN_NAME
 elif [[ $CMD == 'test-creds' ]]; then
