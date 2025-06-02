@@ -108,6 +108,12 @@ function cf_api() {
 
     # -- Create headers for curl
     if [[ -n $API_TOKEN ]]; then
+        # Check if - is contained in API_TOKEN
+        if [[ $API_TOKEN == *"-"* ]]; then
+            _error "API Token contains a dash (-), which is not allowed. Please check your token."
+            exit 1
+        fi
+
         CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
         _debug "Using \$API_TOKEN as 'Authorization: Bearer'. \$CURL_HEADERS: ${CURL_HEADERS[*]}"        
     elif [[ -n $API_ACCOUNT ]]; then
@@ -717,6 +723,8 @@ _cf_zone_accountid() {
                 i=$((i+1))
             done
             return 1            
+        else
+            echo $ACCOUNT_ID
         fi
     fi
 }

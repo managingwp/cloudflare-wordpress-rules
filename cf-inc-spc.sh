@@ -286,4 +286,40 @@ _cf_spc_test_perms () {
         return 1
     fi
 }
-    
+
+# =====================================
+# -- _cf_spc_test_token $DOMAIN $TOKEN
+# =====================================
+_cf_spc_test_token () {
+    _debug "function:${FUNCNAME[0]}"
+    DOMAIN="${1}"
+    TOKEN="${2}"
+    _debug "DOMAIN: ${DOMAIN} TOKEN: ${API_TOKEN}"
+    if [[ -z $TOKEN ]]; then
+        _error "No token provided"
+        return 1
+    fi
+
+    # Get accountID of domain
+    _running2 "Getting account ID for $DOMAIN"
+    ACCOUNT_ID="$(_cf_zone_accountid "$DOMAIN")"
+    if [[ -z $ACCOUNT_ID ]]; then
+        _error "No account ID found for $DOMAIN"
+        return 1
+    fi
+    _debug "ACCOUNT_ID: $ACCOUNT_ID"
+
+
+    API_TOKEN=$TOKEN
+    _running2 "Testing token: $API_TOKEN"
+    cf_api GET /client/v4/accounts/${ACCOUNT_ID}/tokens/verify
+    if [[ $CURL_EXIT_CODE == "200" ]]; then
+        _success "Token is valid"
+        echo "$API_OUTPUT" | jq '.result'
+        return 0
+    else
+        _error "Token is invalid"
+        echo "$API_OUTPUT"
+        return 1
+    fi
+}

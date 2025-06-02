@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 # This script reads JSON profiles in "profiles" and injects rule sections into existing .md templates.
 # Templates must have markers:
@@ -9,7 +10,7 @@
 set -euo pipefail
 shopt -s nullglob
 
-PROFILES_DIR="../profiles"
+PROFILES_DIR="$SCRIPT_DIR/../profiles"
 [[ -d "$PROFILES_DIR" ]] || { echo "Directory $PROFILES_DIR not found"; exit 1; }
 
 # Generate the Markdown section for rules & optional changelog

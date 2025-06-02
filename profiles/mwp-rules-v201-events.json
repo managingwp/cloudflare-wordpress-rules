@@ -1,5 +1,5 @@
 {
-  "name": "default",
+  "name": "default-calendar",
   "description": "Managing WP v201 Cloudflare Rules + Event Calendar",
   "rules": [
     {

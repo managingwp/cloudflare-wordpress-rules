@@ -231,9 +231,10 @@ elif [[ $CMD == 'token-exists' ]]; then
 # -- test-token
 # ===================================
 elif [[ $CMD == 'test-token' ]]; then
-    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
-    [[ -z $TOKEN_NAME ]] && { usage;_error "Please specify a token name"; exit 1;} # No token name, exit
-    _cf_spc_test_token "$DOMAIN_NAME" "$TOKEN_NAME"
+    [[ -z $1 ]] && { usage;_error "Please specify a token"; exit 1;} # No token, exit
+    [[ -z $DOMAIN_NAME ]] && { _error "No domain name provided"; exit 1;} # No domain, exit
+    _debug "Testing token: $1 on $DOMAIN_NAME"
+    _cf_spc_test_token "$DOMAIN_NAME" "$1"
 # ==================================
 # -- test-perms
 # ==================================

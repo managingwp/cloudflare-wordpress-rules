@@ -1,3 +1,8 @@
+## Release 2.0.10
+* improvement(spc): Improved test-token command
+* fix(profiles): Fixed improper naming of profiles
+
+
 ## Release 2.0.9
 * refactor: Brought in cf-inc-refactor.sh for reference
 * enhance: Added ipblocks-ua template for rule R2

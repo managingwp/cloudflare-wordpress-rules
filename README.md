@@ -172,6 +172,11 @@ Configuration file for credentials:
 # Changelog
 Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
 <!--- CHANGELOG --->
+## Release 2.0.10
+* improvement(spc): Improved test-token command
+* fix(profiles): Fixed improper naming of profiles
+
+
 ## Release 2.0.9
 * refactor: Brought in cf-inc-refactor.sh for reference
 * enhance: Added ipblocks-ua template for rule R2
