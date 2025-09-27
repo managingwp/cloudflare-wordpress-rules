@@ -1,16 +1,14 @@
 {
-  "profile": [
+  "name": "block-event-calendar",
+  "description": "Block Event Calendar",
+  "rules": [
     {
-      "name": "block-event-calendar",
-      "description": "Block Event Calendar"
-    }
-  ],
-  "clouflare_api": [
-    {
-      "filter": "(http.request.uri.query contains \"ical\" and cf.client.bot) or (http.request.uri.query contains \"eventDisplay\" and cf.client.bot) or (http.request.uri.path contains \"/events\" and cf.client.bot)",
+      "rule_number": "1",
+      "rule_version": "204",
+      "description": "R1V204 - Block Event Calendar Bot Traffic (Block)",
+      "expression": "(http.request.uri.query contains \"ical\" and cf.client.bot) or (http.request.uri.query contains \"eventDisplay\" and cf.client.bot) or (http.request.uri.path contains \"/events\" and cf.client.bot)",
       "action": "block",
-      "priority": "1",
-      "profile_name": "Block URI Query, URL, User Agents, and IPs (Block) P1"
+      "priority": 1
     }
   ]
 }

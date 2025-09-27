@@ -7,7 +7,7 @@
 # -- Variables
 # ==================================
 # Get Version from VERSION located in root directory
-SCRIPT_NAME=cloudflare-spc
+SCRIPT_NAME=cloudflare-token
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
@@ -21,25 +21,30 @@ CSV="0"
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
-source "$SCRIPT_DIR/cf-inc-spc.sh"
+source "$SCRIPT_DIR/cf-inc-token.sh"
 
 # ==================================
 # -- Usage
 # ==================================
 usage () {
     echo \
-"Usage: ./${SCRIPT_NAME}.sh -c <command> -d <domain> -tn <token-name> 
+"Usage: ./${SCRIPT_NAME}.sh -c <command> -d <domain> -tn <token-name>
 
-Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
+Creates appropriate api tokens and permissions for Cloudflare WordPress plugins Super Page Cache for Cloudflare and App for Cloudflare.
 
 Commands:
-    create -d <domain> -tn <token-name>             - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
-    create-file <file>                              - Creates tokens for all domains in <file> (one domain per line)
+    create-spc -d <domain> -tn <token-name>         - Creates a token called if <token-name> blank then (zone)-spc used.
+    create-app-cf -d <domain> -tn <token-name>      - Creates a token called if <token-name> blank then (zone)-app-cf used
     list -d <domain>                                - Lists account tokens.
+    list-permissions <token-id>                     - Lists permissions for a specific token ID (use -d <domain> -ao for account tokens)
+
+    create-file <file>                              - Creates tokens for all domains in <file> (one domain per line)
     
     token-exists -d <domain> -tn <token-name>       - Check if token exists for domain
     test-token <token>                              - Test created token against Cloudflare API.
     test-perms -d <domain> -ao                     - Check permissions for account owned token
+    list-permission-groups                          - Lists all available permission groups for API tokens
+
 
 Options:
     -d|--domain [domain name]              - Set zoneid
@@ -65,7 +70,7 @@ Configuration file for credentials:
     Create a file in \$HOME/.cloudflare with both CF_SPC_ACCOUNT and CF_SPC_KEY defined or CF_SPC_TOKEN. Only use a KEY or Token, not both.
 
     CF_SPC_ACCOUNT=example@example.com
-    CF_SPC_KEY=<global api key>    
+    CF_SPC_KEY=<global api key>
 
 Version: $VERSION - DIR: $SCRIPT_DIR
 "
@@ -103,10 +108,10 @@ case $key in
     shift # past argument
     shift # past variable
     ;;
-    -ao)     
+    -ao)
     ACCOUNT_OWNED="1"
     shift # past argument
-    ;;    
+    ;;
     --aoid)
     ACCOUNT_OWNED_ID="$2"
     shift # past argument
@@ -118,14 +123,14 @@ case $key in
     shift # past variable
     ;;
     -at|--account-token)
-    API_TOKEN="$2"    
+    API_TOKEN="$2"
     shift # past argument
     shift # past variable
-    ;;    
+    ;;
     -ak|--apikey)
     API_APIKEY="$2"
     shift # past argument
-    shift # past variable  
+    shift # past variable
     ;;
     --debug)
     DEBUG="1"
@@ -173,14 +178,17 @@ _debug "Pre-flight_check"
 _pre_flight_check CF_SPC_
 
 # -- Run
-if [[ $CMD == 'create' ]]; then        
+if [[ $CMD == 'create-spc' ]]; then
     [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
     _cf_spc_create_token "$DOMAIN_NAME" "$TOKEN_NAME"
+elif [[ $CMD == 'create-app-cf' ]]; then
+    [[ -z $DOMAIN_NAME ]] && { usage;_error "Please specify a domain name"; exit 1;} # No domain, exit
+    _cf_app_cf_create_token "$DOMAIN_NAME" "$TOKEN_NAME"
 elif [[ $CMD == 'create-file' ]]; then
     FILE="$1"
     [[ -z $FILE ]] && { usage;_error "Please specify a file"; exit 1;} # No file, exit
     [[ ! -f $FILE ]] && { usage;_error "File not found: $FILE"; exit 1;} # File not found, exit
-    _debug "FILE: $FILE"        
+    _debug "FILE: $FILE"
     _running "Creating tokens for all domains in $FILE"
     echo
     cat "$FILE"
@@ -188,27 +196,27 @@ elif [[ $CMD == 'create-file' ]]; then
     
     _running2 "Are you sure you want to create tokens for all domains in $FILE? (y/n)"
     read -r -p "Are you sure? (y/n) " -n 1 -s
-    echo  
+    echo
     
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         _success "Creating tokens for all domains in $FILE"
-        _debug "User confirmed"        
+        _debug "User confirmed"
     else
         _error "Existing"
         _debug "User cancelled"
         exit 1
     fi
     [[ $? -ne 0 ]] && { _error "Aborting"; exit 1;} # User cancelled, exit
-    
+
     # -- Look through domains in file
     while IFS= read -r DOMAIN_NAME; do
         _running "Creating token for $DOMAIN_NAME"
-        [[ -z $DOMAIN_NAME ]] && { _error "No domain name found in file"; continue;} # No domain name, skip        
+        [[ -z $DOMAIN_NAME ]] && { _error "No domain name found in file"; continue;} # No domain name, skip
         [[ $DOMAIN_NAME =~ ^#.*$ ]] && { _debug "Skipping comment: $DOMAIN_NAME"; continue;} # Skip comments
         _debug "Creating toking for $DOMAIN_NAME"
-        _cf_spc_create_token "$DOMAIN_NAME" 
+        _cf_spc_create_token "$DOMAIN_NAME"
         if [[ $? -ne 0 ]]; then
-          _error "Error creating token for $DOMAIN_NAME"; 
+          _error "Error creating token for $DOMAIN_NAME";
           [[ $FIRST_ONE == 1 ]] && { _debug "First one only"; exit 1;} # Only run first action
           continue
         fi
@@ -220,6 +228,18 @@ elif [[ $CMD == 'create-file' ]]; then
 # ==================================
 elif [[ $CMD == 'list' ]]; then
     list_tokens $DOMAIN_NAME
+# ==================================
+# -- list-permission-groups
+# ==================================
+elif [[ $CMD == 'list-permission-groups' ]]; then
+    list_permission_groups
+# ==================================
+# -- list-permissions
+# ==================================
+elif [[ $CMD == 'list-permissions' ]]; then
+    TOKEN_ID="$1"
+    [[ -z $TOKEN_ID ]] && { usage;_error "Please specify a token ID"; exit 1;} # No token ID, exit
+    list_token_permissions "$TOKEN_ID"
 # ==================================
 # -- token-exists
 # ==================================

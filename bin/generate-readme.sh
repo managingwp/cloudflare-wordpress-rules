@@ -21,7 +21,7 @@ if ! grep -q '<!--- CHANGELOG --->' ${README_FILE} || ! grep -q '<!--- END CHANG
 fi
 
 # Generate the CHANGELOG.md file
-git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > ${CHANGELOG_FILE}
+git log --pretty=format:"## %s%n%b" | sed '/^## /b; /^$/d; s/^/* /' > ${CHANGELOG_FILE}
 CHANGELOG=$(<${CHANGELOG_FILE})
 
 # Locate <!--- CHANGELOG ---> in the README.md file

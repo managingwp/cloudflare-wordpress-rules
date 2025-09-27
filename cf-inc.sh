@@ -114,12 +114,12 @@ function _check_cloudflare_creds () {
     local PRE_TAG=$1    
 
     if [[ -n $API_TOKEN ]]; then
-        _running "Found \$API_TOKEN via CLI using for authentication/."        
-        API_TOKEN=$CF_SPC_TOKEN
+        _running3 "Found \$API_TOKEN via CLI using for authentication/."        
+        API_TOKEN=$CF_SPC_TOKEN        
     elif [[ -n $API_ACCOUNT ]]; then
-        _running "Found \$API_ACCOUNT via CLI using as authentication."                
+        _running3 "Found \$API_ACCOUNT via CLI using as authentication."                
         if [[ -n $API_APIKEY ]]; then
-            _running "Found \$API_APIKEY via CLI using as authentication."                        
+            _running3 "Found \$API_APIKEY via CLI using as authentication."                        
         else
             _error "Found API Account via CLI, but no API Key found, use -ak...exiting"
             exit 1
@@ -134,22 +134,30 @@ function _check_cloudflare_creds () {
         CHECK_CF_TOKEN="${PRE_TAG}TOKEN"
         if [[ ${!CHECK_CF_ACCOUNT} ]]; then            
             API_ACCOUNT=${!CHECK_CF_ACCOUNT}
-            _debug "Found ${PRE_TAG}ACCOUNT = ${API_ACCOUNT} in \$HOME/.cloudflare"            
+            _running3 "Found ${PRE_TAG}ACCOUNT = ${API_ACCOUNT} in \$HOME/.cloudflare"            
             CHECK_CF_KEY="${PRE_TAG}KEY"
             if [[ ${!CHECK_CF_KEY} ]]; then
                 API_APIKEY=${!CHECK_CF_KEY}
-                _debug "Found ${PRE_TAG}KEY = ${API_APIKEY} in \$HOME/.cloudflare"
+                _running3 "Found ${PRE_TAG}KEY = ${API_APIKEY: -4} in \$HOME/.cloudflare"
             else
                 _error "No ${PRE_TAG}KEY found in \$HOME/.cloudflare, required for ${PRE_TAG}ACCOUNT"
                 exit 1
             fi
         elif [[ ${!CHECK_CF_TOKEN} ]]; then
             API_TOKEN=${!CHECK_CF_TOKEN}
-            _debug "Found ${PRE_TAG}TOKEN = ${API_TOKEN} in \$HOME/.cloudflare"
+            _running3 "Found ${PRE_TAG}TOKEN = ${API_TOKEN: -4} in \$HOME/.cloudflare"
         else
             _error "No ${PRE_TAG}TOKEN or ${PRE_TAG}KEY found in \$HOME/.cloudflare"
             exit 1
         fi
+    fi
+
+    _running2 "Using Cloudflare credentials:"
+    if [[ -n $API_TOKEN ]]; then
+        # Display last four characters of API_TOKEN for security
+        _running3 "API_TOKEN: ${API_TOKEN: -4}"
+    elif [[ -n $API_ACCOUNT ]]; then
+        _running3 "API_ACCOUNT: ${API_ACCOUNT} API_APIKEY: ${API_APIKEY: -4}"
     fi
 }
 
