@@ -1,0 +1,72 @@
+# ==================================================
+# Cloudflare Authentication Configuration
+# ==================================================
+# This file supports multiple authentication profiles
+# Place this file at: ~/.cloudflare
+#
+# Profile Format: CF_<PROFILE>_<TYPE>
+# Where PROFILE can be any name (PROD, DEV, CLIENT1, etc.)
+# And TYPE is ACCOUNT, TOKEN, or KEY
+
+# ==================================================
+# Generic/Default Credentials (backwards compatibility)
+# ==================================================
+# These will be used if no specific profile is found
+# CF_ACCOUNT=example@domain.com
+# CF_KEY=your_global_api_key_here
+# CF_TOKEN=your_api_token_here
+
+# ==================================================
+# Production Environment
+# ==================================================
+CF_PROD_ACCOUNT=prod@company.com
+CF_PROD_KEY=prod_global_api_key_here
+# OR use token instead:
+# CF_PROD_TOKEN=prod_api_token_here
+
+# ==================================================
+# Development Environment  
+# ==================================================
+CF_DEV_ACCOUNT=dev@company.com
+CF_DEV_KEY=dev_global_api_key_here
+# OR use token instead:
+# CF_DEV_TOKEN=dev_api_token_here
+
+# ==================================================
+# Client Specific Credentials
+# ==================================================
+CF_CLIENT1_ACCOUNT=client1@theircompany.com
+CF_CLIENT1_TOKEN=client1_api_token_here
+
+CF_CLIENT2_ACCOUNT=client2@anotherclient.com
+CF_CLIENT2_KEY=client2_global_api_key_here
+
+# ==================================================
+# Legacy Profile Names (for backwards compatibility)
+# ==================================================
+# These maintain compatibility with existing scripts
+CF_SPC_ACCOUNT=spc@company.com
+CF_SPC_TOKEN=spc_api_token_here
+
+CF_TS_ACCOUNT=turnstile@company.com
+CF_TS_TOKEN=turnstile_api_token_here
+
+# ==================================================
+# Usage Examples:
+# ==================================================
+# When you run a script, if multiple profiles are available,
+# you'll see an interactive menu like:
+#
+# Multiple Cloudflare credential profiles found:
+#
+#   1) PROD
+#      Account: prod@company.com
+#      Key: prod_glo...
+#
+#   2) DEV
+#      Token: dev_api_...
+#
+#   3) CLIENT1
+#      Token: client1_...
+#
+# Select profile (1-3): _

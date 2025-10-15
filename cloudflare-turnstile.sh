@@ -18,10 +18,11 @@ ZONE=""
 
 
 # ==================================
-# -- Include cf-inc.sh and cf-api-inc.sh
+# -- Include cf-inc files
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
+source "$SCRIPT_DIR/cf-inc-auth.sh"
 
 
 # ==================================
@@ -38,6 +39,7 @@ Commands:
     list -t [turnstile sitekey] | -z [domain name] | -a [accountemail]           - Lists account turnstiles.
     delete -t [turnstile sitekey] | -z [domain name] | -a [accountemail]         - Deletes a turnstile.
     test-creds -t [turnstile sitekey] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
+    list-auth-profiles                                                           - List available authentication profiles
 
 Options:
     -z|--zone [domain name]                - Zone domain name
@@ -49,16 +51,23 @@ Options:
     -d|--debug                             - Debug mode
     -dr|--dryrun                           - Dry run mode
 
-Environment variables:
-    CF_TS_ACCOUNT      - Cloudflare account email address
-    CF_TS_KEY          - Cloudflare Global API Key
-    CF_TS_TOKEN        - Cloudflare API token.
+Cloudflare API Credentials:
+    Place credentials in \$HOME/.cloudflare
+    Supports multiple profiles: CF_PROD_TOKEN, CF_DEV_ACCOUNT/CF_DEV_KEY, etc.
+    Use 'list-auth-profiles' to see available profiles
+    See .cloudflare.example for configuration format
+    
+    Legacy environment variables (still supported):
+        CF_TS_ACCOUNT      - Cloudflare account email address  
+        CF_TS_KEY          - Cloudflare Global API Key
+        CF_TS_TOKEN        - Cloudflare API token
 
-Configuration file for credentials:
-    Create a file in \$HOME/.cloudflare with both CF_TS_ACCOUNT and CF_TS_KEY defined or CF_TS_TOKEN. Only use a KEY or Token, not both.
-
-    CF_TS_ACCOUNT=example@example.com
-    CF_TS_KEY=<global api key>    
+    Example .cloudflare entries:
+        CF_TS_ACCOUNT=example@example.com
+        CF_TS_KEY=<global api key>
+        # OR
+        CF_PROD_TOKEN=<api token>
+        CF_DEV_TOKEN=<dev api token>    
 
 Version: $VERSION - DIR: $SCRIPT_DIR
 "
@@ -158,9 +167,12 @@ if [[ $DEBUG == "1" ]]; then
     _debug "Debug enabled"
 fi
 
-# -- pre-flight check
-_debug "Pre-flight_check"
-[[ $CMD != "test-token" ]] && _pre_flight_check
+# -- Initialize authentication
+_debug "Initializing authentication"
+if ! cf_auth_init; then
+    _error "Authentication failed"
+    exit 1
+fi
 
 # -- Run
 _running "Running: $CMD"
@@ -217,6 +229,8 @@ elif [[ $CMD == "delete_turnstile" ]]; then
     delete_turnstile $ACCOUNT_ID $TURNSTILE_ID
 elif [[ $CMD == 'test-creds' ]]; then
     [[ $2 ]] && test_creds $2 || test_creds
+elif [[ $CMD == 'list-auth-profiles' ]]; then
+    cf_auth_list_profiles
 else
     usage
     _error "No command provided - $1"

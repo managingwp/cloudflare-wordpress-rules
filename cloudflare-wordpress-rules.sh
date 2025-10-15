@@ -12,15 +12,16 @@ VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
 QUIET="0"
-PROFILE_DIR="${SCRIPT_DIR}/profiles"
+export PROFILE_DIR="${SCRIPT_DIR}/profiles"
 
 # ==================================
-# -- Include cf-inc.sh and cf-api-inc.sh
+# -- Include cf-inc files
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
 source "$SCRIPT_DIR/cf-inc-old.sh"
 source "$SCRIPT_DIR/cf-inc-wp.sh"
+source "$SCRIPT_DIR/cf-inc-auth.sh"
 
 # ==================================
 # -- usage
@@ -36,6 +37,10 @@ usage () {
 	echo
 	echo "   list-profiles                              - List profiles"
 	echo "   print-profile <profile>                    - Print rules from profile"
+	echo "   validate-profile <profile>                 - Validate profile JSON syntax and structure"
+	echo ""
+	echo "Authentication Commands"
+	echo "   list-auth-profiles                         - List available authentication profiles"
 	echo
 	echo "   list-rules                                 - List rules"
 	echo "   delete-rule <id>                           - Delete rule"
@@ -68,7 +73,11 @@ usage () {
 	echo "   $SCRIPT_NAME -d domain.com -c delete-filter 32341983412384bv213v"
 	echo "   $SCRIPT_NAME -d domain.com -c create-rules"
 	echo ""
-	echo "Cloudflare API Credentials should be placed in \$HOME/.cloudflare"
+	echo "Cloudflare API Credentials:"
+	echo "  Place credentials in \$HOME/.cloudflare"
+	echo "  Supports multiple profiles: CF_PROD_TOKEN, CF_DEV_ACCOUNT/CF_DEV_KEY, etc."
+	echo "  Use 'list-auth-profiles' to see available profiles"
+	echo "  See .cloudflare.example for configuration format"
 	echo ""
 	echo "Version: $VERSION"
 }
@@ -121,10 +130,6 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 # -- Commands
 _debug "ARGS: ${*}@"
 
-# -- pre-flight check
-_debug "Pre-flight_check"
-[[ $CMD != "test-token" ]] && _pre_flight_check "CF_"
-
 # -- Dryrun
 if [[ $DRYRUN = "1" ]]; then
     _error "Dryrun not implemented yet"
@@ -134,6 +139,43 @@ fi
 if [[ -z $CMD ]]; then
     usage
     _error "No command provided"
+    exit 1
+fi
+
+# ==================================
+# -- Commands that don't need authentication
+# ==================================
+if [[ $CMD == "list-profiles" ]]; then
+    cf_list_profiles
+    exit 0
+elif [[ $CMD == "print-profile" ]]; then
+    PROFILE=$1
+    if [[ -z $PROFILE ]]; then
+        _error "No profile provided"
+        cf_list_profiles
+        exit 1
+    fi
+    cf_print_profile "$PROFILE"
+    exit 0
+elif [[ $CMD == "list-auth-profiles" ]]; then
+    cf_auth_list_profiles
+    exit 0
+elif [[ $CMD == "validate-profile" ]]; then
+    PROFILE=$1
+    if [[ -z $PROFILE ]]; then
+        _error "No profile provided"
+        cf_list_profiles
+        exit 1
+    fi
+    cf_validate_profile "$PROFILE"
+    exit $?
+fi
+
+# ==================================
+# -- Initialize Authentication (for commands that need it)
+# ==================================
+if ! cf_auth_init; then
+    _error "Authentication failed"
     exit 1
 fi
 
@@ -177,22 +219,7 @@ elif [[ $CMD == "update-rules" ]]; then
 elif [[ $CMD == "upgrade-default-rules" ]]; then
     PROFILE="default"
     cf_upgrade_rules_default "$DOMAIN" "$ZONE_ID" "$PROFILE"
-# =====================================
-# -- list-profiles
-# =====================================
-elif [[ $CMD == "list-profiles" ]]; then
-	_running2 "Listing profiles"
-	cf_list_profiles
-	exit 0
-# =====================================
-# -- print-profile
-# =====================================
-elif [[ $CMD == "print-profile" ]]; then
-	PROFILE=$1
-	[[ $PROFILE == "" ]] && _error "No profile provided" && exit 1
-	_running2 "Printing rules from profile $PROFILE"
-	cf_print_profile "$PROFILE"
-	exit 0
+
 # =====================================
 # -- list-rules
 # =====================================
@@ -277,6 +304,11 @@ elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
 # ================
 elif [[ $CMD == "get-settings" ]]; then	
 	_cf_get_settings "$ZONE_ID"
+# =====================================
+# -- list-auth-profiles
+# =====================================
+elif [[ $CMD == "list-auth-profiles" ]]; then
+	cf_auth_list_profiles
 else
     usage
     _error "No command provided"

@@ -84,18 +84,13 @@ _debug_json () {
 }
 
 # =====================================
-# -- _pre_flight_check
-# -- Check for .cloudflare credentials based on script
+# =====================================
+# -- _pre_flight_check (DEPRECATED)
+# -- Use cf_auth_init from cf-inc-auth.sh instead
 # =====================================
 function _pre_flight_check () {
-    # -- PRE_TAG is the script, either CF_TS_, CF_SPC_ or CF_
-    local PRE_TAG=$1
-    [[ -z $PRE_TAG ]] && PRE_TAG="CF_"
-
-    # -- Check cloudflare creds
-    _debug "Checking for Cloudflare credentials"
-    _check_cloudflare_creds $PRE_TAG
-
+    _debug "DEPRECATED: _pre_flight_check - Use cf_auth_init from cf-inc-auth.sh instead"
+    
     # -- Check required
     _debug "Checking for required apps"
     _check_required_apps
@@ -103,62 +98,8 @@ function _pre_flight_check () {
     # -- Check bash
     _debug "Checking for bash version"
     _check_bash
-}
-
-# =====================================
-# -- _check_cloudflare_creds $PRE_TAG
-# -- Check for .cloudflare credentials
-# =====================================
-function _check_cloudflare_creds () {
-    # -- PRE_TAG is the script, either CF_TS, CF_SPC or CF_
-    local PRE_TAG=$1    
-
-    if [[ -n $API_TOKEN ]]; then
-        _running3 "Found \$API_TOKEN via CLI using for authentication/."        
-        API_TOKEN=$CF_SPC_TOKEN        
-    elif [[ -n $API_ACCOUNT ]]; then
-        _running3 "Found \$API_ACCOUNT via CLI using as authentication."                
-        if [[ -n $API_APIKEY ]]; then
-            _running3 "Found \$API_APIKEY via CLI using as authentication."                        
-        else
-            _error "Found API Account via CLI, but no API Key found, use -ak...exiting"
-            exit 1
-        fi
-    elif [[ -f "$HOME/.cloudflare" ]]; then
-        _debug "Found .cloudflare file."
-        # shellcheck source=$HOME/.cloudflare
-        source "$HOME/.cloudflare"
     
-        # -- Check first if we have _ACCOUNT
-        CHECK_CF_ACCOUNT="${PRE_TAG}ACCOUNT"    
-        CHECK_CF_TOKEN="${PRE_TAG}TOKEN"
-        if [[ ${!CHECK_CF_ACCOUNT} ]]; then            
-            API_ACCOUNT=${!CHECK_CF_ACCOUNT}
-            _running3 "Found ${PRE_TAG}ACCOUNT = ${API_ACCOUNT} in \$HOME/.cloudflare"            
-            CHECK_CF_KEY="${PRE_TAG}KEY"
-            if [[ ${!CHECK_CF_KEY} ]]; then
-                API_APIKEY=${!CHECK_CF_KEY}
-                _running3 "Found ${PRE_TAG}KEY = ${API_APIKEY: -4} in \$HOME/.cloudflare"
-            else
-                _error "No ${PRE_TAG}KEY found in \$HOME/.cloudflare, required for ${PRE_TAG}ACCOUNT"
-                exit 1
-            fi
-        elif [[ ${!CHECK_CF_TOKEN} ]]; then
-            API_TOKEN=${!CHECK_CF_TOKEN}
-            _running3 "Found ${PRE_TAG}TOKEN = ${API_TOKEN: -4} in \$HOME/.cloudflare"
-        else
-            _error "No ${PRE_TAG}TOKEN or ${PRE_TAG}KEY found in \$HOME/.cloudflare"
-            exit 1
-        fi
-    fi
-
-    _running2 "Using Cloudflare credentials:"
-    if [[ -n $API_TOKEN ]]; then
-        # Display last four characters of API_TOKEN for security
-        _running3 "API_TOKEN: ${API_TOKEN: -4}"
-    elif [[ -n $API_ACCOUNT ]]; then
-        _running3 "API_ACCOUNT: ${API_ACCOUNT} API_APIKEY: ${API_APIKEY: -4}"
-    fi
+    # Note: Authentication is now handled by cf_auth_init()
 }
 
 # =====================================

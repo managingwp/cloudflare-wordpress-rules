@@ -17,11 +17,12 @@ FIRST_ONE="0"
 CSV="0"
 
 # ==================================
-# -- Include cf-inc.sh and cf-api-inc.sh
+# -- Include cf-inc files
 # ==================================
 source "$SCRIPT_DIR/cf-inc.sh"
 source "$SCRIPT_DIR/cf-inc-api.sh"
 source "$SCRIPT_DIR/cf-inc-token.sh"
+source "$SCRIPT_DIR/cf-inc-auth.sh"
 
 # ==================================
 # -- Usage
@@ -173,9 +174,12 @@ fi
 # Get zone ID for domain.com and set TOKEN_NAME
 _running "Running $CMD on $DOMAIN_NAME"
 
-# -- pre-flight check
-_debug "Pre-flight_check"
-_pre_flight_check CF_SPC_
+# -- Initialize authentication
+_debug "Initializing authentication"
+if ! cf_auth_init; then
+    _error "Authentication failed"
+    exit 1
+fi
 
 # -- Run
 if [[ $CMD == 'create-spc' ]]; then

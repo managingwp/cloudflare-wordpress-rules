@@ -14,7 +14,7 @@ cf_profile_create () {
 	local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
 
 	_running2 "Creating profile $PROFILE_NAME on $OBJECT"
-
+    _debug "PROFILE_DIR is set to: $PROFILE_DIR, checking for existence"
 	# -- Check if profile dir exists
 	if [[ ! -d $PROFILE_DIR ]]; then
 		_error "$PROFILE_DIR doesn't exist, failing"
@@ -22,9 +22,10 @@ cf_profile_create () {
 	fi
 
 	# -- Check if profile exists
+    _debug "Checking for profile: $PROFILE_NAME in $PROFILE_DIR/$PROFILE_NAME.json"
 	PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
 	if [[ ! -f $PROFILE_FILE ]]; then
-		_error "PROFILE_FILE doesn't exist, failing"
+		_error "$PROFILE_DIR/$PROFILE_NAME.json doesn't exist, failing"
 		exit 1
 	else		
 		_running2 "Profile file found: $PROFILE_FILE reating rules on $OBJECT"
@@ -331,4 +332,170 @@ function cf_print_profile () {
         echo "$EXPRESSION"
         echo -e "${CCYAN}$(printf '=%.0s' {1..80})${NC}"
     done
+}
+
+# =====================================
+# -- cf_validate_profile $PROFILE_NAME
+# -- Validate a JSON profile file for syntax and structure errors
+# =====================================
+cf_validate_profile() {
+    local PROFILE_NAME=$1
+    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+    local total_errors=0
+    
+    if [[ -z "$PROFILE_NAME" ]]; then
+        _error "No profile name provided"
+        return 1
+    fi
+    
+    _running2 "Validating profile: $PROFILE_NAME"
+    
+    # Check if file exists
+    if [[ ! -f "$PROFILE_FILE" ]]; then
+        _error "Profile file not found: $PROFILE_FILE"
+        return 1
+    fi
+    
+    # Step 1: JSON syntax validation
+    _debug "Checking JSON syntax..."
+    if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
+        _error "Invalid JSON syntax in $PROFILE_FILE"
+        return 1
+    fi
+    _success "JSON syntax is valid"
+    
+    # Step 2: Structure validation
+    _debug "Checking JSON structure..."
+    
+    # Check required top-level fields
+    local required_fields=("name" "description" "rules")
+    for field in "${required_fields[@]}"; do
+        if ! jq -e ".$field" "$PROFILE_FILE" >/dev/null 2>&1; then
+            _error "Missing required field: '$field'"
+            ((total_errors++))
+        fi
+    done
+    
+    # Check if rules is an array
+    if ! jq -e '.rules | type == "array"' "$PROFILE_FILE" >/dev/null 2>&1; then
+        _error "'rules' must be an array"
+        ((total_errors++))
+    fi
+    
+    # Step 3: Rules validation
+    local rule_count
+    rule_count=$(jq '.rules | length' "$PROFILE_FILE" 2>/dev/null || echo "0")
+    _debug "Validating $rule_count rules..."
+    
+    for ((i=0; i<rule_count; i++)); do
+        local rule_num=$((i+1))
+        _debug "Checking rule $rule_num..."
+        
+        # Check required rule fields
+        local rule_fields=("rule_number" "rule_version" "description" "expression" "action" "priority")
+        
+        for field in "${rule_fields[@]}"; do
+            if ! jq -e ".rules[$i].$field" "$PROFILE_FILE" >/dev/null 2>&1; then
+                _error "Rule $rule_num: Missing required field '$field'"
+                ((total_errors++))
+            fi
+        done
+        
+        # Validate action values
+        local action
+        action=$(jq -r ".rules[$i].action" "$PROFILE_FILE" 2>/dev/null)
+        if [[ -n "$action" && "$action" != "null" ]]; then
+            case "$action" in
+                "allow"|"block"|"challenge"|"js_challenge"|"managed_challenge"|"log"|"bypass")
+                    # Valid actions
+                    ;;
+                *)
+                    _error "Rule $rule_num: Invalid action '$action'. Valid actions: allow, block, challenge, js_challenge, managed_challenge, log, bypass"
+                    ((total_errors++))
+                    ;;
+            esac
+        fi
+        
+        # Validate priority is a number
+        local priority
+        priority=$(jq -r ".rules[$i].priority" "$PROFILE_FILE" 2>/dev/null)
+        if [[ -n "$priority" && "$priority" != "null" ]]; then
+            if ! [[ "$priority" =~ ^[0-9]+$ ]]; then
+                _error "Rule $rule_num: Priority must be a number, got '$priority'"
+                ((total_errors++))
+            fi
+        fi
+        
+        # Validate expression syntax (basic parentheses check)
+        local expression
+        expression=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" 2>/dev/null)
+        if [[ -n "$expression" && "$expression" != "null" ]]; then
+            if ! _validate_expression_syntax "$expression" "$rule_num"; then
+                ((total_errors++))
+            fi
+        fi
+    done
+    
+    # Summary
+    if [ $total_errors -eq 0 ]; then
+        _success "✓ Profile validation passed: $PROFILE_NAME"
+        
+        # Show profile summary
+        local name description
+        name=$(jq -r '.name' "$PROFILE_FILE")
+        description=$(jq -r '.description' "$PROFILE_FILE")
+        
+        echo ""
+        echo "Profile Summary:"
+        echo "  Name: $name"
+        echo "  Description: $description"  
+        echo "  Rules: $rule_count"
+        
+        return 0
+    else
+        _error "✗ Profile validation failed with $total_errors errors: $PROFILE_NAME"
+        return 1
+    fi
+}
+
+# =====================================
+# -- _validate_expression_syntax $expression $rule_num
+# -- Basic expression syntax validation (helper function)
+# =====================================
+_validate_expression_syntax() {
+    local expression="$1"
+    local rule_num="$2"
+    local paren_count=0
+    local i=0
+    
+    # Check for balanced parentheses
+    while [ $i -lt ${#expression} ]; do
+        char="${expression:$i:1}"
+        case "$char" in
+            "(")
+                ((paren_count++))
+                ;;
+            ")")
+                ((paren_count--))
+                if [ $paren_count -lt 0 ]; then
+                    _error "Rule $rule_num: Unmatched closing parenthesis at position $i"
+                    return 1
+                fi
+                ;;
+        esac
+        ((i++))
+    done
+    
+    if [ $paren_count -ne 0 ]; then
+        _error "Rule $rule_num: Unbalanced parentheses: $paren_count unmatched opening parentheses"
+        return 1
+    fi
+    
+    # Check for empty expression
+    if [[ -z "${expression// /}" ]]; then
+        _error "Rule $rule_num: Empty expression"
+        return 1
+    fi
+    
+    return 0
 }

@@ -1,5 +1,5 @@
 {
-  "name": "default-beta",
+  "name": "mwp-rules-v204-beta",
   "description": "Managing WP v204 Cloudflare Rules",
   "rules": [
     {
@@ -14,7 +14,7 @@
       "rule_number": "2",
       "rule_version": "204",
       "description": "R2V204 - Block URI Query, URL, User Agents, and IPs (Block)",
-      "expression": "(http.request.uri.path eq \"/wp-content/uploads/wp-activity-log/non_mirrored_logs.json\") or (http.request.uri.path eq \"/xmlrpc.php\" or ((ip.src.asnum in {396982})",
+      "expression": "(http.request.uri.path eq \"/wp-content/uploads/wp-activity-log/non_mirrored_logs.json\") or (http.request.uri.path eq \"/xmlrpc.php\") or (ip.src.asnum in {396982})",
       "action": "block",
       "priority": 2
     },    

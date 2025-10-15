@@ -6,32 +6,75 @@ This repository provides a bash script for the creation of Cloudflare WAF rules 
 | [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md) | Contains all of the Cloudflare WAF expression rules that I've created. |
 | [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md) | Contains Cloudflare cache rules expressions. |
 | [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API. |
-| [cloudflare-spc.sh](cloudflare-spc.sh) | This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens. |
+| [cloudflare-token.sh](cloudflare-token.sh) | Create and manage Cloudflare API tokens (including for the Super Page Cache plugin), with support for account-owned tokens. |
 | [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | This script creates an a turnstile widget for Cloudflare. |
 
-## Authentication File .cloudflare
-The .cloudflare file should be placed in the user's home directory. 
+## Authentication (.cloudflare)
+All scripts read credentials from a single config file at: `~/.cloudflare`.
 
-### Example .cloudflare file
+You can define either generic (default) credentials or multiple named profiles. If multiple profiles exist, the scripts will offer an interactive menu to choose which profile to use.
+
+### What you can define
+- Generic (fallback) credentials:
+  - `CF_ACCOUNT` + `CF_KEY` (Global API Key auth), or
+  - `CF_TOKEN` (scoped API Token auth)
+- Profile-based credentials (recommended):
+  - `CF_<PROFILE>_ACCOUNT` + `CF_<PROFILE>_KEY`
+  - `CF_<PROFILE>_TOKEN`
+
+Profiles are any uppercase name you choose (e.g., `PROD`, `DEV`, `CLIENT1`). The scripts will detect all `CF_<PROFILE>_(ACCOUNT|KEY|TOKEN)` entries and list them for selection.
+
+### Precedence (highest to lowest)
+1. A specific profile you pass explicitly (future option)
+2. Interactive choice (if multiple profiles are found)
+3. Generic credentials: `CF_TOKEN` or `CF_ACCOUNT` + `CF_KEY`
+
+### Examples
+Minimal (generic) credentials:
 ```
-# For cloudflare-wordpress-rules.sh
-CF_ACOUNT="example@domain.com"
-CF_KEY="global api key"
-#or
-CF_TOKEN="api token"
-
-# For cloudflare-spc.sh
-CF_SPC_ACCOUNT="example@domain.com"
-CF_SPC_KEY="global api key"
-#or
-CF_SPC_TOKEN="api token"
-
-# For cloudflare-turnstile.sh
-CF_TS_ACCOUNT="example@domain.com"
-CF_TS_KEY="global api key"
-#or
-CF_TS_TOKEN="api token"
+# Uses a single default set for all scripts
+CF_ACCOUNT=example@domain.com
+CF_KEY=your_global_api_key
+# OR
+CF_TOKEN=your_api_token
 ```
+
+Multiple profiles (recommended):
+```
+# Production
+CF_PROD_ACCOUNT=prod@company.com
+CF_PROD_KEY=prod_global_api_key
+# OR
+# CF_PROD_TOKEN=prod_api_token
+
+# Development
+CF_DEV_TOKEN=dev_api_token
+
+# Client-specific
+CF_CLIENT1_ACCOUNT=client1@theircompany.com
+CF_CLIENT1_TOKEN=client1_api_token
+```
+
+Legacy (still supported):
+```
+# Super Page Cache (legacy keys remain compatible)
+CF_SPC_ACCOUNT=spc@company.com
+CF_SPC_TOKEN=spc_api_token
+
+# Turnstile (legacy keys remain compatible)
+CF_TS_ACCOUNT=turnstile@company.com
+CF_TS_TOKEN=turnstile_api_token
+```
+
+See `.cloudflare.example` in the repo root for a complete, commented template.
+
+### Notes
+- Token auth is preferred: safer and easier to scope (`Zone.Firewall Services:Edit`, etc.).
+- Some commands do not require authentication and will run without reading `~/.cloudflare`:
+  - `list-profiles`
+  - `print-profile <profile>`
+  - `validate-profile <profile>`
+  - `list-auth-profiles`
 
 ## [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
 ### Usage
