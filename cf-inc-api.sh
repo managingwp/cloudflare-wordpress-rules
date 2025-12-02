@@ -1827,18 +1827,35 @@ function _convert_seconds () {
 }
 
 # ==================================================
-# -- _cf_get_settings $CF_ZONEID
+# -- _cf_get_settings $CF_ZONEID [optional_setting]
 # ==================================================
 function _cf_get_settings () {	
     _debug "function:${FUNCNAME[0]} - ${*}"
-    local CF_ZONE_ID=$1    
+    local CF_ZONE_ID=$1
+    shift  # Remove zone ID from arguments
+    local FILTER_SETTING="$1"  # Optional: specific setting to query
 
     # -- Get Zone Settings
     cf_api "GET" "/client/v4/zones/${CF_ZONE_ID}/settings"
     _debug "API_OUTPUT: $API_OUTPUT CURL_EXIT_CODE: $CURL_EXIT_CODE"
 
+    # -- If a specific setting was requested, only show that one
+    local SETTINGS_TO_PROCESS
+    if [[ -n "$FILTER_SETTING" ]]; then
+        # Check if the requested setting is valid
+        if [[ -z "${CF_SETTINGS[$FILTER_SETTING]}" ]]; then
+            _error "Unknown setting: $FILTER_SETTING"
+            _error "Allowed settings are: ${!CF_SETTINGS[*]}"
+            return 1
+        fi
+        SETTINGS_TO_PROCESS=("$FILTER_SETTING")
+    else
+        # Show all settings
+        SETTINGS_TO_PROCESS=("${!CF_SETTINGS[@]}")
+    fi
+
     # -- Process each setting we're interested in
-    for SETTING in "${!CF_SETTINGS[@]}"; do
+    for SETTING in "${SETTINGS_TO_PROCESS[@]}"; do
         _debug "Processing setting: $SETTING"
         # Extract the value for this specific setting ID from the results array
         SETTING_VALUE=$(echo "$API_OUTPUT" | jq -r --arg id "$SETTING" '.result[] | select(.id==$id) | .value')

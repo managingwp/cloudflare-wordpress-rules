@@ -55,8 +55,8 @@ usage () {
 	echo "   get-ruleset <id>                           - Get ruleset ID on domain"
 	echo "   get-ruleset-fw-custom                      - Get http_request_firewall_custom ruleset"
 	echo 
-	echo "   get-settings <domain>                      - Get security settings on domain"
-	echo "   set-settings <domain> <setting> <value>    - Set security settings on domain"
+	echo "   get-settings                               - Get security settings on domain"
+	echo "   set-settings <setting> <value>             - Set security settings on domain"
 	echo "         security_level"
 	echo "         challenge_ttl"
 	echo "         browser_integrity_check"
@@ -179,8 +179,16 @@ if ! cf_auth_init; then
     exit 1
 fi
 
-# -- Show usage if no domain provided
-if [[ -n $DOMAIN ]]; then
+# -- Check if domain is required for this command
+COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+
+if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
+    if [[ -z $DOMAIN ]]; then
+        usage
+        _error "Command '$CMD' requires a domain to be specified with -d"
+        exit 1
+    fi
+    
     ZONE_ID=$(_cf_zone_id "$DOMAIN")	
 	if [[ -z $ZONE_ID ]]; then
 		_error "No zone ID found for $DOMAIN"
@@ -303,7 +311,7 @@ elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
 # -- get-settings
 # ================
 elif [[ $CMD == "get-settings" ]]; then	
-	_cf_get_settings "$ZONE_ID"
+	_cf_get_settings "$ZONE_ID" "$@"
 # =====================================
 # -- list-auth-profiles
 # =====================================
