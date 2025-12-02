@@ -5,9 +5,10 @@ This repository provides a bash script for the creation of Cloudflare WAF rules 
 | --- | --- |
 | [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md) | Contains all of the Cloudflare WAF expression rules that I've created. |
 | [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md) | Contains Cloudflare cache rules expressions. |
-| [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API. |
+| [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API. Supports multi-zone operations. |
 | [cloudflare-token.sh](cloudflare-token.sh) | Create and manage Cloudflare API tokens (including for the Super Page Cache plugin), with support for account-owned tokens. |
-| [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | This script creates an a turnstile widget for Cloudflare. |
+| [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | Creates turnstile widgets for Cloudflare. |
+| [zones.txt.example](zones.txt.example) | Example zones file for multi-zone operations. |
 
 ## Authentication (.cloudflare)
 All scripts read credentials from a single config file at: `~/.cloudflare`.
@@ -77,45 +78,122 @@ See `.cloudflare.example` in the repo root for a complete, commented template.
   - `list-auth-profiles`
 
 ## [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh)
+Bash script to create and manage Cloudflare WAF rules for WordPress sites through the Cloudflare API. Supports batch operations across multiple zones.
+
 ### Usage
 ```
-Usage: cloudflare-wordpress-rules -d <domain> -c <command>
+cloudflare-wordpress-rules -d <domain> -c <command> [options]
 
- Commands
-   create-rules-v1                     - Create rules on domain using v1 rules
+RULE COMMANDS
+  create-rules <profile>          Create rules on domain using profile
+  update-rules <profile>          Update rules on domain using profile
+  upgrade-default-rules           Upgrade MWP default rules on domain
+  list-rules                      List rules on domain
+  delete-rule <id>                Delete specific rule by ID
+  delete-rules                    Delete all rules on domain
 
-   create-rules-profile <profile>      - Create rules on domain using profile
-   list-profiles                       - List profiles
+PROFILE COMMANDS
+  list-profiles                   List available rule profiles
+  print-profile <profile>         Print rules from profile
+  validate-profile <profile>      Validate profile JSON syntax
 
-   list-rules                          - List rules
-   delete-rule <id>                    - Delete rule
-   delete-rules                        - Delete all rules
+FILTER COMMANDS
+  list-filters                    List filters on domain
+  get-filter <id>                 Get specific filter by ID
+  delete-filter <id>              Delete specific filter by ID
+  delete-filters                  Delete all filters on domain
 
-   list-filters <id>                   - Get Filters
-   delete-filter <id>                  - Delete rule ID on domain
-   delete-filters                      - Delete all filters
+RULESET COMMANDS
+  list-rulesets                   List rulesets on domain
+  get-ruleset <id>                Get specific ruleset by ID
+  get-ruleset-fw-custom           Get http_request_firewall_custom ruleset
 
- Options
-   --debug                                  - Debug mode
-   -dr                                 - Dry run, don't send to Cloudflare
+SETTINGS COMMANDS
+  get-settings                    Get security settings on domain
+  set-settings <setting> <value>  Set security setting
+    Settings: security_level, challenge_ttl, browser_integrity_check, always_use_https
 
- Profiles - See profiles directory for example.
-   default                             - Default using v2 rules.
+AUTH COMMANDS
+  list-auth-profiles              List available authentication profiles
 
-Examples
-   cloudflare-wordpress-rules -d domain.com -c delete-filter 32341983412384bv213v
-   cloudflare-wordpress-rules -d domain.com -c create-rules
-
-Cloudflare API Credentials should be placed in $HOME/.cloudflare
+OPTIONS
+  -d, --domain <domain>         Domain to operate on (can be used multiple times)
+  -zf, --zones-file <file>      Load zones from file (one per line)
+  -y, --yes                     Skip confirmation prompt for multi-zone ops
+  -c, --command <cmd>           Command to execute
+  --debug                       Enable debug mode
+  -dr, --dryrun                 Dry run, don't send to Cloudflare
 ```
+
 ### Examples
-```
-cloudflare-wordpress-rules -d domain.com -c create-rules-v1
-cloudflare-wordpress-rules -d domain.com -c create-rules-profile default
-cloudflare-wordpress-rules -d domain.com -c list-profiles
+```bash
+# Create rules on a single domain
+cloudflare-wordpress-rules -d domain.com -c create-rules default
+
+# List rules on a domain
 cloudflare-wordpress-rules -d domain.com -c list-rules
+
+# Delete a specific rule
 cloudflare-wordpress-rules -d domain.com -c delete-rule 1234567890
+
+# Get security settings
+cloudflare-wordpress-rules -d domain.com -c get-settings
+
+# Set security level
+cloudflare-wordpress-rules -d domain.com -c set-settings security_level high
 ```
+
+### Multi-Zone Operations (v2.2.0+)
+The script supports running commands across multiple zones at once. This is useful for managing rules on many domains.
+
+#### Specifying Multiple Domains
+Use the `-d` flag multiple times:
+```bash
+cloudflare-wordpress-rules -d site1.com -d site2.com -d site3.com -c create-rules default
+```
+
+#### Using a Zones File
+Create a text file with one domain or zone ID per line:
+```bash
+# zones.txt
+site1.com
+site2.com
+site3.com
+# Comments are supported
+example.org  # inline comments too
+```
+
+Then reference it with `-zf`:
+```bash
+cloudflare-wordpress-rules -zf zones.txt -c create-rules default
+```
+
+You can also combine both methods:
+```bash
+cloudflare-wordpress-rules -zf zones.txt -d extra-site.com -c list-rules
+```
+
+#### Skip Confirmation
+By default, the script will list all affected zones and ask for confirmation before proceeding. Use `-y` to skip:
+```bash
+cloudflare-wordpress-rules -zf zones.txt -c delete-rules -y
+```
+
+#### Commands Supporting Multi-Zone
+- `create-rules` - Create rules on all specified zones
+- `update-rules` - Update rules on all specified zones
+- `list-rules` - List rules from all specified zones
+- `delete-rules` - Delete rules from all specified zones
+- `get-settings` - Get settings from all specified zones
+- `set-settings` - Set settings on all specified zones
+
+#### Output
+The script will process each zone sequentially and provide a summary at the end showing:
+- Total zones processed
+- Number of successful operations
+- Number of failed operations
+- List of failed zones (if any)
+
 ### Profiles
 Profiles are stored in the profiles directory. They are JSON files that contain the rules to be created. The profile name is the filename without the .json extension.
 
@@ -142,79 +220,90 @@ Profiles are stored in the profiles directory. They are JSON files that contain 
 }
 ```
 
-## [cloudflare-spc.sh](cloudflare-spc.sh)
-* This script creates an API token with the appropriate permissions that works with the Super Page Cache for Cloudflare WordPress plugin. It has support for account owned tokens.
+## [cloudflare-token.sh](cloudflare-token.sh)
+This script creates and manages Cloudflare API tokens, including tokens for the Super Page Cache for Cloudflare WordPress plugin. Supports account-owned tokens.
 
 ### Usage
 ```
-Usage: ./cloudflare-spc.sh [create <zone> <token-name> | list]
-
-Creates appropriate api token and permissions for the Super Page Cache for Cloudflare WordPress plugin.
+Usage: cloudflare-token.sh [command] [options]
 
 Commands:
-    create-token <domain-name> <token-name> (-z|-a|-t|-ak)           - Creates a token called <token name> for <zone>, if <token-name> blank then (zone)-spc used
-    list -t [token] | -a [account] -ak [api-key]                     - Lists account tokens.
-    test-creds -t [token] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
-    test-token <token>                                               - Test created token against Cloudflare API.
+    create-token <domain> <token-name>    Create API token for domain
+    list                                  List account tokens
+    test-creds                            Test credentials against Cloudflare API
+    test-token <token>                    Test created token against Cloudflare API
 
 Options:
-    -z|--zone [zoneid]                - Set zoneid
-    -a|--account [name@email.com]     - Cloudflare account email address
-    -t|--token [token]                - API Token to use for creating the new token.
-    -ak|--apikey [apikey]             - API Key to use for creating the new token.
-    -d|--debug                        - Debug mode
-    -dr|--dryrun                      - Dry run mode
-
-Environment variables:
-    CF_SPC_ACCOUNT      - Cloudflare account email address
-    CF_SPC_KEY          - Cloudflare Global API Key
-    CF_SPC_TOKEN        - Cloudflare API token.
-
-Configuration file for credentials:
-    Create a file in $HOME/.cloudflare with both CF_SPC_ACCOUNT and CF_SPC_KEY defined or CF_SPC_TOKEN. Only use a KEY or Token, not both.
-
-    CF_SPC_ACCOUNT=example@example.com
-    CF_SPC_KEY=<global api key>
+    -z, --zone <zoneid>           Set zone ID
+    -a, --account <email>         Cloudflare account email address
+    -t, --token <token>           API Token to use
+    -ak, --apikey <apikey>        API Key to use
+    -d, --debug                   Debug mode
+    -dr, --dryrun                 Dry run mode
 ```
 
 ## [cloudflare-turnstile.sh](cloudflare-turnstile.sh)
-* This script creates an a turnstile widget for Cloudflare.
+This script creates and manages Cloudflare Turnstile widgets.
+
 ### Usage
 ```
-Usage: ./cloudflare-turnstile.sh [create <zone> <name> | list]
-
-Creates appropriate Cloudflare turnstile api id and key.
+Usage: cloudflare-turnstile.sh [command] [options]
 
 Commands:
-    create -z <domain-name> -tn <turnstile-name> (-z|-a|-t|-ak)                  - Creates a turnstile called <turnstile name> for <zone>, if <turnstile-name> blank then (zone)-spc used
-    list -t [turnstile sitekey] | -z [domain name] | -a [accountemail]           - Lists account turnstiles.
-    delete -t [turnstile sitekey] | -z [domain name] | -a [accountemail]         - Deletes a turnstile.
-    test-creds -t [turnstile sitekey] | -a [account] -ak [api-key]               - Test credentials against Cloudflare API.
+    create                                Create a turnstile widget
+    list                                  List account turnstiles
+    delete                                Delete a turnstile
+    test-creds                            Test credentials against Cloudflare API
 
 Options:
-    -z|--zone [domain name]                - Zone domain name
-    -a|--account [name@email.com]          - Cloudflare account email address
-    -t|--turnstile [turnstile sitekey]     - Turnstile Sitekey
-    -tn|--turnstile-name [name]            - Turnstile Name
-    -ak|--apikey [apikey]                  - API Key to use for creating the new turnstile.
-    -d|--debug                             - Debug mode
-    -dr|--dryrun                           - Dry run mode
-
-Environment variables:
-    CF_TS_ACCOUNT      - Cloudflare account email address
-    CF_TS_KEY          - Cloudflare Global API Key
-    CF_TS_TOKEN        - Cloudflare API token.
-
-Configuration file for credentials:
-    Create a file in $HOME/.cloudflare with both CF_TS_ACCOUNT and CF_TS_KEY defined or CF_TS_TOKEN. Only use a KEY or Token, not both.
-
-    CF_TS_ACCOUNT=example@example.com
-    CF_TS_KEY=<global api key>
+    -z, --zone <domain>             Zone domain name
+    -a, --account <email>           Cloudflare account email address
+    -t, --turnstile <sitekey>       Turnstile Sitekey
+    -tn, --turnstile-name <name>    Turnstile Name
+    -ak, --apikey <apikey>          API Key
+    -d, --debug                     Debug mode
+    -dr, --dryrun                   Dry run mode
 ```
 
 # Changelog
 Generated using `git log --pretty=format:"## %s%n%b%n" | sed '/^## /b; /^[[:space:]]*$/b; s/^/* /' > CHANGELOG.md`
 <!--- CHANGELOG --->
+## Release 2.2.0
+* * Add multi-zone support for batch operations
+* * Add support for multiple -d flags to specify multiple domains
+* * Add -zf|--zones-file flag to load zones from a file
+* * Add -y|--yes flag to skip confirmation prompts
+* * Add zone deduplication to prevent processing same zone twice
+* * Add confirmation prompt showing affected zones before execution
+* * Add summary output with success/failure counts per zone
+* New functions in cf-inc.sh:
+* * _load_zones_file: Parse zones file with comment support
+* * _deduplicate_zones: Remove duplicate zones from array
+* * _confirm_zones: Display zones and prompt for confirmation
+* * _run_on_zones: Execute command across multiple zones with progress
+* Commands supporting multi-zone:
+* * create-rules, update-rules, list-rules, delete-rules
+* * get-settings, set-settings
+* Files changed:
+* * cloudflare-wordpress-rules.sh: Multi-zone CLI and command integration
+* * cf-inc.sh: Multi-zone support functions
+* * CHANGELOG.md: Release notes for v2.2.0
+* * README.md: Multi-zone documentation and examples
+* * VERSION: Bump to 2.2.0
+* * TODO.md: Mark completed items
+* * zones.txt.example: Template for zones file format
+## Release 2.1.2
+* (af39726) (HEAD -> dev, origin/dev) fix: add domain validation for get-settings and support filtering by specific setting parameter
+* (2270998) Updated usage for get-settings and set-settings
+## Release 2.1.1
+* (de29bfb) (HEAD -> dev, origin/dev) chore: Updated README.md to better document .cloudflare file
+* (f03c426) improvement: Updated authentication system.
+* (68ac46b) Merged changes that were missing
+* (32ed657) Added TODO.md
+* (92b0b14) Small fixes
+* (d5d41e5) Added mwp-rules-v204-beta.md
+* (9e6d417) Added asn.txt for building rules
+* (cf3f595) Updated API credentials system to enable multiple profiles
 ## Release 2.1.0
 * (6dc4a1b) (HEAD -> dev, origin/dev) Small fixes
 * (5f97c85) Created v204-beta rules

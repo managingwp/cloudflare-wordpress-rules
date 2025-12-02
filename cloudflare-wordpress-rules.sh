@@ -27,64 +27,104 @@ source "$SCRIPT_DIR/cf-inc-auth.sh"
 # -- usage
 # ==================================
 usage () {
-	echo "Usage: $SCRIPT_NAME -d <domain> -c <command>"
-	echo 
-	echo " Commands"
-	echo
-	echo "   create-rules <profile>                     - Create rules on domain using profile"
-	echo "   update-rules <profile>                     - Update rules on domain using profile"
-	echo "   upgrade-default-rules                      - Upgrade MWP default rules on domain"
-	echo
-	echo "   list-profiles                              - List profiles"
-	echo "   print-profile <profile>                    - Print rules from profile"
-	echo "   validate-profile <profile>                 - Validate profile JSON syntax and structure"
+	local CBOLD=$(tput bold)
+	local CUNDERLINE=$(tput smul)
+	
 	echo ""
-	echo "Authentication Commands"
-	echo "   list-auth-profiles                         - List available authentication profiles"
-	echo
-	echo "   list-rules                                 - List rules"
-	echo "   delete-rule <id>                           - Delete rule"
-	echo "   delete-rules                               - Delete all rules"
-	echo
-	echo "   list-filters <id>                          - Get Filters"
-	echo "   delete-filter <id>                         - Delete rule ID on domain"
-	echo "   delete-filters                             - Delete all filters"
-	echo
-	echo "Ruleset Commands"
-	echo "   list-rulesets                              - List rulesets"
-	echo "   get-ruleset <id>                           - Get ruleset ID on domain"
-	echo "   get-ruleset-fw-custom                      - Get http_request_firewall_custom ruleset"
-	echo 
-	echo "   get-settings                               - Get security settings on domain"
-	echo "   set-settings <setting> <value>             - Set security settings on domain"
-	echo "         security_level"
-	echo "         challenge_ttl"
-	echo "         browser_integrity_check"
-	echo "         always_use_https"
-	echo 
-	echo " Options"
-	echo "   --debug                 - Debug mode"
-	echo "   -dr                     - Dry run, don't send to Cloudflare"
-	echo 
-	echo " Profiles - See profiles directory for example."
-	echo "   default                             - Default profile"
-	echo 
-	echo "Examples"
-	echo "   $SCRIPT_NAME -d domain.com -c delete-filter 32341983412384bv213v"
-	echo "   $SCRIPT_NAME -d domain.com -c create-rules"
+	echo -e "${CBOLD}${CCYAN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+	echo -e "${CBOLD}${CCYAN}║${NC}  ${CBOLD}Cloudflare WordPress Rules${NC} - Manage WAF rules across zones                  ${CBOLD}${CCYAN}║${NC}"
+	echo -e "${CBOLD}${CCYAN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
 	echo ""
-	echo "Cloudflare API Credentials:"
-	echo "  Place credentials in \$HOME/.cloudflare"
-	echo "  Supports multiple profiles: CF_PROD_TOKEN, CF_DEV_ACCOUNT/CF_DEV_KEY, etc."
-	echo "  Use 'list-auth-profiles' to see available profiles"
-	echo "  See .cloudflare.example for configuration format"
+	echo -e "${CBOLD}${CYELLOW}USAGE${NC}"
+	echo -e "  ${CGRAY}$SCRIPT_NAME${NC} ${CGREEN}-d${NC} <domain> ${CGREEN}-c${NC} <command> [options]"
 	echo ""
-	echo "Version: $VERSION"
+	
+	echo -e "${CBOLD}${CYELLOW}RULE COMMANDS${NC}"
+	echo -e "  ${CGREEN}create-rules${NC} <profile>          Create rules on domain using profile"
+	echo -e "  ${CGREEN}update-rules${NC} <profile>          Update rules on domain using profile"
+	echo -e "  ${CGREEN}upgrade-default-rules${NC}           Upgrade MWP default rules on domain"
+	echo -e "  ${CGREEN}list-rules${NC}                      List rules on domain"
+	echo -e "  ${CGREEN}delete-rule${NC} <id>                Delete specific rule by ID"
+	echo -e "  ${CGREEN}delete-rules${NC}                    Delete all rules on domain"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}PROFILE COMMANDS${NC}"
+	echo -e "  ${CGREEN}list-profiles${NC}                   List available rule profiles"
+	echo -e "  ${CGREEN}print-profile${NC} <profile>         Print rules from profile"
+	echo -e "  ${CGREEN}validate-profile${NC} <profile>      Validate profile JSON syntax"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}FILTER COMMANDS${NC}"
+	echo -e "  ${CGREEN}list-filters${NC}                    List filters on domain"
+	echo -e "  ${CGREEN}get-filter${NC} <id>                 Get specific filter by ID"
+	echo -e "  ${CGREEN}delete-filter${NC} <id>              Delete specific filter by ID"
+	echo -e "  ${CGREEN}delete-filters${NC}                  Delete all filters on domain"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}RULESET COMMANDS${NC}"
+	echo -e "  ${CGREEN}list-rulesets${NC}                   List rulesets on domain"
+	echo -e "  ${CGREEN}get-ruleset${NC} <id>                Get specific ruleset by ID"
+	echo -e "  ${CGREEN}get-ruleset-fw-custom${NC}           Get http_request_firewall_custom ruleset"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}SETTINGS COMMANDS${NC}"
+	echo -e "  ${CGREEN}get-settings${NC}                    Get security settings on domain"
+	echo -e "  ${CGREEN}set-settings${NC} <setting> <value>  Set security setting"
+	echo -e "    ${CDARKGRAY}Settings: security_level, challenge_ttl, browser_integrity_check, always_use_https${NC}"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}AUTH COMMANDS${NC}"
+	echo -e "  ${CGREEN}list-auth-profiles${NC}              List available authentication profiles"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}OPTIONS${NC}"
+	echo -e "  ${CCYAN}-d${NC}, ${CCYAN}--domain${NC} <domain>         Domain to operate on (can be used multiple times)"
+	echo -e "  ${CCYAN}-zf${NC}, ${CCYAN}--zones-file${NC} <file>      Load zones from file (one per line)"
+	echo -e "  ${CCYAN}-y${NC}, ${CCYAN}--yes${NC}                     Skip confirmation prompt for multi-zone ops"
+	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
+	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
+	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}EXAMPLES${NC}"
+	echo -e "  ${CDARKGRAY}# Single domain${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default"
+	echo ""
+	echo -e "  ${CDARKGRAY}# Multiple domains${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} site1.com ${CCYAN}-d${NC} site2.com ${CCYAN}-c${NC} create-rules default"
+	echo ""
+	echo -e "  ${CDARKGRAY}# Using zones file${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-zf${NC} zones.txt ${CCYAN}-c${NC} create-rules default"
+	echo ""
+	echo -e "  ${CDARKGRAY}# Skip confirmation for batch operations${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-zf${NC} zones.txt ${CCYAN}-c${NC} delete-rules ${CCYAN}-y${NC}"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}AUTHENTICATION${NC}"
+	echo -e "  Place credentials in ${CUNDERLINE}\$HOME/.cloudflare${NC}"
+	echo -e "  Supports multiple profiles: ${CGRAY}CF_PROD_TOKEN${NC}, ${CGRAY}CF_DEV_ACCOUNT/CF_DEV_KEY${NC}, etc."
+	echo -e "  Run '${CGREEN}list-auth-profiles${NC}' to see available profiles"
+	echo -e "  See ${CGRAY}.cloudflare.example${NC} for configuration format"
+	echo ""
+	
+	echo -e "${CBOLD}${CYELLOW}MULTI-ZONE SUPPORT${NC} ${CDARKGRAY}(v2.2.0+)${NC}"
+	echo -e "  Commands supporting multi-zone: ${CGREEN}create-rules${NC}, ${CGREEN}update-rules${NC}, ${CGREEN}list-rules${NC},"
+	echo -e "  ${CGREEN}delete-rules${NC}, ${CGREEN}get-settings${NC}, ${CGREEN}set-settings${NC}"
+	echo ""
+	
+	echo -e "${CDARKGRAY}Version: ${VERSION}${NC}"
+	echo ""
 }
 
 # =============================================================================
 # -- main
 # =============================================================================
+
+# -- Multi-zone support variables
+declare -a DOMAINS=()
+ZONES_FILE=""
+SKIP_CONFIRM=0
+MULTI_ZONE=0
 
 # -- Parse options
     POSITIONAL=()
@@ -94,9 +134,19 @@ usage () {
 
     case $key in
 		-d|--domain)
-		DOMAIN="$2"
+		# Accumulate multiple -d arguments
+		DOMAINS+=("$2")
 		shift # past argument
 		shift # past variable
+		;;
+		-zf|--zones-file)
+		ZONES_FILE="$2"
+		shift # past argument
+		shift # past variable
+		;;
+		-y|--yes)
+		SKIP_CONFIRM=1
+		shift # past argument
 		;;
 		-c|--command)
 		CMD="$2"
@@ -126,6 +176,16 @@ usage () {
     esac
     done
 set -- "${POSITIONAL[@]}" # restore positional parameters
+
+# -- Load zones from file if specified
+if [[ -n "$ZONES_FILE" ]]; then
+    _load_zones_file "$ZONES_FILE"
+fi
+
+# -- For backward compatibility, set DOMAIN to first zone if only one
+if [[ ${#DOMAINS[@]} -eq 1 ]]; then
+    DOMAIN="${DOMAINS[0]}"
+fi
 
 # -- Commands
 _debug "ARGS: ${*}@"
@@ -182,23 +242,54 @@ fi
 # -- Check if domain is required for this command
 COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
 
+# -- Commands that support multi-zone operations
+COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings")
+
 if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
-    if [[ -z $DOMAIN ]]; then
+    # Check if we have at least one domain
+    if [[ ${#DOMAINS[@]} -eq 0 ]]; then
         usage
-        _error "Command '$CMD' requires a domain to be specified with -d"
+        _error "Command '$CMD' requires at least one domain to be specified with -d or -zf"
         exit 1
     fi
     
-    ZONE_ID=$(_cf_zone_id "$DOMAIN")	
-	if [[ -z $ZONE_ID ]]; then
-		_error "No zone ID found for $DOMAIN"
-		exit 1
-	else
-		_running2 "Zone ID found: $ZONE_ID"
-	fi
+    # Deduplicate zones
+    _deduplicate_zones
+    
+    # For multi-zone operations
+    MULTI_ZONE=0
+    if [[ ${#DOMAINS[@]} -gt 1 ]]; then
+        # Check if command supports multi-zone
+        if [[ ! " ${COMMANDS_SUPPORTING_MULTIZONE[*]} " =~ " ${CMD} " ]]; then
+            _error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
+            exit 1
+        fi
+        MULTI_ZONE=1
+        
+        # Confirm with user unless -y flag was used
+        if ! _confirm_zones; then
+            exit 1
+        fi
+    fi
+    
+    # For single zone, resolve zone ID now (backward compatibility)
+    if [[ $MULTI_ZONE -eq 0 ]]; then
+        DOMAIN="${DOMAINS[0]}"
+        ZONE_ID=$(_cf_zone_id "$DOMAIN")
+        if [[ -z $ZONE_ID ]]; then
+            _error "No zone ID found for $DOMAIN"
+            exit 1
+        else
+            _running2 "Zone ID found: $ZONE_ID"
+        fi
+    fi
 fi
 
-_running "Running $CMD on $DOMAIN with ID $ZONE_ID"
+if [[ $MULTI_ZONE -eq 1 ]]; then
+    _running "Running $CMD on ${#DOMAINS[@]} zones"
+else
+    _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
+fi
 # =====================================
 # -- create-rules
 # =====================================
@@ -209,7 +300,11 @@ if [[ $CMD == "create-rules" ]]; then
         cf_list_profiles
         exit 1
     fi
-    cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
+    else
+        cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+    fi
 # =====================================
 # -- update-rules
 # =====================================
@@ -220,7 +315,11 @@ elif [[ $CMD == "update-rules" ]]; then
 		cf_list_profiles    
         exit 1
     fi
-    cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_update_rules "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
+    else
+        cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
+    fi
 # =====================================
 # -- upgrade-default-rules
 # =====================================
@@ -232,12 +331,20 @@ elif [[ $CMD == "upgrade-default-rules" ]]; then
 # -- list-rules
 # =====================================
 elif [[ $CMD == "list-rules" ]]; then
-    cf_list_rules_action "$DOMAIN" "$ZONE_ID"
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_list_rules_action "\$DOMAIN" "\$ZONE_ID"
+    else
+        cf_list_rules_action "$DOMAIN" "$ZONE_ID"
+    fi
 # =====================================
 # -- delete-rules
 # =====================================
 elif [[ $CMD == "delete-rules" ]]; then
-    cf_delete_rules_action "$DOMAIN" "$ZONE_ID"
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_delete_rules_action "\$DOMAIN" "\$ZONE_ID"
+    else
+        cf_delete_rules_action "$DOMAIN" "$ZONE_ID"
+    fi
 # =====================================
 # -- delete-rule
 # =====================================
@@ -306,12 +413,20 @@ elif [[ $CMD == "get-ruleset-fw-custom" ]]; then
 # ================
 elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
 	_running "  Running Set settings"
-	_cf_set_settings "$ZONE_ID" "$@"
+	if [[ $MULTI_ZONE -eq 1 ]]; then
+	    _run_on_zones _cf_set_settings "\$ZONE_ID" "$@"
+	else
+	    _cf_set_settings "$ZONE_ID" "$@"
+	fi
 # ================
 # -- get-settings
 # ================
 elif [[ $CMD == "get-settings" ]]; then	
-	_cf_get_settings "$ZONE_ID" "$@"
+	if [[ $MULTI_ZONE -eq 1 ]]; then
+	    _run_on_zones _cf_get_settings "\$ZONE_ID" "$@"
+	else
+	    _cf_get_settings "$ZONE_ID" "$@"
+	fi
 # =====================================
 # -- list-auth-profiles
 # =====================================

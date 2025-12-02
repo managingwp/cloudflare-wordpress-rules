@@ -1,3 +1,40 @@
+## improvement: Added color the usage.
+## Release 2.2.0
+* * Add multi-zone support for batch operations
+* * Add support for multiple -d flags to specify multiple domains
+* * Add -zf|--zones-file flag to load zones from a file
+* * Add -y|--yes flag to skip confirmation prompts
+* * Add zone deduplication to prevent processing same zone twice
+* * Add confirmation prompt showing affected zones before execution
+* * Add summary output with success/failure counts per zone
+* New functions in cf-inc.sh:
+* * _load_zones_file: Parse zones file with comment support
+* * _deduplicate_zones: Remove duplicate zones from array
+* * _confirm_zones: Display zones and prompt for confirmation
+* * _run_on_zones: Execute command across multiple zones with progress
+* Commands supporting multi-zone:
+* * create-rules, update-rules, list-rules, delete-rules
+* * get-settings, set-settings
+* Files changed:
+* * cloudflare-wordpress-rules.sh: Multi-zone CLI and command integration
+* * cf-inc.sh: Multi-zone support functions
+* * CHANGELOG.md: Release notes for v2.2.0
+* * README.md: Multi-zone documentation and examples
+* * VERSION: Bump to 2.2.0
+* * TODO.md: Mark completed items
+* * zones.txt.example: Template for zones file format
+## Release 2.1.2
+* (af39726) (HEAD -> dev, origin/dev) fix: add domain validation for get-settings and support filtering by specific setting parameter
+* (2270998) Updated usage for get-settings and set-settings
+## Release 2.1.1
+* (de29bfb) (HEAD -> dev, origin/dev) chore: Updated README.md to better document .cloudflare file
+* (f03c426) improvement: Updated authentication system.
+* (68ac46b) Merged changes that were missing
+* (32ed657) Added TODO.md
+* (92b0b14) Small fixes
+* (d5d41e5) Added mwp-rules-v204-beta.md
+* (9e6d417) Added asn.txt for building rules
+* (cf3f595) Updated API credentials system to enable multiple profiles
 ## Release 2.1.0
 * (6dc4a1b) (HEAD -> dev, origin/dev) Small fixes
 * (5f97c85) Created v204-beta rules

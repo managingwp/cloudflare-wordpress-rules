@@ -1,0 +1,44 @@
+# =============================================================================
+# Cloudflare Zones File
+# =============================================================================
+# List your domains or zone IDs here, one per line.
+# This file is used with the -zf|--zones-file argument.
+#
+# Supported formats:
+#   - Domain names: example.com
+#   - Zone IDs: abc123def456789012345678901234567 (32 character hex)
+#
+# Comments:
+#   - Lines starting with # are ignored
+#   - Inline comments are supported: example.com # production site
+#
+# =============================================================================
+
+# Production Sites
+site1.com                    # Main production site
+site2.com                    # Secondary site
+www.site3.com                # With subdomain
+
+# Staging/Development
+staging.site1.com            # Staging environment
+dev.site1.com                # Development
+
+# Client Sites
+client1-site.com
+client2-site.com
+
+# Using Zone IDs (useful for zones without DNS access)
+# abc123def456789012345678901234567
+
+# =============================================================================
+# Usage Examples:
+# =============================================================================
+# Apply rules to all zones in this file:
+#   ./cloudflare-wordpress-rules.sh -zf zones.txt -c create-rules default
+#
+# Combine with additional domains:
+#   ./cloudflare-wordpress-rules.sh -zf zones.txt -d extra.com -c list-rules
+#
+# Skip confirmation prompt:
+#   ./cloudflare-wordpress-rules.sh -zf zones.txt -c delete-rules -y
+# =============================================================================
