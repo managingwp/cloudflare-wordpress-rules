@@ -63,15 +63,15 @@ Additional Options:
     --csv                                      - CSV output
 
 Environment variables:
-    CF_SPC_ACCOUNT      - Cloudflare account email address
-    CF_SPC_KEY          - Cloudflare Global API Key
-    CF_SPC_TOKEN        - Cloudflare API token.
+    CF_ACCOUNT_SPC      - Cloudflare account email address
+    CF_KEY_SPC          - Cloudflare Global API Key
+    CF_TOKEN_SPC        - Cloudflare API token.
 
 Configuration file for credentials:
-    Create a file in \$HOME/.cloudflare with both CF_SPC_ACCOUNT and CF_SPC_KEY defined or CF_SPC_TOKEN. Only use a KEY or Token, not both.
+    Create a file in \$HOME/.cloudflare with both CF_ACCOUNT_SPC and CF_KEY_SPC defined or CF_TOKEN_SPC. Only use a KEY or Token, not both.
 
-    CF_SPC_ACCOUNT=example@example.com
-    CF_SPC_KEY=<global api key>
+    CF_ACCOUNT_SPC=example@example.com
+    CF_KEY_SPC=<global api key>
 
 Version: $VERSION - DIR: $SCRIPT_DIR
 "

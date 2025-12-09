@@ -20,10 +20,10 @@ You can define either generic (default) credentials or multiple named profiles. 
   - `CF_ACCOUNT` + `CF_KEY` (Global API Key auth), or
   - `CF_TOKEN` (scoped API Token auth)
 - Profile-based credentials (recommended):
-  - `CF_<PROFILE>_ACCOUNT` + `CF_<PROFILE>_KEY`
-  - `CF_<PROFILE>_TOKEN`
+  - `CF_ACCOUNT_<PROFILE>` + `CF_KEY_<PROFILE>`
+  - `CF_TOKEN_<PROFILE>`
 
-Profiles are any uppercase name you choose (e.g., `PROD`, `DEV`, `CLIENT1`). The scripts will detect all `CF_<PROFILE>_(ACCOUNT|KEY|TOKEN)` entries and list them for selection.
+Profiles are any uppercase name you choose (e.g., `PROD`, `DEV`, `CLIENT1`). The scripts will detect all `CF_(ACCOUNT|TOKEN|KEY)_<PROFILE>` entries and list them for selection.
 
 ### Precedence (highest to lowest)
 1. A specific profile you pass explicitly (future option)
@@ -43,28 +43,28 @@ CF_TOKEN=your_api_token
 Multiple profiles (recommended):
 ```
 # Production
-CF_PROD_ACCOUNT=prod@company.com
-CF_PROD_KEY=prod_global_api_key
+CF_ACCOUNT_PROD=prod@company.com
+CF_KEY_PROD=prod_global_api_key
 # OR
-# CF_PROD_TOKEN=prod_api_token
+# CF_TOKEN_PROD=prod_api_token
 
 # Development
-CF_DEV_TOKEN=dev_api_token
+CF_TOKEN_DEV=dev_api_token
 
 # Client-specific
-CF_CLIENT1_ACCOUNT=client1@theircompany.com
-CF_CLIENT1_TOKEN=client1_api_token
+CF_ACCOUNT_CLIENT1=client1@theircompany.com
+CF_TOKEN_CLIENT1=client1_api_token
 ```
 
 Legacy (still supported):
 ```
 # Super Page Cache (legacy keys remain compatible)
-CF_SPC_ACCOUNT=spc@company.com
-CF_SPC_TOKEN=spc_api_token
+CF_ACCOUNT_SPC=spc@company.com
+CF_TOKEN_SPC=spc_api_token
 
 # Turnstile (legacy keys remain compatible)
-CF_TS_ACCOUNT=turnstile@company.com
-CF_TS_TOKEN=turnstile_api_token
+CF_ACCOUNT_TS=turnstile@company.com
+CF_TOKEN_TS=turnstile_api_token
 ```
 
 See `.cloudflare.example` in the repo root for a complete, commented template.

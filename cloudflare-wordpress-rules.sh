@@ -102,7 +102,7 @@ usage () {
 	
 	echo -e "${CBOLD}${CYELLOW}AUTHENTICATION${NC}"
 	echo -e "  Place credentials in ${CUNDERLINE}\$HOME/.cloudflare${NC}"
-	echo -e "  Supports multiple profiles: ${CGRAY}CF_PROD_TOKEN${NC}, ${CGRAY}CF_DEV_ACCOUNT/CF_DEV_KEY${NC}, etc."
+	echo -e "  Supports multiple profiles: ${CGRAY}CF_TOKEN_PROD${NC}, ${CGRAY}CF_ACCOUNT_DEV/CF_KEY_DEV${NC}, etc."
 	echo -e "  Run '${CGREEN}list-auth-profiles${NC}' to see available profiles"
 	echo -e "  See ${CGRAY}.cloudflare.example${NC} for configuration format"
 	echo ""
@@ -125,6 +125,7 @@ declare -a DOMAINS=()
 ZONES_FILE=""
 SKIP_CONFIRM=0
 MULTI_ZONE=0
+CONFIG_FILE=""
 
 # -- Parse options
     POSITIONAL=()
@@ -141,6 +142,11 @@ MULTI_ZONE=0
 		;;
 		-zf|--zones-file)
 		ZONES_FILE="$2"
+		shift # past argument
+		shift # past variable
+		;;
+		--config)
+		CONFIG_FILE="$2"
 		shift # past argument
 		shift # past variable
 		;;
@@ -218,7 +224,21 @@ elif [[ $CMD == "print-profile" ]]; then
     cf_print_profile "$PROFILE"
     exit 0
 elif [[ $CMD == "list-auth-profiles" ]]; then
-    cf_auth_list_profiles
+    # Use CONFIG_FILE if set via --config, otherwise use first positional arg or default
+    if [[ -z "$CONFIG_FILE" ]]; then
+        CONFIG_FILE="${1:-$HOME/.cloudflare}"
+    fi
+    # Make sure it's an absolute path
+    if [[ ! "$CONFIG_FILE" =~ ^/ ]]; then
+        if [[ -f "$CONFIG_FILE" ]]; then
+            CONFIG_FILE="$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")"
+        elif [[ -f "$HOME/$CONFIG_FILE" ]]; then
+            CONFIG_FILE="$HOME/$CONFIG_FILE"
+        elif [[ -f "./$CONFIG_FILE" ]]; then
+            CONFIG_FILE="$(pwd)/$CONFIG_FILE"
+        fi
+    fi
+    cf_auth_list_profiles "$CONFIG_FILE"
     exit 0
 elif [[ $CMD == "validate-profile" ]]; then
     PROFILE=$1
@@ -234,7 +254,12 @@ fi
 # ==================================
 # -- Initialize Authentication (for commands that need it)
 # ==================================
-if ! cf_auth_init; then
+# Use default config file if not specified
+if [[ -z "$CONFIG_FILE" ]]; then
+    CONFIG_FILE="$HOME/.cloudflare"
+fi
+
+if ! cf_auth_init "" "$CONFIG_FILE"; then
     _error "Authentication failed"
     exit 1
 fi

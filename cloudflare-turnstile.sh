@@ -53,21 +53,21 @@ Options:
 
 Cloudflare API Credentials:
     Place credentials in \$HOME/.cloudflare
-    Supports multiple profiles: CF_PROD_TOKEN, CF_DEV_ACCOUNT/CF_DEV_KEY, etc.
+    Supports multiple profiles: CF_TOKEN_PROD, CF_ACCOUNT_DEV/CF_KEY_DEV, etc.
     Use 'list-auth-profiles' to see available profiles
     See .cloudflare.example for configuration format
     
     Legacy environment variables (still supported):
-        CF_TS_ACCOUNT      - Cloudflare account email address  
-        CF_TS_KEY          - Cloudflare Global API Key
-        CF_TS_TOKEN        - Cloudflare API token
+        CF_ACCOUNT_TS      - Cloudflare account email address  
+        CF_KEY_TS          - Cloudflare Global API Key
+        CF_TOKEN_TS        - Cloudflare API token
 
     Example .cloudflare entries:
-        CF_TS_ACCOUNT=example@example.com
-        CF_TS_KEY=<global api key>
+        CF_ACCOUNT_TS=example@example.com
+        CF_KEY_TS=<global api key>
         # OR
-        CF_PROD_TOKEN=<api token>
-        CF_DEV_TOKEN=<dev api token>    
+        CF_TOKEN_PROD=<api token>
+        CF_TOKEN_DEV=<dev api token>    
 
 Version: $VERSION - DIR: $SCRIPT_DIR
 "

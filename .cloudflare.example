@@ -4,9 +4,9 @@
 # This file supports multiple authentication profiles
 # Place this file at: ~/.cloudflare
 #
-# Profile Format: CF_<PROFILE>_<TYPE>
-# Where PROFILE can be any name (PROD, DEV, CLIENT1, etc.)
-# And TYPE is ACCOUNT, TOKEN, or KEY
+# Profile Format: CF_<TYPE>_<PROFILE>
+# Where TYPE is ACCOUNT, TOKEN, or KEY
+# And PROFILE can be any name (PROD, DEV, CLIENT1, etc.)
 
 # ==================================================
 # Generic/Default Credentials (backwards compatibility)
@@ -19,37 +19,37 @@
 # ==================================================
 # Production Environment
 # ==================================================
-CF_PROD_ACCOUNT=prod@company.com
-CF_PROD_KEY=prod_global_api_key_here
+CF_ACCOUNT_PROD=prod@company.com
+CF_KEY_PROD=prod_global_api_key_here
 # OR use token instead:
-# CF_PROD_TOKEN=prod_api_token_here
+# CF_TOKEN_PROD=prod_api_token_here
 
 # ==================================================
 # Development Environment  
 # ==================================================
-CF_DEV_ACCOUNT=dev@company.com
-CF_DEV_KEY=dev_global_api_key_here
+CF_ACCOUNT_DEV=dev@company.com
+CF_KEY_DEV=dev_global_api_key_here
 # OR use token instead:
-# CF_DEV_TOKEN=dev_api_token_here
+# CF_TOKEN_DEV=dev_api_token_here
 
 # ==================================================
 # Client Specific Credentials
 # ==================================================
-CF_CLIENT1_ACCOUNT=client1@theircompany.com
-CF_CLIENT1_TOKEN=client1_api_token_here
+CF_ACCOUNT_CLIENT1=client1@theircompany.com
+CF_TOKEN_CLIENT1=client1_api_token_here
 
-CF_CLIENT2_ACCOUNT=client2@anotherclient.com
-CF_CLIENT2_KEY=client2_global_api_key_here
+CF_ACCOUNT_CLIENT2=client2@anotherclient.com
+CF_KEY_CLIENT2=client2_global_api_key_here
 
 # ==================================================
 # Legacy Profile Names (for backwards compatibility)
 # ==================================================
 # These maintain compatibility with existing scripts
-CF_SPC_ACCOUNT=spc@company.com
-CF_SPC_TOKEN=spc_api_token_here
+CF_ACCOUNT_SPC=spc@company.com
+CF_TOKEN_SPC=spc_api_token_here
 
-CF_TS_ACCOUNT=turnstile@company.com
-CF_TS_TOKEN=turnstile_api_token_here
+CF_ACCOUNT_TS=turnstile@company.com
+CF_TOKEN_TS=turnstile_api_token_here
 
 # ==================================================
 # Usage Examples:

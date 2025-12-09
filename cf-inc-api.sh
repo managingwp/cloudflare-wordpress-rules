@@ -107,18 +107,12 @@ function cf_api() {
     _debug "API_PATH: $API_PATH"
 
     # -- Create headers for curl
-    if [[ -n $API_TOKEN ]]; then
-        # Check if - is contained in API_TOKEN
-        if [[ $API_TOKEN == *"-"* ]]; then
-            _error "API Token contains a dash (-), which is not allowed. Please check your token."
-            exit 1
-        fi
-
-        CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
-        _debug "Using \$API_TOKEN as 'Authorization: Bearer'. \$CURL_HEADERS: ${CURL_HEADERS[*]}"        
-    elif [[ -n $API_ACCOUNT ]]; then
+    if [[ -n $API_ACCOUNT && -n $API_APIKEY ]]; then
         CURL_HEADERS=("-H" "X-Auth-Key: ${API_APIKEY}" -H "X-Auth-Email: ${API_ACCOUNT}")
-        _debug "Using \$API_APIKEY as X-Auth-Key. \$CURL_HEADERS: ${CURL_HEADERS[*]}"        
+        _debug "Using \$API_APIKEY as X-Auth-Key. \$CURL_HEADERS: -H X-Auth-Key: [MASKED] -H X-Auth-Email: ${API_ACCOUNT}"        
+    elif [[ -n $API_TOKEN ]]; then
+        CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
+        _debug "Using \$API_TOKEN as 'Authorization: Bearer'. \$CURL_HEADERS: -H Authorization: Bearer [MASKED]"        
     else
         _error "No API Token or API Key found...major error...exiting"
         exit 1
@@ -128,7 +122,8 @@ function cf_api() {
     CURL_OUTPUT=$(mktemp)
 
     # -- Start API Call
-    _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "${CURL_HEADERS[*]}" --output $CURL_OUTPUT ${EXTRA[*]}"
+    local MASKED_HEADERS="$(echo "${CURL_HEADERS[*]}" | sed 's/Bearer [^ ]*/Bearer [MASKED]/g; s/X-Auth-Key: [^ ]*/X-Auth-Key: [MASKED]/g')"
+    _debug "Running curl -s --request $REQUEST --url "${API_URL}${API_PATH}" "$MASKED_HEADERS" --output $CURL_OUTPUT ${EXTRA[*]}"
     [[ $DEBUG == "1" ]] && set -x
     CURL_EXIT_CODE=$(curl -s --output "$CURL_OUTPUT" -w "%{http_code}" --request "$REQUEST" \
         --url "${API_URL}${API_PATH}" \
@@ -1769,7 +1764,7 @@ function delete_turnstile () {
 # -- Cloudflare Settings Variables
 # =====================================
 
-declare -a CF_SETTINGS
+declare -A CF_SETTINGS
 
 # Add settings to the array
 CF_SETTINGS["security_level"]="Security Level"
@@ -1888,7 +1883,28 @@ _cf_set_settings () {
 	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
 	_debug "function:${FUNCNAME[0]}"
 	_debug "Running _cf_set_settings() with ${*}"
-	
+
+	# -- Check if setting was provided
+	if [[ -z "$SETTING" ]]; then
+		usage_set_settings
+		return 1
+	fi
+
+	# -- Normalize setting name (convert dashes to underscores)
+	SETTING="${SETTING//-/_}"
+
+	# -- Check if setting is valid
+	if ! _cf_check_setting "$SETTING"; then
+		return 1
+	fi
+
+	# -- If no value provided, show available options
+	if [[ -z "$VALUE" ]]; then
+		echo "Setting: $SETTING"
+		_cf_settings_values "$SETTING"
+		return 1
+	fi
+
 	_running "Setting $SETTING to $VALUE"
     EXTRA=(-H "Content-Type: application/json" \
      --data 
