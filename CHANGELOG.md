@@ -1,5 +1,9 @@
-## improvement: Added color the usage.
+## Release 2.2.1
+* * Added Screaming Frog to allow list.
+* * Updated rules to v205
 ## Release 2.2.0
+* * improvement: Added color to the usage screen
+* * fix Updated CHANGELOG.md and README.md as well as profiles/mwp-rules-v204-beta.md
 * * Add multi-zone support for batch operations
 * * Add support for multiple -d flags to specify multiple domains
 * * Add -zf|--zones-file flag to load zones from a file
