@@ -1769,7 +1769,7 @@ function delete_turnstile () {
 # -- Cloudflare Settings Variables
 # =====================================
 
-declare -a CF_SETTINGS
+declare -A CF_SETTINGS
 
 # Add settings to the array
 CF_SETTINGS["security_level"]="Security Level"
@@ -1888,7 +1888,28 @@ _cf_set_settings () {
 	local CF_ZONE_ID=$1 SETTING=$2 VALUE=$3
 	_debug "function:${FUNCNAME[0]}"
 	_debug "Running _cf_set_settings() with ${*}"
-	
+
+	# -- Check if setting was provided
+	if [[ -z "$SETTING" ]]; then
+		usage_set_settings
+		return 1
+	fi
+
+	# -- Normalize setting name (convert dashes to underscores)
+	SETTING="${SETTING//-/_}"
+
+	# -- Check if setting is valid
+	if ! _cf_check_setting "$SETTING"; then
+		return 1
+	fi
+
+	# -- If no value provided, show available options
+	if [[ -z "$VALUE" ]]; then
+		echo "Setting: $SETTING"
+		_cf_settings_values "$SETTING"
+		return 1
+	fi
+
 	_running "Setting $SETTING to $VALUE"
     EXTRA=(-H "Content-Type: application/json" \
      --data 
