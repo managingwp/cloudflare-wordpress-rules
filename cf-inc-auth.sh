@@ -25,14 +25,31 @@ function _cf_load_config() {
     fi
     
     # Source the config file safely
-    while IFS='=' read -r key value; do
+    # Strips inline comments so values like "CF_KEY=abc # note" load as "abc".
+    while IFS= read -r line; do
+        # Trim leading/trailing whitespace
+        line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
         # Skip comments and empty lines
-        [[ $key =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$key" ]] && continue
-        
-        # Remove quotes and whitespace
+        [[ $line =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+
+        # Remove inline comments (anything after an unescaped #)
+        line=$(echo "$line" | sed 's/[[:space:]]*#.*$//')
+        # Trim again in case whitespace remains after stripping comment
+        line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [[ -z "$line" ]] && continue
+
+        # Split key and value
+        local key value
+        key=${line%%=*}
+        value=${line#*=}
+
+        # Skip lines without '='
+        [[ "$key" == "$line" ]] && continue
+
+        # Clean key and value
         key=$(echo "$key" | xargs)
-        value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//' | xargs)
+        value=$(echo "$value" | sed 's/^["'"'']*//;s/["'"'']*$//' | xargs)
         
         # Export the variable
         export "$key"="$value"
@@ -100,14 +117,23 @@ function _cf_get_profile_creds() {
     local -A creds=()
     
     # Read from config file
-    while IFS='=' read -r var value; do
+    while IFS= read -r line; do
         # Skip comments and empty lines
-        [[ $var =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$var" ]] && continue
-        
+        [[ $line =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+
+        # Remove inline comments and trim
+        line=$(echo "$line" | sed 's/[[:space:]]*#.*$//')
+        [[ -z "$line" ]] && continue
+
+        # Split key and value on first '='
+        var=${line%%=*}
+        value=${line#*=}
+        [[ "$var" == "$line" ]] && continue
+
         # Clean up var name
         var=$(echo "$var" | xargs)
-        # Clean up value
+        # Clean up value (strip surrounding quotes and whitespace)
         value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//' | xargs)
         
         if [[ "$profile" == "DEFAULT" ]]; then
