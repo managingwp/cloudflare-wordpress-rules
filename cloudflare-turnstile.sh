@@ -15,6 +15,7 @@ DRYRUN="0"
 QUIET="0"
 TURNSTILE_ID=""
 ZONE=""
+CF_PROFILE=""
 
 
 # ==================================
@@ -48,6 +49,8 @@ Options:
     -t|--turnstile [turnstile sitekey]     - Turnstile Sitekey
     -tn|--turnstile-name [name]            - Turnstile Name
     -ak|--apikey [apikey]                  - API Key to use for creating the new turnstile.
+    --cf-profile [name]                    - Cloudflare auth profile from .cloudflare
+    --cf-auth-profile [name]               - Alias for --cf-profile
     -d|--debug                             - Debug mode
     -dr|--dryrun                           - Dry run mode
 
@@ -123,6 +126,11 @@ case $key in
     shift # past argument
     shift # past variable  
     ;;
+    --cf-profile|--cf-auth-profile)
+    CF_PROFILE="$2"
+    shift # past argument
+    shift # past variable
+    ;;
     -aid|--account-id)
     ACCOUNT_ID="$2"
     shift # past argument
@@ -169,7 +177,8 @@ fi
 
 # -- Initialize authentication
 _debug "Initializing authentication"
-if ! cf_auth_init; then
+REQUESTED_CF_PROFILE="${CF_PROFILE:-${CF_AUTH_PROFILE:-}}"
+if ! cf_auth_init "$REQUESTED_CF_PROFILE"; then
     _error "Authentication failed"
     exit 1
 fi

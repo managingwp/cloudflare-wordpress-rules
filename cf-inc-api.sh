@@ -10,7 +10,6 @@ API_LIB_VERSION="1.5"
 API_URL="https://api.cloudflare.com"
 DEBUG_CURL_OUTPUT="0"
 declare -a cf_api_functions
-echo "Cloudflare API Library v${API_LIB_VERSION}"
 
 # =============================================================================
 # -- Core Functions
@@ -904,19 +903,25 @@ function CF_CREATE_RULE () {
 # =====================================
 cf_api_functions["cf_list_rules_action"]="List all rules"
 function cf_list_rules_action () {
-    local DOMAIN_NAME=$1 ZONE_ID=$2
+    local DOMAIN_NAME=$1 ZONE_ID=$2 TABLE_ONLY=${3:-0}
     _debug "function:${FUNCNAME[0]}"
-    _running "Listing all rules for ${DOMAIN}/${ZONE_ID}"
+    if [[ $TABLE_ONLY != "1" ]]; then
+        _running "Listing all rules for ${DOMAIN}/${ZONE_ID}"
+    fi
     cf_api GET /client/v4/zones/${ZONE_ID}/firewall/rules
     if [[ $CURL_EXIT_CODE == "200" ]]; then
-        _success "Success from API: $CURL_EXIT_CODE"
+        if [[ $TABLE_ONLY != "1" ]]; then
+            _success "Success from API: $CURL_EXIT_CODE"
+        fi
         # -- Get Total Rules
         TOTAL_RULES=$(echo $API_OUTPUT | jq -r '.result_info.total_count')
         if [[ $TOTAL_RULES == "0" ]]; then
             _warning "No rules found for ${DOMAIN}/${ZONE_ID}"
         else
-            _success "Found Rules for ${DOMAIN}/${ZONE_ID} - Total Rules: $TOTAL_RULES"
-            echo
+            if [[ $TABLE_ONLY != "1" ]]; then
+                _success "Found Rules for ${DOMAIN}/${ZONE_ID} - Total Rules: $TOTAL_RULES"
+                echo
+            fi
             # -- Go through each rule and print out in numbered order
             echo $API_OUTPUT | jq -r '.result[] | "\(.id) \(.description)"' | awk '{print "#" NR, $0}'
 

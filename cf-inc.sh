@@ -293,20 +293,29 @@ function _run_on_zones () {
     local success_count=0
     local fail_count=0
     local -a failed_zones=()
+    local table_only_mode=0
+
+    if [[ "${TABLE_ONLY:-0}" -eq 1 && "$COMMAND" == "cf_list_rules_action" ]]; then
+        table_only_mode=1
+    fi
     
     _debug "Running command '$COMMAND' on ${zone_count} zone(s)"
     
-    echo ""
-    _running "Processing ${zone_count} zone(s)..."
-    echo ""
+    if [[ $table_only_mode -ne 1 ]]; then
+        echo ""
+        _running "Processing ${zone_count} zone(s)..."
+        echo ""
+    fi
     
     local current=0
     for DOMAIN in "${DOMAINS[@]}"; do
         ((current++))
         
-        echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${CBLUEBG} Zone ${current} of ${zone_count}: ${DOMAIN} ${NC}"
-        echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        if [[ $table_only_mode -ne 1 ]]; then
+            echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${CBLUEBG} Zone ${current} of ${zone_count}: ${DOMAIN} ${NC}"
+            echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        fi
         
         # Get zone ID
         local ZONE_ID
@@ -340,33 +349,39 @@ function _run_on_zones () {
         # Execute the command
         if "$COMMAND" "${actual_args[@]}"; then
             ((success_count++))
-            _success "Completed: $DOMAIN"
+            if [[ $table_only_mode -ne 1 ]]; then
+                _success "Completed: $DOMAIN"
+            fi
         else
             ((fail_count++))
             failed_zones+=("$DOMAIN")
             _error "Failed: $DOMAIN"
         fi
         
-        echo ""
+        if [[ $table_only_mode -ne 1 ]]; then
+            echo ""
+        fi
     done
     
     # Summary
-    echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CBLUEBG} Summary ${NC}"
-    echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "  Total zones:  ${zone_count}"
-    echo -e "  ${CGREEN}Succeeded:${NC}    ${success_count}"
-    echo -e "  ${CRED}Failed:${NC}       ${fail_count}"
-    
-    if [[ ${#failed_zones[@]} -gt 0 ]]; then
+    if [[ $table_only_mode -ne 1 ]]; then
+        echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CBLUEBG} Summary ${NC}"
+        echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "  Total zones:  ${zone_count}"
+        echo -e "  ${CGREEN}Succeeded:${NC}    ${success_count}"
+        echo -e "  ${CRED}Failed:${NC}       ${fail_count}"
+        
+        if [[ ${#failed_zones[@]} -gt 0 ]]; then
+            echo ""
+            echo -e "${CRED}Failed zones:${NC}"
+            for fz in "${failed_zones[@]}"; do
+                echo "  - $fz"
+            done
+        fi
+        
         echo ""
-        echo -e "${CRED}Failed zones:${NC}"
-        for fz in "${failed_zones[@]}"; do
-            echo "  - $fz"
-        done
     fi
-    
-    echo ""
     
     [[ $fail_count -eq 0 ]]
 }

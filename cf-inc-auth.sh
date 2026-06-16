@@ -356,11 +356,15 @@ function cf_auth_init() {
     # Determine authentication method
     if [[ -n "$token" ]]; then
         CF_AUTH_METHOD="token"
-        _success "Authenticated using token (profile: $profile)"
+        if [[ ! ( $CMD == "list-rules" && $TABLE_ONLY -eq 1 ) ]]; then
+            _success "Authenticated using token (profile: $profile)"
+        fi
         _debug "Set API_TOKEN for backwards compatibility"
     else
         CF_AUTH_METHOD="key"
-        _success "Authenticated using account/key (profile: $profile, account: $account)"
+        if [[ ! ( $CMD == "list-rules" && $TABLE_ONLY -eq 1 ) ]]; then
+            _success "Authenticated using account/key (profile: $profile, account: $account)"
+        fi
         _debug "Set API_ACCOUNT and API_APIKEY for backwards compatibility"
     fi
     

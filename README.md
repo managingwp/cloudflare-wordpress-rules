@@ -26,7 +26,7 @@ You can define either generic (default) credentials or multiple named profiles. 
 Profiles are any uppercase name you choose (e.g., `PROD`, `DEV`, `CLIENT1`). The scripts will detect all `CF_(ACCOUNT|TOKEN|KEY)_<PROFILE>` entries and list them for selection.
 
 ### Precedence (highest to lowest)
-1. A specific profile you pass explicitly (future option)
+1. A specific profile you pass explicitly using `--cf-profile` (or `--cf-auth-profile`)
 2. Interactive choice (if multiple profiles are found)
 3. Generic credentials: `CF_TOKEN` or `CF_ACCOUNT` + `CF_KEY`
 
@@ -121,7 +121,10 @@ OPTIONS
   -zf, --zones-file <file>      Load zones from file (one per line)
   -y, --yes                     Skip confirmation prompt for multi-zone ops
   -c, --command <cmd>           Command to execute
+  --cf-profile <name>           Cloudflare auth profile from .cloudflare
+  --cf-auth-profile <name>      Alias for --cf-profile
   --debug                       Enable debug mode
+  --table-only                  list-rules only: show table output and errors only
   -dr, --dryrun                 Dry run, don't send to Cloudflare
 ```
 
@@ -130,8 +133,14 @@ OPTIONS
 # Create rules on a single domain
 cloudflare-wordpress-rules -d domain.com -c create-rules default
 
+# Create rules and force a specific auth profile
+cloudflare-wordpress-rules -d domain.com -c create-rules default --cf-profile PROD
+
 # List rules on a domain
 cloudflare-wordpress-rules -d domain.com -c list-rules
+
+# List rules with table output only (keep errors visible)
+cloudflare-wordpress-rules -d domain.com -c list-rules --table-only
 
 # Delete a specific rule
 cloudflare-wordpress-rules -d domain.com -c delete-rule 1234567890
@@ -238,6 +247,8 @@ Options:
     -a, --account <email>         Cloudflare account email address
     -t, --token <token>           API Token to use
     -ak, --apikey <apikey>        API Key to use
+  --cf-profile <name>           Cloudflare auth profile from .cloudflare
+  --cf-auth-profile <name>      Alias for --cf-profile
     -d, --debug                   Debug mode
     -dr, --dryrun                 Dry run mode
 ```
@@ -261,6 +272,8 @@ Options:
     -t, --turnstile <sitekey>       Turnstile Sitekey
     -tn, --turnstile-name <name>    Turnstile Name
     -ak, --apikey <apikey>          API Key
+  --cf-profile <name>             Cloudflare auth profile from .cloudflare
+  --cf-auth-profile <name>        Alias for --cf-profile
     -d, --debug                     Debug mode
     -dr, --dryrun                   Dry run mode
 ```

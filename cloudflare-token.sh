@@ -15,6 +15,7 @@ DRYRUN="0"
 QUIET="0"
 FIRST_ONE="0"
 CSV="0"
+CF_PROFILE=""
 
 # ==================================
 # -- Include cf-inc files
@@ -56,6 +57,8 @@ Additional Options:
     -ae|--account-email [name@email.com]       - Cloudflare account email address
     -ak|--api-key [apikey]                     - API Key to use for creating the new token.
     -at|--account-token [token]                - API Token to use for creating the new token.
+    --cf-profile [name]                        - Cloudflare auth profile from .cloudflare
+    --cf-auth-profile [name]                   - Alias for --cf-profile
     --debug                                    - Debug mode
     --debug-json                               - Debug JSON output
     --dryrun                                   - Dry run mode
@@ -133,6 +136,11 @@ case $key in
     shift # past argument
     shift # past variable
     ;;
+    --cf-profile|--cf-auth-profile)
+    CF_PROFILE="$2"
+    shift # past argument
+    shift # past variable
+    ;;
     --debug)
     DEBUG="1"
     shift # past argument
@@ -176,7 +184,8 @@ _running "Running $CMD on $DOMAIN_NAME"
 
 # -- Initialize authentication
 _debug "Initializing authentication"
-if ! cf_auth_init; then
+REQUESTED_CF_PROFILE="${CF_PROFILE:-${CF_AUTH_PROFILE:-}}"
+if ! cf_auth_init "$REQUESTED_CF_PROFILE"; then
     _error "Authentication failed"
     exit 1
 fi

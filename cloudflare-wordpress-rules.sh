@@ -12,6 +12,7 @@ VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
 QUIET="0"
+TABLE_ONLY="0"
 export PROFILE_DIR="${SCRIPT_DIR}/profiles"
 
 # ==================================
@@ -82,13 +83,17 @@ usage () {
 	echo -e "  ${CCYAN}-zf${NC}, ${CCYAN}--zones-file${NC} <file>      Load zones from file (one per line)"
 	echo -e "  ${CCYAN}-y${NC}, ${CCYAN}--yes${NC}                     Skip confirmation prompt for multi-zone ops"
 	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
+    echo -e "  ${CCYAN}--cf-profile${NC} <name>            Cloudflare auth profile from .cloudflare"
+    echo -e "  ${CDARKGRAY}--cf-auth-profile${NC} <name>      Alias for --cf-profile"
 	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
+    echo -e "  ${CCYAN}--table-only${NC}                    list-rules only: show table output and errors only"
 	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
 	echo ""
 	
 	echo -e "${CBOLD}${CYELLOW}EXAMPLES${NC}"
 	echo -e "  ${CDARKGRAY}# Single domain${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default"
+    echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default ${CCYAN}--cf-profile${NC} PROD"
 	echo ""
 	echo -e "  ${CDARKGRAY}# Multiple domains${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} site1.com ${CCYAN}-d${NC} site2.com ${CCYAN}-c${NC} create-rules default"
@@ -126,6 +131,7 @@ ZONES_FILE=""
 SKIP_CONFIRM=0
 MULTI_ZONE=0
 CONFIG_FILE=""
+CF_PROFILE=""
 
 # -- Parse options
     POSITIONAL=()
@@ -150,6 +156,11 @@ CONFIG_FILE=""
 		shift # past argument
 		shift # past variable
 		;;
+        --cf-profile|--cf-auth-profile)
+        CF_PROFILE="$2"
+        shift # past argument
+        shift # past variable
+        ;;
 		-y|--yes)
 		SKIP_CONFIRM=1
 		shift # past argument
@@ -169,6 +180,10 @@ CONFIG_FILE=""
         DEBUG=1
         # shellcheck disable=SC2034
         DEBUG_JSON=1
+        shift # past argument
+        ;;
+        --table-only)
+        TABLE_ONLY="1"
         shift # past argument
         ;;
         -dr|--dryrun)
@@ -206,6 +221,82 @@ if [[ -z $CMD ]]; then
     usage
     _error "No command provided"
     exit 1
+fi
+
+# -- Validate command and required arguments before authentication
+COMMANDS_NO_AUTH=("list-profiles" "print-profile" "list-auth-profiles" "validate-profile")
+COMMANDS_REQUIRING_AUTH=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rule" "delete-rules" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+ALL_COMMANDS=("${COMMANDS_NO_AUTH[@]}" "${COMMANDS_REQUIRING_AUTH[@]}")
+
+if [[ ! " ${ALL_COMMANDS[*]} " =~ " ${CMD} " ]]; then
+    usage
+    _error "Unknown command: $CMD"
+    exit 1
+fi
+
+if [[ $CMD == "create-rules" || $CMD == "update-rules" ]]; then
+    if [[ -z $1 ]]; then
+        _error "No profile provided"
+        cf_list_profiles
+        exit 1
+    fi
+elif [[ $CMD == "delete-rule" ]]; then
+    if [[ -z $1 ]]; then
+        _error "No rule ID provided"
+        exit 1
+    fi
+elif [[ $CMD == "get-filter" || $CMD == "delete-filter" ]]; then
+    if [[ -z $1 ]]; then
+        usage
+        _error "No filter ID provided"
+        exit 1
+    fi
+elif [[ $CMD == "get-ruleset" ]]; then
+    if [[ -z $1 ]]; then
+        usage
+        _error "No ruleset ID provided"
+        exit 1
+    fi
+elif [[ $CMD == "set-settings" ]]; then
+    if [[ -z $1 || -z $2 ]]; then
+        usage
+        _error "set-settings requires <setting> <value>"
+        exit 1
+    fi
+fi
+
+# -- Check if domain is required for this command
+COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+
+# -- Commands that support multi-zone operations
+COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings")
+
+if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
+    # Check if we have at least one domain
+    if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+        usage
+        _error "Command '$CMD' requires at least one domain to be specified with -d or -zf"
+        exit 1
+    fi
+
+    # Deduplicate zones
+    _deduplicate_zones
+
+    # For multi-zone operations
+    MULTI_ZONE=0
+    if [[ ${#DOMAINS[@]} -gt 1 ]]; then
+        # Check if command supports multi-zone
+        if [[ ! " ${COMMANDS_SUPPORTING_MULTIZONE[*]} " =~ " ${CMD} " ]]; then
+            _error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
+            exit 1
+        fi
+        MULTI_ZONE=1
+
+        # Confirm with user unless -y flag was used
+        if ! _confirm_zones; then
+            exit 1
+        fi
+    fi
 fi
 
 # ==================================
@@ -259,61 +350,37 @@ if [[ -z "$CONFIG_FILE" ]]; then
     CONFIG_FILE="$HOME/.cloudflare"
 fi
 
-if ! cf_auth_init "" "$CONFIG_FILE"; then
+REQUESTED_CF_PROFILE="${CF_PROFILE:-${CF_AUTH_PROFILE:-}}"
+if ! cf_auth_init "$REQUESTED_CF_PROFILE" "$CONFIG_FILE"; then
     _error "Authentication failed"
     exit 1
 fi
 
-# -- Check if domain is required for this command
-COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+LIST_TABLE_ONLY_MODE=0
+if [[ $CMD == "list-rules" && $TABLE_ONLY -eq 1 ]]; then
+    LIST_TABLE_ONLY_MODE=1
+fi
 
-# -- Commands that support multi-zone operations
-COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings")
-
-if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
-    # Check if we have at least one domain
-    if [[ ${#DOMAINS[@]} -eq 0 ]]; then
-        usage
-        _error "Command '$CMD' requires at least one domain to be specified with -d or -zf"
+# For single zone, resolve zone ID now (backward compatibility)
+if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " && $MULTI_ZONE -eq 0 ]]; then
+    DOMAIN="${DOMAINS[0]}"
+    ZONE_ID=$(_cf_zone_id "$DOMAIN")
+    if [[ -z $ZONE_ID ]]; then
+        _error "No zone ID found for $DOMAIN"
         exit 1
-    fi
-    
-    # Deduplicate zones
-    _deduplicate_zones
-    
-    # For multi-zone operations
-    MULTI_ZONE=0
-    if [[ ${#DOMAINS[@]} -gt 1 ]]; then
-        # Check if command supports multi-zone
-        if [[ ! " ${COMMANDS_SUPPORTING_MULTIZONE[*]} " =~ " ${CMD} " ]]; then
-            _error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
-            exit 1
-        fi
-        MULTI_ZONE=1
-        
-        # Confirm with user unless -y flag was used
-        if ! _confirm_zones; then
-            exit 1
-        fi
-    fi
-    
-    # For single zone, resolve zone ID now (backward compatibility)
-    if [[ $MULTI_ZONE -eq 0 ]]; then
-        DOMAIN="${DOMAINS[0]}"
-        ZONE_ID=$(_cf_zone_id "$DOMAIN")
-        if [[ -z $ZONE_ID ]]; then
-            _error "No zone ID found for $DOMAIN"
-            exit 1
-        else
+    else
+        if [[ $LIST_TABLE_ONLY_MODE -ne 1 ]]; then
             _running2 "Zone ID found: $ZONE_ID"
         fi
     fi
 fi
 
-if [[ $MULTI_ZONE -eq 1 ]]; then
-    _running "Running $CMD on ${#DOMAINS[@]} zones"
-else
-    _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
+if [[ $LIST_TABLE_ONLY_MODE -ne 1 ]]; then
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _running "Running $CMD on ${#DOMAINS[@]} zones"
+    else
+        _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
+    fi
 fi
 # =====================================
 # -- create-rules
@@ -357,9 +424,9 @@ elif [[ $CMD == "upgrade-default-rules" ]]; then
 # =====================================
 elif [[ $CMD == "list-rules" ]]; then
     if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_list_rules_action "\$DOMAIN" "\$ZONE_ID"
+        _run_on_zones cf_list_rules_action "\$DOMAIN" "\$ZONE_ID" "$TABLE_ONLY"
     else
-        cf_list_rules_action "$DOMAIN" "$ZONE_ID"
+        cf_list_rules_action "$DOMAIN" "$ZONE_ID" "$TABLE_ONLY"
     fi
 # =====================================
 # -- delete-rules
