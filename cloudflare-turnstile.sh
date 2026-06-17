@@ -21,9 +21,9 @@ CF_PROFILE=""
 # ==================================
 # -- Include cf-inc files
 # ==================================
-source "$SCRIPT_DIR/cf-inc.sh"
-source "$SCRIPT_DIR/cf-inc-api.sh"
-source "$SCRIPT_DIR/cf-inc-auth.sh"
+source "$SCRIPT_DIR/inc/cf-inc.sh"
+source "$SCRIPT_DIR/inc/cf-inc-api.sh"
+source "$SCRIPT_DIR/inc/cf-inc-auth.sh"
 
 
 # ==================================

@@ -1,14 +1,46 @@
 # Cloudflare WordPress Rules
+
+> **⚠️ v2.3.0 — Migrated to Rulesets API**  
+> The Firewall Rules API and Filters API were **deprecated on 2025-06-15**.  
+> This release replaces them with the **Rulesets API** (see [Migration Guide](#migration-to-rulesets-api) below).  
+> Run `migrate-to-rulesets` to convert existing rules.
+
+## What's New in v2.3.0
+
+- **Rulesets API** — Replaced the deprecated Firewall Rules & Filters APIs with the modern Rulesets API. All `create-rules`, `update-rules`, `list-rules`, and `delete-*` commands now use the new API behind the scenes.
+- **`migrate-to-rulesets`** — One-time command to convert existing Firewall Rules to the Rulesets API format (with optional `--delete-old` cleanup).
+- **Skip action** — `allow`/`bypass` actions are replaced by the unified `skip` action. v2 profiles are auto-converted when read.
+- **Custom block responses** — The `block` action now supports configurable status codes, content, and content types.
+- **Rate limiting** — Rate limit configuration can be defined directly within custom rules.
+- **New commands** — `ruleset-get-entrypoint`, `ruleset-add-rule`, `ruleset-update-rule`, `ruleset-delete-rule`.
+- **Profile conversion** — `bin/convert-profile-v2-to-v3.sh` converts existing v2 profiles to v3 format for the new API.
+- **Deprecated** — Filter commands (`list-filters`, `get-filter`, `delete-filter`, `delete-filters`) still work but show warnings.
+
 This repository provides a bash script for the creation of Cloudflare WAF rules for WordPress specific sites. It also provides a script for creating API tokens and turnstile widgets for Cloudflare.
 ## Files
 | File | Description |
 | --- | --- |
-| [cloudflare-waf-wordpress.md](cloudflare-waf-wordpress.md) | Contains all of the Cloudflare WAF expression rules that I've created. |
-| [cloudflare-cache-wordpress.md](cloudflare-cache-wordpress.md) | Contains Cloudflare cache rules expressions. |
-| [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules on a domain name through the Cloudflare API. Supports multi-zone operations. |
-| [cloudflare-token.sh](cloudflare-token.sh) | Create and manage Cloudflare API tokens (including for the Super Page Cache plugin), with support for account-owned tokens. |
-| [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | Creates turnstile widgets for Cloudflare. |
-| [zones.txt.example](zones.txt.example) | Example zones file for multi-zone operations. |
+| [cloudflare-wordpress-rules.sh](cloudflare-wordpress-rules.sh) | Bash script to create Cloudflare WAF and Cache rules (uses **Rulesets API**) |
+| [cloudflare-token.sh](cloudflare-token.sh) | Create and manage Cloudflare API tokens (including for the Super Page Cache plugin) |
+| [cloudflare-turnstile.sh](cloudflare-turnstile.sh) | Creates turnstile widgets for Cloudflare |
+| [PROFILES.md](PROFILES.md) | v3 profile format reference (Rulesets API) |
+| [zones.txt.example](zones.txt.example) | Example zones file for multi-zone operations |
+
+### Rulesets API Include Files
+| File | Description |
+| --- | --- |
+| `inc/cf-inc-rulesets.sh` | Rulesets API functions (entry point, CRUD, migration tool) |
+| `inc/cf-inc-wp.sh` | Profile-based rule management (v3 compatible) |
+| `inc/cf-inc-api.sh` | Core API functions (includes deprecated Firewall Rules API for backward compat) |
+
+### Conversion & Documentation
+| File | Description |
+| --- | --- |
+| `bin/convert-profile-v2-to-v3.sh` | Converts v2 profiles to v3 (Rulesets API) format |
+| [docs/ruleset_plan.md](docs/ruleset_plan.md) | Full migration plan and API reference |
+| `profiles/features-skip.md` | Skip action guide |
+| `profiles/features-block-response.md` | Custom block response guide |
+| `profiles/features-rate-limiting.md` | Rate limiting guide |
 
 ## Authentication (.cloudflare)
 All scripts read credentials from a single config file at: `~/.cloudflare`.
@@ -84,7 +116,7 @@ Bash script to create and manage Cloudflare WAF rules for WordPress sites throug
 ```
 cloudflare-wordpress-rules -d <domain> -c <command> [options]
 
-RULE COMMANDS
+RULES COMMANDS (Rulesets API)
   create-rules <profile>          Create rules on domain using profile
   update-rules <profile>          Update rules on domain using profile
   upgrade-default-rules           Upgrade MWP default rules on domain
@@ -97,16 +129,21 @@ PROFILE COMMANDS
   print-profile <profile>         Print rules from profile
   validate-profile <profile>      Validate profile JSON syntax
 
-FILTER COMMANDS
-  list-filters                    List filters on domain
-  get-filter <id>                 Get specific filter by ID
-  delete-filter <id>              Delete specific filter by ID
-  delete-filters                  Delete all filters on domain
-
 RULESET COMMANDS
   list-rulesets                   List rulesets on domain
   get-ruleset <id>                Get specific ruleset by ID
   get-ruleset-fw-custom           Get http_request_firewall_custom ruleset
+  ruleset-get-entrypoint          Get the WAF custom rules entry point
+  ruleset-add-rule <json>         Add a single rule to the entry point
+  ruleset-update-rule <id> <json> Update a single rule in the entry point
+  ruleset-delete-rule <id>        Delete a single rule from the entry point
+  migrate-to-rulesets [--delete-old]  Migrate old Firewall Rules to Rulesets API
+
+FILTER COMMANDS (DEPRECATED since 2025-06-15)
+  list-filters                    List filters on domain
+  get-filter <id>                 Get specific filter by ID
+  delete-filter <id>              Delete specific filter by ID
+  delete-filters                  Delete all filters on domain
 
 SETTINGS COMMANDS
   get-settings                    Get security settings on domain
@@ -150,7 +187,77 @@ cloudflare-wordpress-rules -d domain.com -c get-settings
 
 # Set security level
 cloudflare-wordpress-rules -d domain.com -c set-settings security_level high
+
+# One-time migration from old Firewall Rules to Rulesets API
+cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
+
+# Migration + cleanup of old rules
+cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
 ```
+
+## Migration to Rulesets API
+
+The Firewall Rules API and Filters API were **deprecated by Cloudflare on 2025-06-15** and replaced by the **Rulesets API**. This repository has been fully migrated to the new API.
+
+### What Changed
+
+| Aspect | Old (Firewall Rules API) | New (Rulesets API) |
+|---|---|---|
+| Rule creation | 2 API calls per rule (filter + rule) | 1 API call (expression inline) |
+| Profile schema | v2 with `priority` field | v3 with `enabled`/`logging`/`action_parameters` |
+| Skip action | `allow` + `bypass` (two actions) | `skip` (one action with config) |
+| Custom responses | Not supported | Supported for `block` action |
+| Logging control | Not supported | Per-rule `logging.enabled` |
+| Rate limiting | Separate product | Configurable within custom rules |
+
+### Action Migration
+
+| Old Action | New Action | Notes |
+|---|---|---|
+| `allow` | `skip` with `"ruleset": "current"` | Stops evaluating remaining custom rules |
+| `bypass` | `skip` with `"phases": [...]` | Skips specific security products |
+| `block` | `block` | Same, with optional custom response |
+| `challenge` / `js_challenge` / `managed_challenge` | Same | No changes needed |
+| `log` | `log` | Same |
+
+### One-Time Migration
+
+If you have existing Firewall Rules on your zones, use the migration tool to convert them:
+
+```bash
+# Preview the migration (rules will be applied, old ones preserved)
+cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
+
+# Full migration with cleanup of old rules + filters
+cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
+
+# Multi-zone migration
+cloudflare-wordpress-rules -zf zones.txt -c migrate-to-rulesets
+```
+
+The migration tool:
+1. Fetches all existing Firewall Rules via the old API
+2. Converts them to Rulesets API format (allow→skip, priority removed, etc.)
+3. Applies them to the phase entry point
+4. Optionally deletes old rules and filters after verification
+
+### Profile Conversion
+
+Convert existing v2 profiles to v3 format:
+
+```bash
+bin/convert-profile-v2-to-v3.sh profiles/default.json profiles/default-v3.json
+```
+
+### Required API Token Permissions
+
+For the Rulesets API, ensure your API token includes at least one of:
+- `Zone WAF Write` — for zone-level custom rules
+- `Zone Rulesets Write` — for zone-level ruleset management
+- `Account WAF Write` — for account-level custom rulesets
+- `Account Rulesets Write` — for account-level ruleset management
+
+The old `Zone.Firewall Services:Edit` permission may still work for backward compatibility but the new permissions are recommended.
 
 ### Multi-Zone Operations (v2.2.0+)
 The script supports running commands across multiple zones at once. This is useful for managing rules on many domains.

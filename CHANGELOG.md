@@ -1,3 +1,39 @@
+## Release 2.3.0
+* **MAJOR: Migrated from deprecated Firewall Rules API to Rulesets API**
+* New include file: `inc/cf-inc-rulesets.sh` — Rulesets API functions (CRUD, entry point management, profile application)
+* New profile format: v3 schema with `enabled`, `logging`, `action_parameters` fields
+* New commands: `ruleset-get-entrypoint`, `ruleset-add-rule`, `ruleset-update-rule`, `ruleset-delete-rule`, `migrate-to-rulesets`
+* New features:
+  * `skip` action — replaces deprecated `allow`/`bypass` with support for ruleset/phases configuration
+  * Custom block responses — configurable status code, content, and content type
+  * Rate limiting configuration within custom rules
+  * Per-rule logging control
+* Migration tool: `migrate-to-rulesets [--delete-old]` — one-time migration from old API to new
+* Profile conversion: `bin/convert-profile-v2-to-v3.sh` — converts v2 profiles to v3 format
+* Filter commands (`list-filters`, `get-filter`, `delete-filter`, `delete-filters`) are deprecated
+* `cf-inc-old.sh` removed from includes (CF_PROTECT_WP was unused)
+* New documentation: `PROFILES.md` (v3 profile format), `docs/ruleset_plan.md` (migration plan)
+* Feature guides: `profiles/features-skip.md`, `profiles/features-block-response.md`, `profiles/features-rate-limiting.md`
+## Release 2.2.5
+* Added Cloudflare Rulesets API documentation (`docs/cf-*.md`)
+* Added `--cf-profile`/`--cf-auth-profile` CLI options to select auth profile across scripts
+* Added `--table-only` mode for `list-rules` output while preserving error visibility
+* Added `cfwpr` symlink for quick access
+* Improved auth gating — auth only runs when a valid command is entered
+* Updated AGENTS.md and TODO.md docs
+## Release 2.2.4
+* Fixed inline comment stripping in Cloudflare config loader (`~/.cloudflare` parsing)
+## Release 2.2.3
+* Refactored authentication system — updated environment variable format
+* Added `--config` argument to use an alternative `.cloudflare` file for all commands
+* Added `list-auth-profiles` support with custom config file parameter
+* Unified authentication profile display format across scripts
+* Masked credentials in debug output, prioritized Account API auth over Token auth
+* Added challenge-ttl possible values
+* Created AGENTS.md for development conventions
+## Release 2.2.2
+* Created `mwp-rules-latest.json` and `mwp-rules-latest.md` for bleeding-edge rules
+* Added Infusionsoft user agent to allow list
 ## Release 2.2.1
 * * Added Screaming Frog to allow list.
 * * Updated rules to v205

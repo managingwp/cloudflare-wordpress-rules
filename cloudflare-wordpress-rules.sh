@@ -18,11 +18,12 @@ export PROFILE_DIR="${SCRIPT_DIR}/profiles"
 # ==================================
 # -- Include cf-inc files
 # ==================================
-source "$SCRIPT_DIR/cf-inc.sh"
-source "$SCRIPT_DIR/cf-inc-api.sh"
-source "$SCRIPT_DIR/cf-inc-old.sh"
-source "$SCRIPT_DIR/cf-inc-wp.sh"
-source "$SCRIPT_DIR/cf-inc-auth.sh"
+source "$SCRIPT_DIR/inc/cf-inc.sh"
+source "$SCRIPT_DIR/inc/cf-inc-api.sh"
+source "$SCRIPT_DIR/inc/cf-inc-wp.sh"
+source "$SCRIPT_DIR/inc/cf-inc-auth.sh"
+source "$SCRIPT_DIR/inc/cf-inc-rulesets.sh"
+# cf-inc-old.sh was archived in Phase 7 — it contained only the unused CF_PROTECT_WP function
 
 # ==================================
 # -- usage
@@ -55,17 +56,22 @@ usage () {
 	echo -e "  ${CGREEN}validate-profile${NC} <profile>      Validate profile JSON syntax"
 	echo ""
 	
-	echo -e "${CBOLD}${CYELLOW}FILTER COMMANDS${NC}"
-	echo -e "  ${CGREEN}list-filters${NC}                    List filters on domain"
-	echo -e "  ${CGREEN}get-filter${NC} <id>                 Get specific filter by ID"
-	echo -e "  ${CGREEN}delete-filter${NC} <id>              Delete specific filter by ID"
-	echo -e "  ${CGREEN}delete-filters${NC}                  Delete all filters on domain"
+	echo -e "${CBOLD}${CYELLOW}FILTER COMMANDS${NC} ${CRED}(DEPRECATED since 2025-06-15)${NC}"
+	echo -e "  ${CDARKGRAY}list-filters${NC}                    List filters on domain"
+	echo -e "  ${CDARKGRAY}get-filter${NC} <id>                 Get specific filter by ID"
+	echo -e "  ${CDARKGRAY}delete-filter${NC} <id>              Delete specific filter by ID"
+	echo -e "  ${CDARKGRAY}delete-filters${NC}                  Delete all filters on domain"
 	echo ""
 	
 	echo -e "${CBOLD}${CYELLOW}RULESET COMMANDS${NC}"
 	echo -e "  ${CGREEN}list-rulesets${NC}                   List rulesets on domain"
 	echo -e "  ${CGREEN}get-ruleset${NC} <id>                Get specific ruleset by ID"
 	echo -e "  ${CGREEN}get-ruleset-fw-custom${NC}           Get http_request_firewall_custom ruleset"
+	echo -e "  ${CGREEN}ruleset-get-entrypoint${NC}          Get the WAF custom rules entry point"
+	echo -e "  ${CGREEN}ruleset-add-rule${NC} <json>         Add a single rule to the entry point"
+	echo -e "  ${CGREEN}ruleset-update-rule${NC} <id> <json> Update a single rule in the entry point"
+	echo -e "  ${CGREEN}ruleset-delete-rule${NC} <id>        Delete a single rule from the entry point"
+	echo -e "  ${CGREEN}migrate-to-rulesets${NC} [--delete-old]  Migrate old Firewall Rules to Rulesets API"
 	echo ""
 	
 	echo -e "${CBOLD}${CYELLOW}SETTINGS COMMANDS${NC}"
@@ -225,7 +231,7 @@ fi
 
 # -- Validate command and required arguments before authentication
 COMMANDS_NO_AUTH=("list-profiles" "print-profile" "list-auth-profiles" "validate-profile")
-COMMANDS_REQUIRING_AUTH=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rule" "delete-rules" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+COMMANDS_REQUIRING_AUTH=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rule" "delete-rules" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings" "ruleset-get-entrypoint" "ruleset-add-rule" "ruleset-update-rule" "ruleset-delete-rule" "migrate-to-rulesets")
 ALL_COMMANDS=("${COMMANDS_NO_AUTH[@]}" "${COMMANDS_REQUIRING_AUTH[@]}")
 
 if [[ ! " ${ALL_COMMANDS[*]} " =~ " ${CMD} " ]]; then
@@ -234,6 +240,7 @@ if [[ ! " ${ALL_COMMANDS[*]} " =~ " ${CMD} " ]]; then
     exit 1
 fi
 
+# -- Argument validation
 if [[ $CMD == "create-rules" || $CMD == "update-rules" ]]; then
     if [[ -z $1 ]]; then
         _error "No profile provided"
@@ -257,6 +264,18 @@ elif [[ $CMD == "get-ruleset" ]]; then
         _error "No ruleset ID provided"
         exit 1
     fi
+elif [[ $CMD == "ruleset-update-rule" || $CMD == "ruleset-delete-rule" ]]; then
+    if [[ -z $1 ]]; then
+        usage
+        _error "No rule ID provided"
+        exit 1
+    fi
+elif [[ $CMD == "ruleset-add-rule" ]]; then
+    if [[ -z $1 ]]; then
+        usage
+        _error "No rule JSON provided"
+        exit 1
+    fi
 elif [[ $CMD == "set-settings" ]]; then
     if [[ -z $1 || -z $2 ]]; then
         usage
@@ -266,10 +285,10 @@ elif [[ $CMD == "set-settings" ]]; then
 fi
 
 # -- Check if domain is required for this command
-COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings")
+COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings" "ruleset-get-entrypoint" "ruleset-add-rule" "ruleset-update-rule" "ruleset-delete-rule" "migrate-to-rulesets")
 
 # -- Commands that support multi-zone operations
-COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings")
+COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings" "ruleset-get-entrypoint")
 
 if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
     # Check if we have at least one domain
@@ -420,39 +439,41 @@ elif [[ $CMD == "upgrade-default-rules" ]]; then
     cf_upgrade_rules_default "$DOMAIN" "$ZONE_ID" "$PROFILE"
 
 # =====================================
-# -- list-rules
+# -- list-rules (Rulesets API)
 # =====================================
 elif [[ $CMD == "list-rules" ]]; then
     if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_list_rules_action "\$DOMAIN" "\$ZONE_ID" "$TABLE_ONLY"
+        _run_on_zones cf_ruleset_list_rules_action "\$DOMAIN" "\$ZONE_ID" "$TABLE_ONLY"
     else
-        cf_list_rules_action "$DOMAIN" "$ZONE_ID" "$TABLE_ONLY"
+        cf_ruleset_list_rules_action "$DOMAIN" "$ZONE_ID" "$TABLE_ONLY"
     fi
 # =====================================
-# -- delete-rules
+# -- delete-rules (Rulesets API)
 # =====================================
 elif [[ $CMD == "delete-rules" ]]; then
     if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_delete_rules_action "\$DOMAIN" "\$ZONE_ID"
+        _run_on_zones cf_ruleset_delete_rules_action "\$DOMAIN" "\$ZONE_ID"
     else
-        cf_delete_rules_action "$DOMAIN" "$ZONE_ID"
+        cf_ruleset_delete_rules_action "$DOMAIN" "$ZONE_ID"
     fi
 # =====================================
-# -- delete-rule
+# -- delete-rule (Rulesets API)
 # =====================================
 elif [[ $CMD == "delete-rule" ]]; then
     RULE_ID=$1
 	[[ $RULE_ID == "" ]] && _error "No rule ID provided" && exit 1
-	cf_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
+	cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
 # =====================================
-# -- list-filters
+# -- list-filters (DEPRECATED)
 # =====================================
 elif [[ $CMD == "list-filters" ]]; then
+    _warning "Filters API is deprecated since 2025-06-15. Use 'list-rules' instead (Rulesets API)."
     cf_list_filters_action "$DOMAIN" "$ZONE_ID"
 # =====================================
-# -- get-filter
+# -- get-filter (DEPRECATED)
 # =====================================
 elif [[ $CMD == "get-filter" ]]; then
+    _warning "Filters API is deprecated since 2025-06-15. Use 'ruleset-get-entrypoint' instead."
     FILTER_ID=$1
 	_running2 "Getting filter ID $FILTER_ID"
     if [[ -z $FILTER_ID ]]; then
@@ -463,16 +484,18 @@ elif [[ $CMD == "get-filter" ]]; then
         CF_GET_FILTER "$ZONE_ID" "$FILTER_ID"
     fi
 # =====================================
-# -- delete-filter
+# -- delete-filter (DEPRECATED)
 # =====================================
 elif [[ $CMD == "delete-filter" ]]; then
+    _warning "Filters API is deprecated since 2025-06-15. Rulesets API does not use separate filters."
 	FILTER_ID=$1
     [[ $FILTER_ID == "" ]] && _error "No filter ID provided" && exit 1
 	cf_delete_filter_action "$DOMAIN" "$ZONE_ID" "$FILTER_ID"
 # =====================================
-# -- delete-filters
+# -- delete-filters (DEPRECATED)
 # =====================================
 elif [[ $CMD == "delete-filters" ]]; then
+    _warning "Filters API is deprecated since 2025-06-15. Rulesets API does not use separate filters."
 	cf_delete_filters_action "$DOMAIN" "$ZONE_ID"
 
 # =====================================
@@ -500,6 +523,69 @@ elif [[ $CMD == "get-ruleset" ]]; then
 elif [[ $CMD == "get-ruleset-fw-custom" ]]; then	
 	_running2 "Getting http_request_firewall_custom ruleset"
 	cf_get_ruleset_fw_custom "$ZONE_ID"	
+# =====================================
+# -- ruleset-get-entrypoint
+# =====================================
+elif [[ $CMD == "ruleset-get-entrypoint" ]]; then
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_ruleset_get_entrypoint_action "\$DOMAIN" "\$ZONE_ID"
+    else
+        cf_ruleset_get_entrypoint_action "$DOMAIN" "$ZONE_ID"
+    fi
+# =====================================
+# -- ruleset-add-rule
+# =====================================
+elif [[ $CMD == "ruleset-add-rule" ]]; then
+    RULE_JSON=$1
+    POSITION_JSON=${2:-}
+    if [[ -z $RULE_JSON ]]; then
+        _error "No rule JSON provided"
+        exit 1
+    fi
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_ruleset_add_rule_action "\$DOMAIN" "\$ZONE_ID" "$RULE_JSON" "$POSITION_JSON"
+    else
+        cf_ruleset_add_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_JSON" "$POSITION_JSON"
+    fi
+# =====================================
+# -- ruleset-update-rule
+# =====================================
+elif [[ $CMD == "ruleset-update-rule" ]]; then
+    RULE_ID=$1
+    RULE_JSON=$2
+    if [[ -z $RULE_ID ]]; then
+        _error "No rule ID provided"
+        exit 1
+    fi
+    if [[ -z $RULE_JSON ]]; then
+        _error "No rule JSON provided"
+        exit 1
+    fi
+    cf_ruleset_update_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID" "$RULE_JSON"
+# =====================================
+# -- ruleset-delete-rule
+# =====================================
+elif [[ $CMD == "ruleset-delete-rule" ]]; then
+    RULE_ID=$1
+    if [[ -z $RULE_ID ]]; then
+        _error "No rule ID provided"
+        exit 1
+    fi
+    cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
+# =====================================
+# -- migrate-to-rulesets
+# =====================================
+elif [[ $CMD == "migrate-to-rulesets" ]]; then
+    DELETE_OLD=0
+    if [[ "$1" == "--delete-old" ]]; then
+        DELETE_OLD=1
+        shift
+    fi
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        _run_on_zones cf_ruleset_migrate_existing "\$DOMAIN" "\$ZONE_ID" "$DELETE_OLD"
+    else
+        cf_ruleset_migrate_existing "$DOMAIN" "$ZONE_ID" "$DELETE_OLD"
+    fi
 # ================
 # -- set-settings
 # ================

@@ -2,8 +2,11 @@
 
 ## Development Documentation
 
-* Always create and print out a git commit message for each change made, use the format feat, fix, docs, style, refactor, perf, test, chore
-* 
+* **Auto-commit after every change.** After completing any code changes (fixes, features, refactors, etc.), automatically create a git commit with a descriptive message using conventional commit format (`feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`). Do not wait for the user to ask — commit immediately after the changes are verified. Print the commit message when finishing the work.
+* Search `doc/` folder before creating new documentation files to avoid duplicates.
+* After completing code work, suggest testing methods for the change to complete.
+
+
 ## Agents Documentation
 
 * Don't use .cloudflare file, use .cloudflare.example instead to keep secrets from being leaked.

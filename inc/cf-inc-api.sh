@@ -29,7 +29,7 @@ function _list_core_functions () {
     # Loop through array, printing key and value
     for FUNC_NAME in "${!cf_api_functions[@]}"; do
         # -- Count how many times the function is used in the script
-        FUNC_COUNT=$(grep -c "$FUNC_NAME" "$SCRIPT_DIR"/*.sh)
+        FUNC_COUNT=$(grep -c "$FUNC_NAME" "$SCRIPT_DIR"/*.sh "$SCRIPT_DIR"/inc/*.sh)
         DESCRIPTION="${cf_api_functions[$FUNC_NAME]}"
         printf "%-40s | %-40s | %s\n" "$FUNC_NAME" "$DESCRIPTION" "$FUNC_COUNT"
     done

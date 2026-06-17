@@ -179,11 +179,11 @@ function _cf_validate_creds() {
 }
 
 # ==================================================
-# Format and display profiles (shared by list and select)
+# Format and display profiles (shared by list, select, and quiet)
 # ==================================================
 function _cf_display_profiles_formatted() {
     local config_file="$1"
-    local mode="$2"  # "list" or "select"
+    local mode="$2"  # "list", "select", or "quiet"
     local -a profiles
     local -a default_profiles
     local -a other_profiles
@@ -205,16 +205,19 @@ function _cf_display_profiles_formatted() {
     # Combine arrays with DEFAULT first
     local -a sorted_profiles=("${default_profiles[@]}" "${other_profiles[@]}")
     
-    # Display header
-    local redirect=""
-    [[ "$mode" == "select" ]] && redirect=" >&2"
+    # Quiet mode only populates the map without printing
+    local show_output=true
+    [[ "$mode" == "quiet" ]] && show_output=false
     
-    if [[ "$mode" == "select" ]]; then
-        echo "Multiple Cloudflare profiles found in $config_file:" >&2
-        echo "" >&2
-    else
-        echo "Multiple Cloudflare profiles found in $config_file:"
-        echo ""
+    # Display header
+    if $show_output; then
+        if [[ "$mode" == "select" ]]; then
+            echo "Multiple Cloudflare profiles found in $config_file:" >&2
+            echo "" >&2
+        else
+            echo "Multiple Cloudflare profiles found in $config_file:"
+            echo ""
+        fi
     fi
     
     local counter=1
@@ -233,31 +236,37 @@ function _cf_display_profiles_formatted() {
         
         # Display and map Account API entries
         if [[ -n "$account" && -n "$key" ]]; then
-            if [[ "$mode" == "select" ]]; then
-                printf "%d. %s - Account API (%s)\n" "$counter" "$label" "$account" >&2
-            else
-                printf "%d. %s - Account API (%s)\n" "$counter" "$label" "$account"
+            if $show_output; then
+                if [[ "$mode" == "select" ]]; then
+                    printf "%d. %s - Account API (%s)\n" "$counter" "$label" "$account" >&2
+                else
+                    printf "%d. %s - Account API (%s)\n" "$counter" "$label" "$account"
+                fi
             fi
-            _profile_selection_map[$counter]="$profile"
+            _profile_selection_map[$counter]="${profile}:account"
             ((counter++))
         fi
         
         # Display and map Token API entries
         if [[ -n "$token" ]]; then
-            if [[ "$mode" == "select" ]]; then
-                printf "%d. %s - Token API\n" "$counter" "$label" >&2
-            else
-                printf "%d. %s - Token API\n" "$counter" "$label"
+            if $show_output; then
+                if [[ "$mode" == "select" ]]; then
+                    printf "%d. %s - Token API\n" "$counter" "$label" >&2
+                else
+                    printf "%d. %s - Token API\n" "$counter" "$label"
+                fi
             fi
-            _profile_selection_map[$counter]="$profile"
+            _profile_selection_map[$counter]="${profile}:token"
             ((counter++))
         fi
     done
     
-    if [[ "$mode" == "select" ]]; then
-        echo "" >&2
-    else
-        echo ""
+    if $show_output; then
+        if [[ "$mode" == "select" ]]; then
+            echo "" >&2
+        else
+            echo ""
+        fi
     fi
     
     # Store the total count in global variable for caller to use
@@ -302,6 +311,10 @@ function _cf_select_profile() {
 # ==================================================
 # Initialize Cloudflare authentication
 # Usage: cf_auth_init [profile_name]
+#   profile_name can be:
+#     - Named profile (e.g., "DEFAULT", "FPM", "JTRASK")
+#     - Numeric index from profile list (e.g., "1", "2")
+#     - Qualified with method (e.g., "DEFAULT:account", "DEFAULT:token")
 # ==================================================
 function cf_auth_init() {
     local requested_profile="$1"
@@ -315,24 +328,62 @@ function cf_auth_init() {
     fi
     
     local profile=""
+    local auth_method=""
     
     # Determine which profile to use
     if [[ -n "$requested_profile" ]]; then
-        # Specific profile requested
+        # Specific profile requested — could be name, number, or qualified name
         profile="$requested_profile"
         _debug "Using requested profile: $profile"
+        
+        # Numeric selection: look up from the selection map
+        if [[ "$profile" =~ ^[0-9]+$ ]]; then
+            _cf_display_profiles_formatted "$config_file" "quiet"
+            if [[ -z "${_profile_selection_map[$profile]:-}" ]]; then
+                _error "Invalid profile selection: $profile"
+                return 1
+            fi
+            profile="${_profile_selection_map[$profile]}"
+            _debug "Numeric selection maps to: $profile"
+        fi
+        
+        # Parse method qualifier (e.g., "DEFAULT:account" -> profile="DEFAULT", auth_method="account")
+        if [[ "$profile" == *:* ]]; then
+            auth_method="${profile##*:}"
+            profile="${profile%%:*}"
+            _debug "Parsed method qualifier: profile=$profile, method=$auth_method"
+        fi
+        
+        # Normalize profile name to uppercase for case-insensitive matching
+        profile="${profile^^}"
+        _debug "Normalized profile name: $profile"
     else
-        # Auto-detect or select profile
+        # Auto-detect or select profile interactively
         profile=$(_cf_select_profile "$config_file")
         if [[ $? -ne 0 ]]; then
             return 1
         fi
         _debug "Selected profile: $profile"
+        
+        # Parse method qualifier from interactive selection too
+        if [[ "$profile" == *:* ]]; then
+            auth_method="${profile##*:}"
+            profile="${profile%%:*}"
+            _debug "Parsed method qualifier: profile=$profile, method=$auth_method"
+        fi
     fi
     
     # Get credentials for selected profile
     local creds
     IFS='|' read -r account token key <<< "$(_cf_get_profile_creds "$profile" "$config_file")"
+    
+    # If a specific auth method was requested, use only that credential type
+    if [[ "$auth_method" == "account" ]]; then
+        token=""  # Clear token to force account/key auth
+    elif [[ "$auth_method" == "token" ]]; then
+        account=""  # Clear account to force token auth
+        key=""
+    fi
     
     # Validate credentials
     if ! _cf_validate_creds "$account" "$token" "$key"; then
