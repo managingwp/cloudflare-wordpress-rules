@@ -509,7 +509,25 @@ function cf_ruleset_apply_profile () {
         return 0
     fi
     
-    # Otherwise, replace all rules
+    # Existing ruleset found — confirm replacement unless SKIP_CONFIRM is set
+    if [[ "${SKIP_CONFIRM:-0}" -ne 1 ]]; then
+        local existing_count new_count
+        existing_count=$(echo "$RULESET_API_OUTPUT" | jq '.result.rules | length // 0')
+        new_count=$(echo "$RULES_JSON" | jq 'length')
+        
+        echo ""
+        _warning "This zone already has ${existing_count} rule(s) in the entry point ruleset."
+        _warning "The profile contains ${new_count} rule(s)."
+        read -p "Replace all existing rules? [y/N]: " -n 1 -r
+        echo ""
+        
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            _warning "Operation cancelled by user"
+            return 1
+        fi
+    fi
+    
+    # Replace all rules
     if ! cf_ruleset_replace_all_rules "$ZONE_ID" "$RULESET_ID" "$RULES_JSON"; then
         _error "Failed to apply rules to zone $ZONE_ID"
         return 1

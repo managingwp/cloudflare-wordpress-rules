@@ -411,6 +411,17 @@ if [[ $CMD == "create-rules" ]]; then
         cf_list_profiles
         exit 1
     fi
+
+    # -- Prompt for Challenge Passage setting (once, before zone iteration)
+    CHOSEN_TTL=$(_cf_prompt_challenge_passage)
+    if [[ -n "$CHOSEN_TTL" ]]; then
+        if [[ $MULTI_ZONE -eq 1 ]]; then
+            _run_on_zones _cf_set_settings "\$ZONE_ID" "challenge_ttl" "$CHOSEN_TTL"
+        else
+            _cf_set_settings "$ZONE_ID" "challenge_ttl" "$CHOSEN_TTL"
+        fi
+    fi
+
     if [[ $MULTI_ZONE -eq 1 ]]; then
         _run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
     else

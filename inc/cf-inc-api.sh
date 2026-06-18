@@ -1918,9 +1918,9 @@ _cf_set_settings () {
 	if [[ $CURL_EXIT_CODE == "200" ]]; then
 		_success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
 		echo "Completed setting $SETTING to $VALUE successfully"
-		exit 0
+		return 0
 	else		
-		exit 1
+		return 1
 	fi
 }
 
@@ -1988,4 +1988,52 @@ function _cf_settings_values () {
     else
         echo "Possible Values: ${CF_SETTINGS_VALUES[*]}"
     fi   
+}
+
+# ==================================================
+# -- _cf_prompt_challenge_passage
+# -- Prompt user to change Challenge Passage (challenge_ttl) setting.
+# -- If yes, show numbered menu of TTL options and return selected value.
+# -- Returns: selected TTL value (seconds) via stdout, or empty if no change.
+# ==================================================
+function _cf_prompt_challenge_passage () {
+    _debug "function:${FUNCNAME[0]}"
+
+    # All user-facing output goes to stderr to avoid polluting captured output
+    echo "" >&2
+    echo -e "${CCYAN}Challenge Passage${NC} — Controls how long a visitor who passed a challenge" >&2
+    echo "can access the site before being challenged again." >&2
+    echo "" >&2
+    read -p "Change Challenge Passage setting? [y/N]: " -n 1 -r
+    echo "" >&2
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "" >&2
+        # Return empty — no change
+        return 0
+    fi
+
+    local OPTIONS=("${CF_DEFAULTS_CHALLENGE_TTL[@]}")
+    local COUNT=${#OPTIONS[@]}
+
+    echo "" >&2
+    echo "Select Challenge Passage duration:" >&2
+    for i in "${!OPTIONS[@]}"; do
+        local NUM=$((i + 1))
+        echo "  $NUM) ${OPTIONS[$i]} - $(_convert_seconds "${OPTIONS[$i]}")" >&2
+    done
+    echo "" >&2
+
+    local SELECTION
+    read -p "Enter option [1-$COUNT]: " SELECTION
+
+    if [[ "$SELECTION" =~ ^[0-9]+$ ]] && (( SELECTION >= 1 && SELECTION <= COUNT )); then
+        local TTL_VALUE="${OPTIONS[$((SELECTION - 1))]}"
+        # Only this echo goes to stdout — captured by the caller
+        echo "$TTL_VALUE"
+        return 0
+    else
+        _error "Invalid option: $SELECTION. Skipping Challenge Passage change."
+        return 1
+    fi
 }
