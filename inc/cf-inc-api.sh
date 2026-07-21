@@ -1991,16 +1991,34 @@ function _cf_settings_values () {
 }
 
 # ==================================================
-# -- _cf_prompt_challenge_passage
+# -- _cf_prompt_challenge_passage [$ZONE_ID]
 # -- Prompt user to change Challenge Passage (challenge_ttl) setting.
+# -- If a zone ID is provided, queries and displays the current setting first.
 # -- If yes, show numbered menu of TTL options and return selected value.
 # -- Returns: selected TTL value (seconds) via stdout, or empty if no change.
 # ==================================================
 function _cf_prompt_challenge_passage () {
-    _debug "function:${FUNCNAME[0]}"
+    _debug "function:${FUNCNAME[0]} - ${*}"
+    local CHOSEN_ZONE_ID="${1:-}"
 
     # All user-facing output goes to stderr to avoid polluting captured output
     echo "" >&2
+
+    # If zone ID is provided, query and display the current challenge_ttl setting
+    if [[ -n "$CHOSEN_ZONE_ID" ]]; then
+        cf_api "GET" "/client/v4/zones/${CHOSEN_ZONE_ID}/settings/challenge_ttl"
+        if [[ $CURL_EXIT_CODE == "200" ]]; then
+            CURRENT_TTL=$(echo "$API_OUTPUT" | jq -r '.result.value // empty')
+            if [[ -n "$CURRENT_TTL" ]]; then
+                HUMAN_TIME=$(_convert_seconds "$CURRENT_TTL")
+                echo -e "  ${CGREEN}Current setting:${NC} Challenge Passage = ${CURRENT_TTL} (${HUMAN_TIME})" >&2
+            fi
+        else
+            _debug "Failed to get current challenge_ttl for zone $CHOSEN_ZONE_ID"
+        fi
+        echo "" >&2
+    fi
+
     echo -e "${CCYAN}Challenge Passage${NC} — Controls how long a visitor who passed a challenge" >&2
     echo "can access the site before being challenged again." >&2
     echo "" >&2

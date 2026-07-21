@@ -176,19 +176,26 @@ function cf_ruleset_create_entrypoint () {
     
     _debug "function:${FUNCNAME[0]} - Creating entry point ruleset '$NAME' for phase $PHASE on zone $ZONE_ID"
     
+    # Add explicit position indexes to enforce correct evaluation order
+    local RULES_JSON_WITH_POS
+    RULES_JSON_WITH_POS=$(_cf_ruleset_add_positions "$RULES_JSON")
+    _debug "Rules with positions: $RULES_JSON_WITH_POS"
+    
     # Build the POST body
     local POST_DATA
     POST_DATA=$(jq -n \
         --arg name "$NAME" \
         --arg kind "zone" \
         --arg phase "$PHASE" \
-        --argjson rules "$RULES_JSON" \
+        --argjson rules "$RULES_JSON_WITH_POS" \
         '{
             name: $name,
             kind: $kind,
             phase: $phase,
             rules: $rules
         }')
+    
+    _debug_json "$POST_DATA"
     
     _cf_ruleset_api POST "/client/v4/zones/${ZONE_ID}/rulesets" \
         -H "Content-Type: application/json" \
@@ -208,6 +215,22 @@ function cf_ruleset_create_entrypoint () {
 }
 
 # =====================================
+# -- _cf_ruleset_add_positions $RULES_JSON
+# -- Add explicit position index to each rule in a rules JSON array.
+# -- This ensures Cloudflare evaluates rules in the intended order,
+# -- regardless of how the API handles array ordering internally.
+# -- Each rule gets position: { index: N } where N is its 0-based index.
+# -- Returns: modified rules JSON array via stdout
+# =====================================
+cf_ruleset_functions["_cf_ruleset_add_positions"]="Add position indexes to rules array"
+function _cf_ruleset_add_positions () {
+    local RULES_JSON=$1
+    echo "$RULES_JSON" | jq -c '
+        [to_entries[] | .value + {position: {index: .key}}]
+    '
+}
+
+# =====================================
 # -- cf_ruleset_replace_all_rules $ZONE_ID $RULESET_ID $RULES_JSON
 # -- Replace all rules in a ruleset (bulk PUT operation).
 # -- CAUTION: This replaces ALL existing rules. Include existing rule IDs
@@ -222,10 +245,17 @@ function cf_ruleset_replace_all_rules () {
     
     _debug "function:${FUNCNAME[0]} - Replacing all rules in ruleset $RULESET_ID on zone $ZONE_ID"
     
+    # Add explicit position indexes to enforce correct evaluation order
+    local RULES_JSON_WITH_POS
+    RULES_JSON_WITH_POS=$(_cf_ruleset_add_positions "$RULES_JSON")
+    _debug "Rules with positions: $RULES_JSON_WITH_POS"
+    
     local PUT_DATA
     PUT_DATA=$(jq -n \
-        --argjson rules "$RULES_JSON" \
+        --argjson rules "$RULES_JSON_WITH_POS" \
         '{rules: $rules}')
+    
+    _debug_json "$PUT_DATA"
     
     _cf_ruleset_api PUT "/client/v4/zones/${ZONE_ID}/rulesets/${RULESET_ID}" \
         -H "Content-Type: application/json" \
@@ -382,13 +412,16 @@ function cf_ruleset_list_rules () {
     fi
     
     if [[ $TABLE_ONLY -eq 1 ]]; then
-        # Compact numbered list
+        # Compact numbered list with position
         echo "$RULESET_API_OUTPUT" | jq -r '.result.rules[] | "\(.id) \(.description // "(no description)")"' | \
             awk '{print "#" NR, $0}'
     else
         _success "Found $RULE_COUNT rule(s) in entry point ruleset"
         echo ""
-        echo "$RULESET_API_OUTPUT" | jq -r '.result.rules[] | "\(.id) [\(.action)] \(.description // "(no description)")"'
+        echo "$RULESET_API_OUTPUT" | jq -r '
+            .result.rules | to_entries[] |
+            "#\(.key + 1) \(.value.id) [\(.value.action)] \(.value.description // "(no description)")"
+        '
         echo ""
         echo "$RULESET_API_OUTPUT"
     fi

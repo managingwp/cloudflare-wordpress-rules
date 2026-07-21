@@ -413,7 +413,14 @@ if [[ $CMD == "create-rules" ]]; then
     fi
 
     # -- Prompt for Challenge Passage setting (once, before zone iteration)
-    CHOSEN_TTL=$(_cf_prompt_challenge_passage)
+    # Pass a zone ID to query the current setting — for single zone it's already
+    # resolved; for multi-zone we resolve the first domain to show the info.
+    if [[ $MULTI_ZONE -eq 1 ]]; then
+        FIRST_ZONE_ID=$(_cf_zone_id "${DOMAINS[0]}")
+        CHOSEN_TTL=$(_cf_prompt_challenge_passage "$FIRST_ZONE_ID")
+    else
+        CHOSEN_TTL=$(_cf_prompt_challenge_passage "$ZONE_ID")
+    fi
     if [[ -n "$CHOSEN_TTL" ]]; then
         if [[ $MULTI_ZONE -eq 1 ]]; then
             _run_on_zones _cf_set_settings "\$ZONE_ID" "challenge_ttl" "$CHOSEN_TTL"
