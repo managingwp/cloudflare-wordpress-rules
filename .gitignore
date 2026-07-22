@@ -1,1 +1,6 @@
 profiles/*.json
+!profiles/default.json
+!profiles/mwp-rules-beta.json
+!profiles/mwp-rules-v*.json
+!profiles/block-event-calendar.json
+zones.txt

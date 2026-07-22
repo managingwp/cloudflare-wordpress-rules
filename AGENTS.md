@@ -6,6 +6,14 @@
 * Search `doc/` folder before creating new documentation files to avoid duplicates.
 * After completing code work, suggest testing methods for the change to complete.
 
+## Release Workflow
+
+1. Edit `profiles/mwp-rules-beta.json` with rule changes (IPs, UAs, expressions)
+2. Run `bin/build.sh` to regenerate `.md` files and optionally update README changelog
+3. Commit changes with `feat:` or `fix:` prefix
+4. To publish a numbered release: `bin/release.sh <ver>` (e.g., `bin/release.sh 208`)
+5. Commit the release files and tag: `git tag v208`
+6. Run `bin/build.sh generate-readme` to update the README changelog from git log
 
 ## Agents Documentation
 

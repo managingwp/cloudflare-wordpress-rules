@@ -2055,3 +2055,56 @@ function _cf_prompt_challenge_passage () {
         return 1
     fi
 }
+
+# ==================================================
+# -- _cf_set_challenge_ttl_if_lower $ZONE_ID $DESIRED_TTL
+# -- Sets challenge_ttl only if the current value is lower than the desired value.
+# -- If current TTL >= desired TTL, does nothing (skips).
+# -- Returns: 0 on success or skip, 1 on error.
+# ==================================================
+function _cf_set_challenge_ttl_if_lower () {
+    _debug "function:${FUNCNAME[0]} - ${*}"
+    local ZONE_ID=$1
+    local DESIRED_TTL=$2
+
+    if [[ -z "$ZONE_ID" || -z "$DESIRED_TTL" ]]; then
+        _error "Usage: _cf_set_challenge_ttl_if_lower <zone_id> <desired_ttl>"
+        return 1
+    fi
+
+    # Validate that the desired TTL is one of the allowed values
+    if ! _cf_check_setting_value "challenge_ttl" "$DESIRED_TTL"; then
+        return 1
+    fi
+
+    # Query the current challenge_ttl for this zone
+    cf_api "GET" "/client/v4/zones/${ZONE_ID}/settings/challenge_ttl"
+    if [[ $CURL_EXIT_CODE != "200" ]]; then
+        _debug "Failed to get current challenge_ttl for zone $ZONE_ID"
+        _error "Unable to query current Challenge TTL for zone $ZONE_ID; skipping."
+        return 1
+    fi
+
+    local CURRENT_TTL
+    CURRENT_TTL=$(echo "$API_OUTPUT" | jq -r '.result.value // empty')
+
+    if [[ -z "$CURRENT_TTL" ]]; then
+        _error "Could not parse current Challenge TTL for zone $ZONE_ID; skipping."
+        return 1
+    fi
+
+    local HUMAN_CURRENT
+    HUMAN_CURRENT=$(_convert_seconds "$CURRENT_TTL")
+    local HUMAN_DESIRED
+    HUMAN_DESIRED=$(_convert_seconds "$DESIRED_TTL")
+
+    # Compare: only set if current is less than desired
+    if [[ "$CURRENT_TTL" -ge "$DESIRED_TTL" ]]; then
+        _running "Zone $ZONE_ID: current Challenge TTL ${CURRENT_TTL} (${HUMAN_CURRENT}) >= ${DESIRED_TTL} (${HUMAN_DESIRED}) — no change needed."
+        return 0
+    fi
+
+    _running "Zone $ZONE_ID: current Challenge TTL ${CURRENT_TTL} (${HUMAN_CURRENT}) < ${DESIRED_TTL} (${HUMAN_DESIRED}) — updating."
+    _cf_set_settings "$ZONE_ID" "challenge_ttl" "$DESIRED_TTL"
+    return $?
+}

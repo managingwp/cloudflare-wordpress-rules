@@ -51,6 +51,12 @@ generate_rules_section() {
 
 # Main loop: process each JSON profile
 for json in "$PROFILES_DIR"/*.json; do
+    # Skip symlinks — the real file will be processed directly
+    if [[ -L "$json" ]]; then
+        echo "Skipping symlink: $(basename "$json") (resolves to $(readlink "$json"))"
+        continue
+    fi
+
     echo "Processing $json"
     base=$(basename "$json" .json)
     md_file="$PROFILES_DIR/${base}.md"
@@ -63,13 +69,14 @@ for json in "$PROFILES_DIR"/*.json; do
     # Generate the combined block
     rules_block=$(generate_rules_section "$json")
 
-    # Inject between markers
+    # Inject between markers (use cp to preserve symlinks)
     awk -v block="$rules_block" '
         $0 ~ /<!-- RULES-START -->/ { print; print block; inblock=1; next }
         $0 ~ /<!-- RULES-END -->/ { inblock=0 }
         !inblock { print }
     ' "$md_file" > "${md_file}.tmp"
 
-    mv "${md_file}.tmp" "$md_file"
+    cp "${md_file}.tmp" "$md_file"
+    rm "${md_file}.tmp"
     echo "Updated $md_file"
 done

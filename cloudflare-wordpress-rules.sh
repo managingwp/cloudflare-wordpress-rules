@@ -91,6 +91,7 @@ usage () {
 	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
     echo -e "  ${CCYAN}--cf-profile${NC} <name>            Cloudflare auth profile from .cloudflare"
     echo -e "  ${CDARKGRAY}--cf-auth-profile${NC} <name>      Alias for --cf-profile"
+    echo -e "  ${CCYAN}--challenge-ttl${NC} <seconds>       Challenge Passage TTL (bypasses interactive prompt)"
 	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
     echo -e "  ${CCYAN}--table-only${NC}                    list-rules only: show table output and errors only"
 	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
@@ -103,6 +104,9 @@ usage () {
 	echo ""
 	echo -e "  ${CDARKGRAY}# Multiple domains${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} site1.com ${CCYAN}-d${NC} site2.com ${CCYAN}-c${NC} create-rules default"
+	echo ""
+	echo -e "  ${CDARKGRAY}# With Challenge TTL (bypasses interactive prompt)${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default ${CCYAN}--challenge-ttl${NC} 3600"
 	echo ""
 	echo -e "  ${CDARKGRAY}# Using zones file${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-zf${NC} zones.txt ${CCYAN}-c${NC} create-rules default"
@@ -138,6 +142,7 @@ SKIP_CONFIRM=0
 MULTI_ZONE=0
 CONFIG_FILE=""
 CF_PROFILE=""
+CHALLENGE_TTL_ARG=""
 
 # -- Parse options
     POSITIONAL=()
@@ -164,6 +169,11 @@ CF_PROFILE=""
 		;;
         --cf-profile|--cf-auth-profile)
         CF_PROFILE="$2"
+        shift # past argument
+        shift # past variable
+        ;;
+        --challenge-ttl)
+        CHALLENGE_TTL_ARG="$2"
         shift # past argument
         shift # past variable
         ;;
@@ -401,6 +411,27 @@ if [[ $LIST_TABLE_ONLY_MODE -ne 1 ]]; then
         _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
     fi
 fi
+
+# =====================================
+# -- _cf_create_rules_with_ttl $DOMAIN $ZONE_ID $PROFILE [$CHALLENGE_TTL]
+# -- Combined operation: optionally set challenge TTL (if provided), then create rules.
+# -- Returns 0 if both (or the one that runs) succeed. Fails fast on TTL failure.
+# =====================================
+function _cf_create_rules_with_ttl () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local CHALLENGE_TTL=${4:-}
+
+    # If a challenge TTL was provided, set it (if-lower logic — skips if current >= desired)
+    if [[ -n "$CHALLENGE_TTL" ]]; then
+        _cf_set_challenge_ttl_if_lower "$ZONE_ID" "$CHALLENGE_TTL" || return 1
+    fi
+
+    # Create rules via profile
+    cf_profile_create "$DOMAIN_NAME" "$ZONE_ID" "$PROFILE_NAME"
+}
+
 # =====================================
 # -- create-rules
 # =====================================
@@ -412,27 +443,39 @@ if [[ $CMD == "create-rules" ]]; then
         exit 1
     fi
 
-    # -- Prompt for Challenge Passage setting (once, before zone iteration)
-    # Pass a zone ID to query the current setting — for single zone it's already
-    # resolved; for multi-zone we resolve the first domain to show the info.
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        FIRST_ZONE_ID=$(_cf_zone_id "${DOMAINS[0]}")
-        CHOSEN_TTL=$(_cf_prompt_challenge_passage "$FIRST_ZONE_ID")
-    else
-        CHOSEN_TTL=$(_cf_prompt_challenge_passage "$ZONE_ID")
-    fi
-    if [[ -n "$CHOSEN_TTL" ]]; then
+    # -- Handle Challenge Passage setting
+    # If --challenge-ttl was passed, apply it directly (bypasses interaction).
+    # Otherwise, prompt interactively (existing behavior).
+    if [[ -n "$CHALLENGE_TTL_ARG" ]]; then
+        # --challenge-ttl path: single pass per zone — set TTL then create rules
         if [[ $MULTI_ZONE -eq 1 ]]; then
-            _run_on_zones _cf_set_settings "\$ZONE_ID" "challenge_ttl" "$CHOSEN_TTL"
+            _run_on_zones _cf_create_rules_with_ttl "\$DOMAIN" "\$ZONE_ID" "$PROFILE" "$CHALLENGE_TTL_ARG"
         else
-            _cf_set_settings "$ZONE_ID" "challenge_ttl" "$CHOSEN_TTL"
+            _cf_create_rules_with_ttl "$DOMAIN" "$ZONE_ID" "$PROFILE" "$CHALLENGE_TTL_ARG"
         fi
-    fi
-
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
     else
-        cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+        # -- Prompt for Challenge Passage setting (once, before zone iteration)
+        # Pass a zone ID to query the current setting — for single zone it's already
+        # resolved; for multi-zone we resolve the first domain to show the info.
+        if [[ $MULTI_ZONE -eq 1 ]]; then
+            FIRST_ZONE_ID=$(_cf_zone_id "${DOMAINS[0]}")
+            CHOSEN_TTL=$(_cf_prompt_challenge_passage "$FIRST_ZONE_ID")
+        else
+            CHOSEN_TTL=$(_cf_prompt_challenge_passage "$ZONE_ID")
+        fi
+        if [[ -n "$CHOSEN_TTL" ]]; then
+            if [[ $MULTI_ZONE -eq 1 ]]; then
+                _run_on_zones _cf_create_rules_with_ttl "\$DOMAIN" "\$ZONE_ID" "$PROFILE" "$CHOSEN_TTL"
+            else
+                _cf_create_rules_with_ttl "$DOMAIN" "$ZONE_ID" "$PROFILE" "$CHOSEN_TTL"
+            fi
+        else
+            if [[ $MULTI_ZONE -eq 1 ]]; then
+                _run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
+            else
+                cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+            fi
+        fi
     fi
 # =====================================
 # -- update-rules

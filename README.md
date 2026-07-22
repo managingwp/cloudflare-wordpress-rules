@@ -1,9 +1,16 @@
 # Cloudflare WordPress Rules
 
-> **⚠️ v2.3.0 — Migrated to Rulesets API**  
-> The Firewall Rules API and Filters API were **deprecated on 2025-06-15**.  
-> This release replaces them with the **Rulesets API** (see [Migration Guide](#migration-to-rulesets-api) below).  
-> Run `migrate-to-rulesets` to convert existing rules.
+> **⚠️ v2.4.0 — Profile Management Update**  
+> Rule profiles now use a beta → release workflow.  
+> See [Profile Management](#profile-management) below.
+
+## What's New in v2.4.0
+
+- **Beta channel** — `mwp-rules-beta.json` is the new staging profile for rule changes
+- **Default symlink** — `default.json` is a symlink to the latest numbered release
+- **`bin/build.sh`** — Unified build orchestrator (generate-md, generate-readme, or all)
+- **`bin/release.sh`** — Promote beta to a numbered release with one command
+- **v3 schema** — All bundled profiles now use the v3 Rulesets API format natively
 
 ## What's New in v2.3.0
 
@@ -32,6 +39,13 @@ This repository provides a bash script for the creation of Cloudflare WAF rules 
 | `inc/cf-inc-rulesets.sh` | Rulesets API functions (entry point, CRUD, migration tool) |
 | `inc/cf-inc-wp.sh` | Profile-based rule management (v3 compatible) |
 | `inc/cf-inc-api.sh` | Core API functions (includes deprecated Firewall Rules API for backward compat) |
+
+### Build & Release
+| File | Description |
+| --- | --- |
+| `bin/build.sh` | Unified build orchestrator — regenerate `.md` files, update README changelog |
+| `bin/release.sh` | Promote beta to a numbered release (snapshot, version substitution, symlinks) |
+| `bin/convert-profile-v2-to-v3.sh` | Converts v2 profiles to v3 (Rulesets API) format |
 
 ### Conversion & Documentation
 | File | Description |
@@ -193,6 +207,53 @@ cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
 
 # Migration + cleanup of old rules
 cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
+```
+
+### Profile Management
+
+The repository uses a **beta → release** workflow:
+
+- **`mwp-rules-beta.json`** — Staging profile for rule changes (IPs, UAs, expressions)
+- **`default.json`** — Symlink to the latest numbered release (current stable)
+- **`mwp-rules-v<NNN>.json`** — Versioned release snapshots
+
+#### Daily workflow (editing rules)
+```bash
+# Edit profiles/mwp-rules-beta.json with your changes
+# Then regenerate the markdown documentation:
+bin/build.sh generate-md
+
+# Commit your changes:
+git add profiles/mwp-rules-beta.*
+git commit -m "feat: update beta rules"
+```
+
+#### Deploying beta rules to test
+```bash
+cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+```
+
+#### Promoting beta to a numbered release
+```bash
+# Create release v208 from beta:
+bin/release.sh 208
+
+# Commit and tag:
+git add profiles/mwp-rules-v208.* profiles/default.* VERSION
+git commit -m "feat: release mwp-rules-v208"
+git tag v208
+
+# Update README changelog from git log:
+bin/build.sh generate-readme
+```
+
+#### Deploying the stable release
+```bash
+# Default profile always points to the latest release:
+cloudflare-wordpress-rules -d domain.com -c create-rules default
+
+# Or upgrade an existing deployment:
+cloudflare-wordpress-rules -d domain.com -c upgrade-default-rules
 ```
 
 ## Migration to Rulesets API
