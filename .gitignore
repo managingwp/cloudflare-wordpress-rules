@@ -4,3 +4,4 @@ profiles/*.json
 !profiles/mwp-rules-v*.json
 !profiles/block-event-calendar.json
 zones.txt
+plans/

@@ -1994,42 +1994,67 @@ function _cf_settings_values () {
 # -- _cf_prompt_challenge_passage [$ZONE_ID]
 # -- Prompt user to change Challenge Passage (challenge_ttl) setting.
 # -- If a zone ID is provided, queries and displays the current setting first.
-# -- If yes, show numbered menu of TTL options and return selected value.
+# -- If current setting is already 604800 (7 days), skips without prompting.
+# -- Prompt options: y = set to 604800, c = choose custom duration, n = skip.
 # -- Returns: selected TTL value (seconds) via stdout, or empty if no change.
 # ==================================================
 function _cf_prompt_challenge_passage () {
     _debug "function:${FUNCNAME[0]} - ${*}"
     local CHOSEN_ZONE_ID="${1:-}"
+    local CURRENT_TTL=""
+    local HUMAN_TIME=""
 
     # All user-facing output goes to stderr to avoid polluting captured output
     echo "" >&2
 
-    # If zone ID is provided, query and display the current challenge_ttl setting
+    # If zone ID is provided, query the current challenge_ttl setting
     if [[ -n "$CHOSEN_ZONE_ID" ]]; then
         cf_api "GET" "/client/v4/zones/${CHOSEN_ZONE_ID}/settings/challenge_ttl"
         if [[ $CURL_EXIT_CODE == "200" ]]; then
             CURRENT_TTL=$(echo "$API_OUTPUT" | jq -r '.result.value // empty')
-            if [[ -n "$CURRENT_TTL" ]]; then
-                HUMAN_TIME=$(_convert_seconds "$CURRENT_TTL")
-                echo -e "  ${CGREEN}Current setting:${NC} Challenge Passage = ${CURRENT_TTL} (${HUMAN_TIME})" >&2
-            fi
         else
             _debug "Failed to get current challenge_ttl for zone $CHOSEN_ZONE_ID"
         fi
-        echo "" >&2
     fi
 
+    # -- Section title and secondary title
     echo -e "${CCYAN}Challenge Passage${NC} — Controls how long a visitor who passed a challenge" >&2
     echo "can access the site before being challenged again." >&2
     echo "" >&2
-    read -p "Change Challenge Passage setting? [y/N]: " -n 1 -r
+    echo -e "${CGREEN}Confirming Challenge Passage${NC}" >&2
+
+    # -- Display current setting
+    if [[ -n "$CURRENT_TTL" ]]; then
+        HUMAN_TIME=$(_convert_seconds "$CURRENT_TTL")
+        echo -e "  ${CGREEN}Current setting:${NC} Challenge Passage = ${CURRENT_TTL} (${HUMAN_TIME})" >&2
+    fi
     echo "" >&2
 
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "" >&2
-        # Return empty — no change
+    # -- If already 604800 (7 days), skip — no change needed
+    if [[ "$CURRENT_TTL" == "604800" ]]; then
+        echo -e "  ${CGREEN}Challenge Passage already ${CURRENT_TTL} (${HUMAN_TIME}) — skipping.${NC}" >&2
         return 0
     fi
+
+    # -- Prompt: y = set to 604800, c = choose custom duration, n = skip
+    read -p "[y] Set to 604800 (7d) | [c] Choose custom duration | [n] Skip [n]: " -n 1 -r
+    echo "" >&2
+
+    case "$REPLY" in
+        [Yy])
+            # Set directly to 604800 (7 days)
+            echo "604800"
+            return 0
+            ;;
+        [Cc])
+            # Fall through to custom duration menu
+            ;;
+        *)
+            echo "" >&2
+            # Return empty — no change
+            return 0
+            ;;
+    esac
 
     local OPTIONS=("${CF_DEFAULTS_CHALLENGE_TTL[@]}")
     local COUNT=${#OPTIONS[@]}

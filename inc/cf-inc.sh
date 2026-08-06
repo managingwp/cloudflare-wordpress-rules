@@ -165,6 +165,37 @@ function json2_keyval () {
 # =============================================================================
 
 # =====================================
+# -- _normalize_domain $DOMAIN
+# -- Normalize a domain argument to a bare domain
+# -- Strips scheme (http://, https://), path, query, port and leading www.
+# -- Accepts: http://www.example.com/path, https://example.com, example.com, zone IDs
+# -- Returns: bare lowercase domain (e.g. example.com); empty on invalid input
+# =====================================
+function _normalize_domain () {
+    local DOMAIN_INPUT="${1:-}"
+    local DOMAIN_OUTPUT
+
+    # Nothing to normalize
+    [[ -z "$DOMAIN_INPUT" ]] && return 1
+
+    # Trim whitespace and lowercase (DNS is case-insensitive)
+    DOMAIN_OUTPUT=$(echo "$DOMAIN_INPUT" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+    # Strip scheme (http://, https://, ftp://, etc.)
+    DOMAIN_OUTPUT=$(echo "$DOMAIN_OUTPUT" | sed -E 's#^[a-z][a-z0-9+.-]*://##')
+
+    # Strip path, query, fragment, or port (everything from first /, ?, #, or :)
+    DOMAIN_OUTPUT=$(echo "$DOMAIN_OUTPUT" | sed -E 's#[/?#:].*$##')
+
+    # Strip leading www. (input is already lowercased)
+    DOMAIN_OUTPUT=$(echo "$DOMAIN_OUTPUT" | sed -E 's#^www\.##')
+
+    [[ -z "$DOMAIN_OUTPUT" ]] && return 1
+
+    echo "$DOMAIN_OUTPUT"
+}
+
+# =====================================
 # -- _load_zones_file $ZONES_FILE
 # -- Read zones from a text file
 # -- Returns: Prints zones to stdout (one per line)

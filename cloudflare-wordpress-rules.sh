@@ -85,7 +85,7 @@ usage () {
 	echo ""
 	
 	echo -e "${CBOLD}${CYELLOW}OPTIONS${NC}"
-	echo -e "  ${CCYAN}-d${NC}, ${CCYAN}--domain${NC} <domain>         Domain to operate on (can be used multiple times)"
+	echo -e "  ${CCYAN}-d${NC}, ${CCYAN}--domain${NC} <domain>         Domain or full URL, normalized to domain (can be used multiple times)"
 	echo -e "  ${CCYAN}-zf${NC}, ${CCYAN}--zones-file${NC} <file>      Load zones from file (one per line)"
 	echo -e "  ${CCYAN}-y${NC}, ${CCYAN}--yes${NC}                     Skip confirmation prompt for multi-zone ops"
 	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
@@ -152,8 +152,13 @@ CHALLENGE_TTL_ARG=""
 
     case $key in
 		-d|--domain)
-		# Accumulate multiple -d arguments
-		DOMAINS+=("$2")
+		# Accumulate multiple -d arguments (full URLs are normalized to bare domain)
+		NORM_DOMAIN="$(_normalize_domain "$2")"
+		if [[ -z "$NORM_DOMAIN" ]]; then
+			_warning "Could not normalize domain: '$2', using as-is"
+			NORM_DOMAIN="$2"
+		fi
+		DOMAINS+=("$NORM_DOMAIN")
 		shift # past argument
 		shift # past variable
 		;;
