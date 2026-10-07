@@ -58,6 +58,59 @@ function _cf_ruleset_read_profile_rules () {
 }
 
 # =============================================================================
+# -- Profile Resolution Helpers
+# =============================================================================
+
+# =====================================
+# -- _cf_profile_path $SELECTOR
+# -- Resolve a profile selector to a JSON file path.
+# -- Resolution order:
+# --   1. Exact filename: $PROFILE_DIR/<selector>.json
+# --   2. Internal name: first file whose .name == <selector>
+# -- Prints the resolved path on success; returns 1 when nothing matches.
+# =====================================
+_cf_profile_path () {
+    local SELECTOR=$1
+    local DIRECT="$PROFILE_DIR/$SELECTOR.json"
+
+    if [[ -f "$DIRECT" ]]; then
+        printf '%s\n' "$DIRECT"
+        return 0
+    fi
+
+    local FILE NAME
+    for FILE in "$PROFILE_DIR"/*.json; do
+        [[ -e "$FILE" ]] || continue
+        NAME=$(jq -r '.name // empty' "$FILE" 2>/dev/null)
+        if [[ "$NAME" == "$SELECTOR" ]]; then
+            printf '%s\n' "$FILE"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# =====================================
+# -- _cf_profile_display_name $FILE
+# -- Name to show for a profile in listings:
+# --   * symlink   → the symlink's basename (default.json → default)
+# --   * otherwise → the profile's .name (fallback: basename)
+# =====================================
+_cf_profile_display_name () {
+    local FILE=$1
+
+    if [[ -L "$FILE" ]]; then
+        basename "$FILE" .json
+        return 0
+    fi
+
+    local NAME
+    NAME=$(jq -r '.name // empty' "$FILE" 2>/dev/null)
+    printf '%s\n' "${NAME:-$(basename "$FILE" .json)}"
+}
+
+# =============================================================================
 # -- Profile Create (Rulesets API)
 # =============================================================================
 
@@ -80,11 +133,11 @@ cf_profile_create () {
         exit 1
     fi
 
-    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
-    if [[ ! -f $PROFILE_FILE ]]; then
-        _error "Profile file not found: $PROFILE_FILE"
+    local PROFILE_FILE
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME") || {
+        _error "Profile not found: $PROFILE_NAME"
         exit 1
-    fi
+    }
 
     # -- Validate JSON
     if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
@@ -152,11 +205,11 @@ cf_update_rules () {
 
     _running2 "Updating rules on $OBJECT via Rulesets API"
 
-    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
-    if [[ ! -f $PROFILE_FILE ]]; then
-        _error "Profile file not found: $PROFILE_FILE"
+    local PROFILE_FILE
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME") || {
+        _error "Profile not found: $PROFILE_NAME"
         return 1
-    fi
+    }
 
     if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
         _error "Invalid JSON in $PROFILE_FILE"
@@ -219,13 +272,14 @@ function cf_upgrade_rules_default () {
     local ZONE_ID=$2
     local PROFILE_NAME=$3
     local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
-    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+    local PROFILE_FILE
 
     _running2 "Upgrading rules on $OBJECT"
 
     # -- Validate profile
     [[ ! -d $PROFILE_DIR ]] && _error "$PROFILE_DIR doesn't exist, failing" && exit 1
-    [[ ! -f $PROFILE_FILE ]] && _error "Profile file not found: $PROFILE_FILE" && return 1
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    [[ -z "$PROFILE_FILE" ]] && _error "Profile not found: $PROFILE_NAME" && return 1
 
     # -- Get existing entry point
     if ! cf_ruleset_get_entrypoint "$ZONE_ID"; then
@@ -306,8 +360,9 @@ function cf_update_rule_profile () {
 
     _running2 "Updating rule $RULE_ID (R${RULE_NUMBER}) on zone $ZONE_ID via PATCH"
 
-    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
-    [[ ! -f $PROFILE_FILE ]] && _error "Profile file not found: $PROFILE_FILE" && return 1
+    local PROFILE_FILE
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    [[ -z "$PROFILE_FILE" ]] && _error "Profile not found: $PROFILE_NAME" && return 1
 
     # -- Read specific rule from profile by rule_number
     local RULE_JSON
@@ -347,7 +402,7 @@ cf_list_profiles () {
 	for FILE in "$PROFILE_DIR"/*.json; do
 		_debug "Processing file: $FILE"		
 		PROFILE_FILE=$(basename "$FILE")
-		PROFILE_NAME=$(jq -r '.name' "$FILE")
+		PROFILE_NAME=$(_cf_profile_display_name "$FILE")
 		PROFILE_DESC=$(jq -r '.description' "$FILE")
 		OUTPUT+="$i\t$PROFILE_FILE\t$PROFILE_NAME\t$PROFILE_DESC\n"
 		i=$((i+1))
@@ -363,9 +418,9 @@ cf_list_profiles () {
 # =====================================
 function cf_print_profile () {
     PROFILE_NAME=$1
-    PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
-    if [[ ! -f $PROFILE_FILE ]]; then
-        _error "Profile file not found: $PROFILE_FILE"
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    if [[ -z "$PROFILE_FILE" ]]; then
+        _error "Profile not found: $PROFILE_NAME"
         return 1
     fi
     
@@ -456,7 +511,7 @@ function cf_print_profile () {
 # =====================================
 cf_validate_profile() {
     local PROFILE_NAME=$1
-    local PROFILE_FILE="$PROFILE_DIR/$PROFILE_NAME.json"
+    local PROFILE_FILE
     local total_errors=0
     
     if [[ -z "$PROFILE_NAME" ]]; then
@@ -466,9 +521,10 @@ cf_validate_profile() {
     
     _running2 "Validating profile: $PROFILE_NAME"
     
-    # Check if file exists
-    if [[ ! -f "$PROFILE_FILE" ]]; then
-        _error "Profile file not found: $PROFILE_FILE"
+    # Resolve profile (by filename or internal .name)
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    if [[ -z "$PROFILE_FILE" ]]; then
+        _error "Profile not found: $PROFILE_NAME"
         return 1
     fi
     
@@ -612,7 +668,7 @@ cf_validate_profile() {
         
         # Show profile summary
         local name description
-        name=$(jq -r '.name' "$PROFILE_FILE")
+        name="$PROFILE_NAME"
         description=$(jq -r '.description' "$PROFILE_FILE")
         
         echo ""

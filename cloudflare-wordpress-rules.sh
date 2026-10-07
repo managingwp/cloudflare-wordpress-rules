@@ -347,7 +347,7 @@ elif [[ $CMD == "print-profile" ]]; then
         exit 1
     fi
     cf_print_profile "$PROFILE"
-    exit 0
+    exit $?
 elif [[ $CMD == "list-auth-profiles" ]]; then
     # Use CONFIG_FILE if set via --config, otherwise use first positional arg or default
     if [[ -z "$CONFIG_FILE" ]]; then

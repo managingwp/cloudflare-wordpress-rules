@@ -2,6 +2,15 @@
 
 This document describes the profile JSON format used by `cloudflare-wordpress-rules.sh` to define WAF rules.
 
+## Profile Selectors
+
+Commands that take a profile (`create-rules`, `update-rules`, `upgrade-default-rules`, `print-profile`, `validate-profile`) resolve the selector in this order:
+
+1. **Filename** — `profiles/<selector>.json`
+2. **Internal name** — the first profile whose top-level `name` field matches `<selector>`
+
+`default` is a symlink to the latest numbered release, so `create-rules default` always deploys the current stable rules while still tracking new releases. The `Name` column shown by `list-profiles` is always a valid selector.
+
 ## Schema Versions
 
 | Version | Description | Status |

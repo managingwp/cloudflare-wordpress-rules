@@ -7,7 +7,7 @@
 ## What's New in v2.4.0
 
 - **Beta channel** — `mwp-rules-beta.json` is the new staging profile for rule changes
-- **Default symlink** — `default.json` is a symlink to the latest numbered release
+- **Default symlink** — `default.json` is a symlink to the latest numbered release, selectable as `default`
 - **`bin/build.sh`** — Unified build orchestrator (generate-md, generate-readme, or all)
 - **`bin/release.sh`** — Promote beta to a numbered release with one command
 - **v3 schema** — All bundled profiles now use the v3 Rulesets API format natively
@@ -214,8 +214,10 @@ cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
 The repository uses a **beta → release** workflow:
 
 - **`mwp-rules-beta.json`** — Staging profile for rule changes (IPs, UAs, expressions)
-- **`default.json`** — Symlink to the latest numbered release (current stable)
+- **`default.json`** — Symlink to the latest numbered release (current stable); use it as the `default` selector
 - **`mwp-rules-v<NNN>.json`** — Versioned release snapshots
+
+Profile selectors are resolved by **filename first** (`<name>.json`), then by the profile's internal `name` field. So `default` always targets the latest release, and any `Name` shown by `list-profiles` (for example `default-calendar`) is also a valid selector.
 
 #### Daily workflow (editing rules)
 ```bash
