@@ -2,12 +2,12 @@
 # =============================================================================
 # bin/build.sh — Unified build orchestrator
 #
-# Runs profile generation and README/changelog update steps.
+# Runs profile generation, the README beta block, and README/changelog update steps.
 # Can be run individually or as part of a release.
 #
 # Usage:
 #   bin/build.sh                    # Run all generation steps
-#   bin/build.sh generate-md        # Only regenerate profile .md files
+#   bin/build.sh generate-md        # Regenerate profile .md files and the README beta block
 #   bin/build.sh generate-readme    # Only update README.md changelog
 #   bin/build.sh --help             # Show this message
 # =============================================================================
@@ -21,13 +21,13 @@ usage() {
     echo ""
     echo "Subcommands:"
     echo "  (none)           Run all generation steps (default)"
-    echo "  generate-md      Regenerate profile .md files from JSON"
+    echo "  generate-md      Regenerate profile .md files and the README beta block"
     echo "  generate-readme  Update README.md changelog from git log"
     echo "  --help, -h       Show this message"
     echo ""
     echo "Examples:"
     echo "  bin/build.sh                 # Full build"
-    echo "  bin/build.sh generate-md     # .md files only"
+    echo "  bin/build.sh generate-md     # .md files + README beta block"
     echo "  bin/build.sh generate-readme # README only"
 }
 

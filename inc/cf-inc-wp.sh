@@ -486,7 +486,7 @@ function cf_print_profile () {
         # Action parameters (v3)
         if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
             local HAS_AP
-            HAS_AP=$(jq '.rules[$i].action_parameters // {} | length' "$PROFILE_FILE")
+            HAS_AP=$(jq ".rules[$i].action_parameters // {} | length" "$PROFILE_FILE")
             if [[ "$HAS_AP" -gt 0 ]]; then
                 echo -e "  ${CDARKGRAY}Action Parameters:${NC}"
                 jq -r ".rules[$i].action_parameters" "$PROFILE_FILE" | while IFS= read -r line; do
