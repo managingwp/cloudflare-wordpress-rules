@@ -35,6 +35,8 @@ WordPress sites, plus helpers for API tokens and Turnstile widgets.
   deploys today.
 - [Profile management](guides/profile-management.md) — how rule changes move
   from beta to a numbered release.
+- [Incidents](incidents/index.md) — situations seen on real sites, with the
+  rule that stopped each one and the requests it must not block.
 
 ## Requirements at a glance
 

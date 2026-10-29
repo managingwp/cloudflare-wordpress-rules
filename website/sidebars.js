@@ -23,6 +23,11 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: 'Incidents',
+      items: ['incidents/index', 'incidents/2026-10-pagination-cache-busting-flood'],
+    },
+    {
+      type: 'category',
       label: 'Commands',
       items: ['commands/waf-rules', 'commands/token', 'commands/turnstile'],
     },
