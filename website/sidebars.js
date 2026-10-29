@@ -76,6 +76,7 @@ const sidebars = {
       items: [
         'reference/history/ruleset-migration-plan',
         'reference/history/legacy-v2-rules',
+        'reference/history/legacy-v2-expressions',
       ],
     },
   ],

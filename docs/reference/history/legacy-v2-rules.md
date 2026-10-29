@@ -6,14 +6,15 @@ description: The archived v2 rule sets kept for reference.
 # Legacy v2 rules
 
 Before the Rulesets API migration the rules were published as **v2** documents
-and JSON profiles. Those files are kept in the repository's
+and JSON profiles. The rule text now lives in
+[Legacy v2 expressions](legacy-v2-expressions.md), and the archived profiles
+stay in the repository's
 [`archive/`](https://github.com/managingwp/cloudflare-wordpress-rules/tree/main/archive)
 directory for historical reference only:
 
 | File | Contents |
 | --- | --- |
-| `archive/cloudflare-waf-wordpress.md` | Rules V2 document (R1/R2 expressions for the Firewall Rules API) |
-| `archive/cloudflare-waf-wordpressv1.md` | The original V1 rule document |
+| [`legacy-v2-expressions.md`](legacy-v2-expressions.md) | The full V1 and V2 rule text, moved out of `archive/` |
 | `archive/mwp-rules-v1.json` | v1 profile example |
 | `archive/mwp-rules-v2.json` | v2 profile with the deprecated `priority` field |
 | `archive/mwp-rules-v2-events.json` | v2 profile with event-calendar bot blocking |
