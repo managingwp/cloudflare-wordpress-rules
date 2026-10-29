@@ -1916,8 +1916,13 @@ _cf_set_settings () {
     '{ "value": "'"$VALUE"'" }')        
 	cf_api "PATCH" "/client/v4/zones/${CF_ZONE_ID}/settings/${SETTING}" "${EXTRA[@]}"
 	if [[ $CURL_EXIT_CODE == "200" ]]; then
-		_success "Success from API: $CURL_EXIT_CODE - $API_OUTPUT"
-		echo "Completed setting $SETTING to $VALUE successfully"
+		# Report the change, not the API envelope: the body is noise here.
+		local SETTING_LABEL=${CF_SETTINGS[$SETTING]:-$SETTING}
+		local DISPLAY_VALUE=$VALUE
+		if [[ $SETTING == "challenge_ttl" && "$VALUE" =~ ^[0-9]+$ ]]; then
+			DISPLAY_VALUE="$VALUE ($(_convert_seconds "$VALUE"))"
+		fi
+		_success "${SETTING_LABEL} set to ${DISPLAY_VALUE}"
 		return 0
 	else		
 		return 1

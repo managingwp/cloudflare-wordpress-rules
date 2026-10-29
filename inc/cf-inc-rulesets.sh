@@ -164,7 +164,8 @@ function cf_ruleset_get_entrypoint () {
 # -- cf_ruleset_create_entrypoint $ZONE_ID $RULES_JSON [$NAME]
 # -- Create the phase entry point ruleset with initial rules.
 # -- If no name is provided, defaults to "Cloudflare WordPress Rules".
-# -- Returns: new ruleset ID via stdout
+# -- Sets: CF_CREATED_RULESET_ID, CF_CREATED_RULESET_JSON (the API body)
+# -- Returns: 0 on success, 1 on failure (never prints data on stdout)
 # =====================================
 cf_ruleset_functions["cf_ruleset_create_entrypoint"]="Create phase entry point ruleset"
 function cf_ruleset_create_entrypoint () {
@@ -202,10 +203,11 @@ function cf_ruleset_create_entrypoint () {
         -d "$POST_DATA"
     
     if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
-        local NEW_ID
-        NEW_ID=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.id')
-        _success "Created entry point ruleset: $NEW_ID"
-        echo "$NEW_ID"
+        local RULE_COUNT
+        CF_CREATED_RULESET_JSON=$RULESET_API_OUTPUT
+        CF_CREATED_RULESET_ID=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '.result.id // empty')
+        RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+        _success "Created entry point ruleset $CF_CREATED_RULESET_ID with ${RULE_COUNT} rule(s)"
         return 0
     else
         _error "Failed to create entry point ruleset (HTTP $RULESET_CURL_EXIT_CODE)"
@@ -235,7 +237,7 @@ function _cf_ruleset_add_positions () {
 # -- Replace all rules in a ruleset (bulk PUT operation).
 # -- CAUTION: This replaces ALL existing rules. Include existing rule IDs
 # -- in the rules array if you want to preserve them.
-# -- Returns: updated ruleset JSON via stdout
+# -- Sets: RULESET_API_OUTPUT to the updated ruleset (never printed on stdout)
 # =====================================
 cf_ruleset_functions["cf_ruleset_replace_all_rules"]="Replace all rules in a ruleset"
 function cf_ruleset_replace_all_rules () {
@@ -262,8 +264,9 @@ function cf_ruleset_replace_all_rules () {
         -d "$PUT_DATA"
     
     if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
-        _success "Replaced all rules in ruleset $RULESET_ID"
-        echo "$RULESET_API_OUTPUT"
+        local RULE_COUNT
+        RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+        _success "Replaced ${RULE_COUNT} rule(s) in ruleset $RULESET_ID"
         return 0
     else
         _error "Failed to replace rules in ruleset $RULESET_ID (HTTP $RULESET_CURL_EXIT_CODE)"
@@ -437,34 +440,53 @@ function _cf_ruleset_render_list () {
 }
 
 # =====================================
-# -- _cf_ruleset_render_table $DOMAIN_NAME $ZONE_ID
-# -- Compact aligned table: #, ACTION, ENABLED, RULE ID, DESCRIPTION.
+# -- _cf_ruleset_render_table $DOMAIN_NAME $ZONE_ID [$RESPONSE_JSON]
+# -- Compact aligned table: #, ACTION, ENABLED, RULE ID, UPDATED, DESCRIPTION.
+# -- RESPONSE_JSON defaults to the RULESET_API_OUTPUT global; pass it explicitly
+# -- when the caller holds a body that is no longer in the global.
+# -- An empty DOMAIN_NAME makes the header name the zone instead.
 # =====================================
 function _cf_ruleset_render_table () {
     local DOMAIN_NAME=$1
     local ZONE_ID=$2
+    local RESPONSE=${3:-${RULESET_API_OUTPUT:-}}
     local RULE_COUNT
-    RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+    RULE_COUNT=$(printf '%s' "$RESPONSE" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+    RULE_COUNT=${RULE_COUNT:-0}
 
     if [[ "$RULE_COUNT" -eq 0 ]]; then
         printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
-            "$DOMAIN_NAME" "$(cf_ruleset_phase_name)"
+            "${DOMAIN_NAME:-$ZONE_ID}" "$(cf_ruleset_phase_name)"
         return 0
     fi
 
-    printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
-    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
-        '"\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated // "?")"'
+    if [[ -n "$DOMAIN_NAME" ]]; then
+        printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    else
+        printf 'zone %s\n' "$ZONE_ID"
+    fi
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
+        "\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated | human_date)"
+    '
     printf '\n'
 
     {
-        printf '#\tACTION\tENABLED\tRULE ID\tDESCRIPTION\n'
-        printf '%s' "$RULESET_API_OUTPUT" | jq -r '
+        printf '#\tACTION\tENABLED\tRULE ID\tUPDATED\tDESCRIPTION\n'
+        printf '%s' "$RESPONSE" | jq -r '
+            def human_date:
+                if . == null or . == "" then "?"
+                else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+                end;
             (.result.rules // []) | to_entries[] | [
                 ((.key + 1) | tostring),
                 (.value.action // "?"),
                 (if .value.enabled == false then "no" else "yes" end),
                 (.value.id // ""),
+                (.value.last_updated | human_date),
                 (.value.description // "(no description)")
             ] | @tsv
         '
@@ -472,33 +494,50 @@ function _cf_ruleset_render_table () {
 }
 
 # =====================================
-# -- _cf_ruleset_render_long $DOMAIN_NAME $ZONE_ID
-# -- Detail block per rule: id, enabled, logging, parameters, expression.
+# -- _cf_ruleset_render_long $DOMAIN_NAME $ZONE_ID [$RESPONSE_JSON]
+# -- Detail block per rule: id, enabled, logging, updated, parameters,
+# -- expression. RESPONSE_JSON defaults to the RULESET_API_OUTPUT global.
 # =====================================
 function _cf_ruleset_render_long () {
     local DOMAIN_NAME=$1
     local ZONE_ID=$2
+    local RESPONSE=${3:-${RULESET_API_OUTPUT:-}}
     local RULE_COUNT
-    RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+    RULE_COUNT=$(printf '%s' "$RESPONSE" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+    RULE_COUNT=${RULE_COUNT:-0}
 
     if [[ "$RULE_COUNT" -eq 0 ]]; then
         printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
-            "$DOMAIN_NAME" "$(cf_ruleset_phase_name)"
+            "${DOMAIN_NAME:-$ZONE_ID}" "$(cf_ruleset_phase_name)"
         return 0
     fi
 
-    printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
-    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
-        '"\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated // "?")"'
+    if [[ -n "$DOMAIN_NAME" ]]; then
+        printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    else
+        printf 'zone %s\n' "$ZONE_ID"
+    fi
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
+        "\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated | human_date)"
+    '
     printf '\n'
 
-    printf '%s' "$RULESET_API_OUTPUT" | jq -r '
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
         (.result.rules // []) | to_entries[] |
         "#\(.key + 1)  \(.value.action // "?")\n" +
         "    \(.value.description // "(no description)")\n" +
         "    id:                \(.value.id // "")\n" +
         "    enabled:           \(if .value.enabled == false then "no" else "yes" end)\n" +
         "    logging:           \(if .value.logging.enabled == true then "enabled" else "disabled" end)\n" +
+        "    last_updated:      \(.value.last_updated | human_date)\n" +
         (if .value.action_parameters then "    action_parameters: \(.value.action_parameters | tojson)\n" else "" end) +
         "    expression:        \(.value.expression // "")\n" +
         "\n"
@@ -592,8 +631,12 @@ function cf_ruleset_get_rule () {
 # -- Get the existing entry point ruleset, or create a new one if none exists.
 # -- If RULES_JSON is provided and a new ruleset is created, those rules
 # -- will be included in the initial creation.
-# -- Returns: ruleset ID (via stdout)
-# -- Sets: GET_OR_CREATE_WAS_CREATED=1 if newly created
+# -- Sets globals (never prints data on stdout, so callers must not use a
+# -- command substitution — its subshell would discard these):
+# --   GET_OR_CREATE_RULESET_ID    the entry point ruleset ID
+# --   GET_OR_CREATE_RULESET_JSON  the API body for the existing/created ruleset
+# --   GET_OR_CREATE_WAS_CREATED   1 when the ruleset was just created, else 0
+# -- Returns: 0 on success, 1 on failure
 # =====================================
 cf_ruleset_functions["_cf_ruleset_get_or_create_entrypoint"]="Get or create entry point ruleset"
 function _cf_ruleset_get_or_create_entrypoint () {
@@ -602,33 +645,39 @@ function _cf_ruleset_get_or_create_entrypoint () {
     
     _debug "function:${FUNCNAME[0]} - Getting or creating entry point on zone $ZONE_ID"
     
+    # shellcheck disable=SC2034
+    GET_OR_CREATE_RULESET_ID=""
+    GET_OR_CREATE_RULESET_JSON=""
+    GET_OR_CREATE_WAS_CREATED=0
+    
     # Try to get existing entry point.
     # Redirect stdout to /dev/null: cf_ruleset_get_entrypoint echoes the full
     # API response JSON, but we only need the exit code + RULESET_API_OUTPUT global.
     cf_ruleset_get_entrypoint "$ZONE_ID" > /dev/null
     local GET_EXIT=$?
     if [[ $GET_EXIT -eq 0 ]]; then
-        # Entry point exists - extract ruleset ID from global variable
-        local RULESET_ID
-        RULESET_ID=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.id')
-        _debug "Existing entry point ruleset found: $RULESET_ID"
-        # shellcheck disable=SC2034
-        GET_OR_CREATE_WAS_CREATED=0
-        echo "$RULESET_ID"
+        # Entry point exists — snapshot the body before anything else writes it
+        GET_OR_CREATE_RULESET_JSON=$RULESET_API_OUTPUT
+        GET_OR_CREATE_RULESET_ID=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '.result.id // empty')
+        _debug "Existing entry point ruleset found: $GET_OR_CREATE_RULESET_ID"
         return 0
     fi
     
     if [[ $GET_EXIT -eq 1 ]]; then
         # 404 - not found, create a new one
         _debug "Entry point not found, creating new one"
-        local NEW_ID
-        NEW_ID=$(cf_ruleset_create_entrypoint "$ZONE_ID" "$RULES_JSON")
-        local CREATE_EXIT=$?
+        local CREATE_EXIT
+        if cf_ruleset_create_entrypoint "$ZONE_ID" "$RULES_JSON"; then
+            CREATE_EXIT=0
+        else
+            CREATE_EXIT=1
+        fi
         
         if [[ $CREATE_EXIT -eq 0 ]]; then
             # shellcheck disable=SC2034
             GET_OR_CREATE_WAS_CREATED=1
-            echo "$NEW_ID"
+            GET_OR_CREATE_RULESET_ID=$CF_CREATED_RULESET_ID
+            GET_OR_CREATE_RULESET_JSON=$CF_CREATED_RULESET_JSON
             return 0
         else
             _error "Failed to create entry point ruleset"
@@ -646,7 +695,8 @@ function _cf_ruleset_get_or_create_entrypoint () {
 # -- Apply a set of rules to a zone via the entry point ruleset.
 # -- This is the high-level function used by create-rules.
 # -- Uses get-or-create and replace-all in one step.
-# -- Returns: ruleset ID via stdout
+# -- Sets: CF_APPLIED_RULESET_ID on success
+# -- Returns: 0 on success, 1 on failure (never prints data on stdout)
 # =====================================
 cf_ruleset_functions["cf_ruleset_apply_profile"]="Apply rules to zone via entry point"
 function cf_ruleset_apply_profile () {
@@ -655,33 +705,45 @@ function cf_ruleset_apply_profile () {
     
     _debug "function:${FUNCNAME[0]} - Applying profile to zone $ZONE_ID"
     
-    local RULESET_ID
-    RULESET_ID=$(_cf_ruleset_get_or_create_entrypoint "$ZONE_ID" "$RULES_JSON")
-    local EP_EXIT=$?
-    
-    if [[ $EP_EXIT -ne 0 ]]; then
+    # Call the helper directly: a command substitution would run it in a
+    # subshell and discard the globals it reports back to us.
+    if ! _cf_ruleset_get_or_create_entrypoint "$ZONE_ID" "$RULES_JSON"; then
         _error "Could not obtain entry point ruleset for zone $ZONE_ID"
         return 1
     fi
     
+    local RULESET_ID=$GET_OR_CREATE_RULESET_ID
+    if [[ -z "$RULESET_ID" ]]; then
+        _error "Could not obtain entry point ruleset ID for zone $ZONE_ID"
+        return 1
+    fi
+    
+    # shellcheck disable=SC2034
+    CF_APPLIED_RULESET_ID=$RULESET_ID
+    
     # If it was newly created with rules already, we're done
-    if [[ $GET_OR_CREATE_WAS_CREATED -eq 1 ]] && [[ "$RULES_JSON" != "[]" ]]; then
-        _success "Entry point created with rules for zone $ZONE_ID"
-        echo "$RULESET_ID"
+    if [[ ${GET_OR_CREATE_WAS_CREATED:-0} -eq 1 ]] && [[ "$RULES_JSON" != "[]" ]]; then
+        _cf_ruleset_render_table "" "$ZONE_ID" "$GET_OR_CREATE_RULESET_JSON"
         return 0
     fi
     
     # Existing ruleset found — confirm replacement unless SKIP_CONFIRM is set
     if [[ "${SKIP_CONFIRM:-0}" -ne 1 ]]; then
         local existing_count new_count
-        existing_count=$(echo "$RULESET_API_OUTPUT" | jq '.result.rules | length // 0')
-        new_count=$(echo "$RULES_JSON" | jq 'length')
+        existing_count=$(printf '%s' "$GET_OR_CREATE_RULESET_JSON" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+        existing_count=${existing_count:-0}
+        new_count=$(printf '%s' "$RULES_JSON" | jq -r 'length' 2>/dev/null)
+        new_count=${new_count:-0}
         
-        echo ""
+        # Keep the whole interaction on stderr; the result table below is stdout.
+        echo "" >&2
         _warning "This zone already has ${existing_count} rule(s) in the entry point ruleset."
+        if [[ "$existing_count" -gt 0 ]]; then
+            _cf_ruleset_render_table "" "$ZONE_ID" "$GET_OR_CREATE_RULESET_JSON" >&2
+        fi
         _warning "The profile contains ${new_count} rule(s)."
         read -p "Replace all existing rules? [y/N]: " -n 1 -r
-        echo ""
+        echo "" >&2
         
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             _warning "Operation cancelled by user"
@@ -695,7 +757,9 @@ function cf_ruleset_apply_profile () {
         return 1
     fi
     
-    echo "$RULESET_ID"
+    # Show what is live now (the PUT response is still in RULESET_API_OUTPUT)
+    _cf_ruleset_render_table "" "$ZONE_ID"
+    
     return 0
 }
 
@@ -1045,10 +1109,13 @@ function cf_ruleset_add_rule_action () {
     _running2 "Adding rule to entry point on ${DOMAIN_NAME}/${ZONE_ID}"
     
     # Get or create entry point
-    local RULESET_ID
-    RULESET_ID=$(_cf_ruleset_get_or_create_entrypoint "$ZONE_ID" "[]")
-    if [[ -z "$RULESET_ID" ]]; then
+    if ! _cf_ruleset_get_or_create_entrypoint "$ZONE_ID" "[]"; then
         _error "Could not obtain entry point ruleset"
+        return 1
+    fi
+    local RULESET_ID=$GET_OR_CREATE_RULESET_ID
+    if [[ -z "$RULESET_ID" ]]; then
+        _error "Could not obtain entry point ruleset ID"
         return 1
     fi
     
@@ -1109,8 +1176,12 @@ function cf_ruleset_migrate_existing () {
         return 1
     fi
     
+    # Snapshot the Firewall Rules body: applying the converted profile below
+    # overwrites RULESET_API_OUTPUT with the new Rulesets response.
+    local FIREWALL_RULES_JSON=$RULESET_API_OUTPUT
+    
     local RULE_COUNT
-    RULE_COUNT=$(echo "$RULESET_API_OUTPUT" | jq -r '.result_info.total_count // 0')
+    RULE_COUNT=$(printf '%s' "$FIREWALL_RULES_JSON" | jq -r '.result_info.total_count // 0')
     
     if [[ $RULE_COUNT -eq 0 ]]; then
         _warning "No existing Firewall Rules found for $DOMAIN_NAME"
@@ -1121,12 +1192,12 @@ function cf_ruleset_migrate_existing () {
     
     # Print the rules being migrated
     echo ""
-    echo "$RULESET_API_OUTPUT" | jq -r '.result[] | "  \(.id) [\(.action)] \(.description)"'
+    printf '%s' "$FIREWALL_RULES_JSON" | jq -r '.result[] | "  \(.id) [\(.action)] \(.description)"'
     echo ""
     
     # 2. Convert old Firewall Rules to Rulesets API format
     local NEW_RULES
-    NEW_RULES=$(echo "$RULESET_API_OUTPUT" | jq -c '
+    NEW_RULES=$(printf '%s' "$FIREWALL_RULES_JSON" | jq -c '
         [
             .result[] | {
                 description: .description,
@@ -1165,9 +1236,9 @@ function cf_ruleset_migrate_existing () {
         _running2 "Deleting old Firewall Rules and Filters..."
         
         local RULE_IDS
-        RULE_IDS=$(echo "$RULESET_API_OUTPUT" | jq -r '.result[].id')
+        RULE_IDS=$(printf '%s' "$FIREWALL_RULES_JSON" | jq -r '.result[].id')
         local FILTER_IDS
-        FILTER_IDS=$(echo "$RULESET_API_OUTPUT" | jq -r '.result[].filter.id // empty')
+        FILTER_IDS=$(printf '%s' "$FIREWALL_RULES_JSON" | jq -r '.result[].filter.id // empty')
         
         for RULE_ID in $RULE_IDS; do
             _running3 "Deleting rule: $RULE_ID"

@@ -118,16 +118,23 @@ cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
 ```text
 $ cloudflare-wordpress-rules -d cannaessence.ch -c list-rules
 cannaessence.ch · 8e88ca76443f8e20af9c78042803b58d
-default · http_request_firewall_custom · 4 rules · version 12 · updated 2026-10-16T20:32:35Z
+default · http_request_firewall_custom · 4 rules · version 12 · updated 2026-10-16 20:32:35
 
-#  ACTION             ENABLED  RULE ID                           DESCRIPTION
-1  skip               yes      eb107ee2c59741a581214b3e359fffc5  R1V207 - Allow URI Query, URL, User Agents...
-2  block              yes      a8d7034442ea4b76aad7a48b5454dc38  R2V207 - Block URI Query, URL, User Agents...
-3  managed_challenge  yes      85d6b0bce6fa4445bc7d1a2ad87a913c  R3V207 - Managed Challenge /wp-admin...
-4  js_challenge       yes      df7e5f803cf845d7858ea7737b084691  R4V207 - Challenge Outside of GEO...
+#  ACTION             ENABLED  RULE ID                           UPDATED              DESCRIPTION
+1  skip               yes      eb107ee2c59741a581214b3e359fffc5  2026-10-16 20:32:35  R1V207 - Allow URI Query, URL, User Agents...
+2  block              yes      a8d7034442ea4b76aad7a48b5454dc38  2026-10-16 20:32:35  R2V207 - Block URI Query, URL, User Agents...
+3  managed_challenge  yes      85d6b0bce6fa4445bc7d1a2ad87a913c  2026-10-16 20:32:35  R3V207 - Managed Challenge /wp-admin...
+4  js_challenge       yes      df7e5f803cf845d7858ea7737b084691  2026-10-16 20:32:35  R4V207 - Challenge Outside of GEO...
 ```
 
-`--long` replaces the table with a detail block per rule: id, enabled state, logging, action parameters and the full expression. `--table-only` is a deprecated alias for the default table.
+`UPDATED` is the per-rule `last_updated` Cloudflare reports, shown in UTC as
+`YYYY-MM-DD HH:MM:SS` (`?` when a rule carries no timestamp); the summary line
+above the table shows the ruleset's own `last_updated` in the same format.
+Cloudflare does not expose a creation date for a rule.
+
+`--long` replaces the table with a detail block per rule: id, enabled state,
+logging, `last_updated`, action parameters and the full expression.
+`--table-only` is a deprecated alias for the default table.
 
 ### JSON
 
@@ -156,6 +163,24 @@ cloudflare-wordpress-rules -d cannaessence.ch -c list-rules --csv > rules.csv
 ### Raw
 
 `--raw` prints the Cloudflare entry point response unchanged, including its `success`, `errors` and `messages` envelope. Use it when debugging the API response itself.
+
+## Applying rules prints the same table
+
+`create-rules`, `update-rules` and `upgrade-default-rules` reuse the table above
+instead of dumping the API response:
+
+- **Before replacing** — the command prints `This zone already has N rule(s)`,
+  the existing rules table (count, ruleset `updated` line, per-rule `UPDATED`)
+  and `The profile contains N rule(s)`, all on stderr, then asks
+  `Replace all existing rules? [y/N]`.
+- **After applying** — the resulting rules table goes to stdout, preceded by a
+  counted success line such as `Replaced 4 rule(s) in ruleset <id>`. A newly
+  created entry point prints `Created entry point ruleset <id> with N rule(s)`.
+- **`-y` / `--yes`** skips the prompt and the existing-rules preview; the
+  resulting table still prints.
+
+Every request failure still exits non-zero and reports the Cloudflare error;
+stdout carries the table only.
 
 ## Profiles
 

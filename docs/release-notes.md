@@ -19,6 +19,25 @@ Unreleased rule changes live in `profiles/mwp-rules-beta.json` and are published
 on the [Beta rules page](reference/beta-rules.md). They are not part of a
 numbered release yet and need no version bump, tag or changelog entry.
 
+## What's New in v2.6.0
+
+- **Apply-profile reporting fix** — `create-rules`, `update-rules` and
+  `upgrade-default-rules` no longer report `This zone already has  rule(s)` with
+  a blank count. The count is read from the entry point response itself, and a
+  ruleset that was just created no longer triggers a replace prompt.
+- **Rules as tables, not JSON** — before the replace prompt the command prints
+  the zone's existing rules as a counted table, and after applying it prints the
+  resulting rules the same way. The raw API body and the bare ruleset ID are no
+  longer printed.
+- **Dated output** — the default table gains a per-rule `UPDATED` column (UTC
+  `YYYY-MM-DD HH:MM:SS`) and the summary line shows the ruleset's `last_updated`
+  in the same form; `--long` prints a `last_updated:` line per rule.
+- **Settings success lines** — `set-settings` reports the change it made, such as
+  `Challenge TTL set to 604800 (7d 0h 0m 0s)`, instead of echoing the PATCH body.
+- **Offline tests** — `tests/test-apply-profile.sh` covers the new-zone,
+  accept, decline, `--yes` and empty-ruleset paths without credentials;
+  `tests/test-list-rules-output.sh` asserts the `UPDATED` column.
+
 ## What's New in v2.5.1
 
 - **Release notifications** — a new [Release notifications](getting-started/release-notifications.md)
@@ -60,17 +79,4 @@ numbered release yet and need no version bump, tag or changelog entry.
 - **Offline tests** — `tests/test-list-rules-output.sh` covers every output
   format, plus docs-site and generator layout/parity checks. No credentials are
   required for any of them.
-
-## What's New in v2.4.3
-
-- **`print-profile` fix** — the v3 Action Parameters block renders again; the jq
-  filter no longer fails with `$i is not defined`.
-- **Offline tests** — `tests/test-print-profile.sh` and
-  `tests/test-beta-readme.sh` run without credentials.
-- **Beta rules at the top** — the generated **Beta Rules (Staging)** section is
-  refreshed by `bin/build.sh generate-md`.
-- **Beta-first workflow** — `AGENTS.md` documents the beta channel, the
-  numbered-release promotion path, and the release-notes contract.
-- **Beta: Wordfence 2FA** — the login/2FA allow-through in the beta skip rule is
-  scoped to Wordfence 2FA actions.
 
