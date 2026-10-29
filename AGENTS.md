@@ -131,6 +131,16 @@ A rules release does not imply a repository release, and a repository release do
 * You can specify a config file using --config flag or CF_CONFIG_FILE environment variable.
 * Generate a single line git commit for any changes you make.
 
+## Client Confidentiality in Documentation
+
+Never write a client or prospect domain, hostname, site title or internal host label into `docs/`, `README.md`, `CHANGELOG.md`, profile JSON, generator presets or commit messages. Incident records are written from real work, which is exactly why they leak: the site is the story.
+
+* **Use placeholders.** `site-a`, `site-b` — the closed set documented in `docs/reference/incident-schema.md` — and `example.com` for illustrative URLs.
+* **Keep the mapping private.** The real domain-to-placeholder mapping belongs in `zones.txt` (gitignored) or the private tracker, never in the repository.
+* **Third-party infrastructure stays.** ASNs, provider address ranges and user-agent strings are safe to publish: they identify the source of an attack, not the client.
+* **Brand names are review-level.** `tests/test-incidents.sh` sweeps incident records for hostnames, but a bare site title cannot be detected generically, so read the record before committing it.
+* **Commit messages count.** `docs: note the site-a wp-login loop`, never the real domain.
+
 ## Documentation Files (docs/)
 
 The `docs/` folder is the documentation site's content directory:
@@ -154,3 +164,11 @@ The `docs/` folder is the documentation site's content directory:
 - **`docs/release-notes.md`** — Hand-written release notes; **`docs/changelog.md`** — generated commit log.
 
 - **`docs/tools/rule-generator.md`** — The client-side rule generator served at `/generator/`: presets, options, Free-plan limits, output formats and upgrade semantics.
+
+- **`docs/incidents/`** — The incident registry: one record per situation observed on a real site, anonymised to a `site-a`-style placeholder, plus the `index.md` table that lists them.
+
+- **`docs/reference/incident-schema.md`** — The incident record contract: required front-matter fields, allowed values, the fixed body sections and the redaction rules.
+
+- **`docs/guides/tracking-parameters.md`** — Why blocking on `trk=`, `fbclid`, `gclid`, `msclkid` or `utm_*` blocks real visitors, and what to match instead.
+
+- **`docs/contributing/incident-template.md`** — Copy-paste skeleton for a new incident record.

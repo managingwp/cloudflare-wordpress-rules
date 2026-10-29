@@ -36,6 +36,7 @@ const sidebars = {
       label: 'Reference',
       items: [
         'reference/profile-format',
+        'reference/incident-schema',
         'reference/beta-rules',
         'reference/stable-rules',
         'release-notes',
@@ -60,6 +61,7 @@ const sidebars = {
       items: [
         'contributing/development',
         'contributing/docs-site',
+        'contributing/incident-template',
         'contributing/roadmap',
       ],
     },

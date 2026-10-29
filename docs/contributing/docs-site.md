@@ -16,6 +16,7 @@ docs/                  documentation content (Markdown)
   getting-started/
   guides/
   commands/
+  incidents/           incident registry: one record per situation
   reference/
     cloudflare-rulesets/
     history/
@@ -94,3 +95,20 @@ If the repository is renamed or a custom domain is added, update `url` and
 2. Add its doc ID to `website/sidebars.js`.
 3. Link it from a related page using a relative `.md` link.
 4. Run `npm run build` in `website/` before committing.
+
+## Incident records
+
+Pages under `docs/incidents/` are **content, not code**: adding or editing one
+does not bump `VERSION`, does not renumber rules, and does not imply a rules
+release. They are published by the docs workflow on the next push to `main`.
+
+Two checks cover them:
+
+```bash
+bash tests/test-incidents.sh    # schema, placeholders, section order, domains
+bash tests/test-docs-site.sh    # front matter, sidebar membership, links
+```
+
+The record format and the anonymisation rule are in
+[the incident schema](../reference/incident-schema.md); the client-domain rule
+is in `AGENTS.md` under **Client Confidentiality in Documentation**.
