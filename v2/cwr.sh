@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# A script to create Cloudflare WAF rules
+# cwr.sh — Cloudflare WordPress Rules (v2)
+#
+# Core WAF and profile commands for a Cloudflare zone, in one file, with all
+# human output going through the vendored bash-ui library.
+#
+#   cwr.sh -d example.com -c create-rules default
+#   cwr.sh create-rules default -d example.com
+#
+# stdout carries data only (list-rules --json/--csv/--raw, print-profile).
 # =============================================================================
 
 # ==================================
@@ -17,7 +25,46 @@ TABLE_ONLY="0"
 LIST_FORMAT="table"
 LIST_LONG="0"
 LIST_DATA_MODE="0"
-export PROFILE_DIR="${REPO_DIR}/profiles"
+export PROFILE_DIR="${PROFILE_DIR:-${CWR_PROFILE_DIR:-${REPO_DIR}/profiles}}"
+
+# ==================================
+# -- bash-ui (vendored at the repo root)
+# ==================================
+# $BASH_UI wins, otherwise the nearest vendor/bash-ui/ui.sh at or above this
+# script. The stub keeps cwr.sh usable when the library is missing.
+_ui_lib=${BASH_UI:-}
+if [[ -z $_ui_lib ]]; then
+	_ui_dir=$SCRIPT_DIR
+	while [[ $_ui_dir != '/' && $_ui_dir != '.' ]]; do
+		if [[ -r $_ui_dir/vendor/bash-ui/ui.sh ]]; then
+			_ui_lib=$_ui_dir/vendor/bash-ui/ui.sh
+			break
+		fi
+		_ui_dir=$(dirname "$_ui_dir")
+	done
+fi
+# shellcheck source=/dev/null
+if [[ -n $_ui_lib ]]; then
+	source "$_ui_lib"
+fi
+if ! command -v ui_ok >/dev/null 2>&1; then
+	ui_ok() { printf 'OK: %s\n' "$*" >&2; }
+	ui_warn() { printf 'WARN: %s\n' "$*" >&2; }
+	ui_err() { printf 'ERR: %s\n' "$*" >&2; }
+	ui_die() { printf 'ERR: %s\n' "$*" >&2; exit "${2:-1}"; }
+	ui_step() { printf '> %s\n' "$*" >&2; }
+	ui_info() { printf '%s\n' "$*" >&2; }
+	ui_section() { printf '== %s ==\n' "$*" >&2; }
+	ui_header() { printf '== %s ==\n' "${1:-}" >&2; }
+	ui_kv() { printf '  %-14s %s\n' "${1:-}" "${2:-}" >&2; }
+	ui_list() { printf '  - %s\n' "$@" >&2; }
+	ui_hr() { printf '%s\n' '----------------------------------------' >&2; }
+	ui_style() { shift; printf '%s' "$*"; }
+	ui_confirm() { if [[ ${UI_YES:-0} == 1 || ${2:-n} == y ]]; then return 0; fi; return 1; }
+	ui_debug() { :; }
+	ui_summary() { :; }
+fi
+UI_APP_NAME="cwr"
 
 # ==================================
 # -- Include cf-inc files
@@ -30,119 +77,72 @@ source "$REPO_DIR/inc/cf-inc-rulesets.sh"
 # cf-inc-old.sh was archived in Phase 7 — it contained only the unused CF_PROTECT_WP function
 
 # ==================================
+# -- Output layer
+# ==================================
+# inc/cf-inc.sh still defines the v1 message helpers; these definitions win
+# because they come after the includes. Every one of them now goes to stderr,
+# so stdout stays data-only.
+_error() { ui_err "$*"; }
+_warning() { ui_warn "$*"; }
+_success() { ui_ok "$*"; }
+_running() { ui_step "$*"; }
+_running2() { ui_info "$*"; }
+_running3() { ui_step "$*"; }
+_creating() { ui_step "$*"; }
+_separator() { ui_hr; }
+_dryrun() { ui_info "DRYRUN: $*"; }
+_debug() { ui_debug "$*"; }
+
+# ==================================
 # -- usage
 # ==================================
 usage () {
-	local CBOLD=$(tput bold)
-	local CUNDERLINE=$(tput smul)
-	
-	echo ""
-	echo -e "${CBOLD}${CCYAN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
-	echo -e "${CBOLD}${CCYAN}║${NC}  ${CBOLD}Cloudflare WordPress Rules${NC} - Manage WAF rules across zones                  ${CBOLD}${CCYAN}║${NC}"
-	echo -e "${CBOLD}${CCYAN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
-	echo ""
-	echo -e "${CBOLD}${CYELLOW}USAGE${NC}"
-	echo -e "  ${CGRAY}$SCRIPT_NAME${NC} ${CGREEN}-d${NC} <domain> ${CGREEN}-c${NC} <command> [options]"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}RULE COMMANDS${NC}"
-	echo -e "  ${CGREEN}create-rules${NC} <profile>          Create rules on domain using profile"
-	echo -e "  ${CGREEN}update-rules${NC} <profile>          Update rules on domain using profile"
-	echo -e "  ${CGREEN}upgrade-default-rules${NC}           Upgrade MWP default rules on domain"
-	echo -e "  ${CGREEN}list-rules${NC}                      List rules on domain"
-	echo -e "  ${CGREEN}delete-rule${NC} <id>                Delete specific rule by ID"
-	echo -e "  ${CGREEN}delete-rules${NC}                    Delete all rules on domain"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}PROFILE COMMANDS${NC}"
-	echo -e "  ${CGREEN}list-profiles${NC}                   List available rule profiles"
-	echo -e "  ${CGREEN}print-profile${NC} <profile>         Print rules from profile"
-	echo -e "  ${CGREEN}validate-profile${NC} <profile>      Validate profile JSON syntax"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}FILTER COMMANDS${NC} ${CRED}(DEPRECATED since 2025-06-15)${NC}"
-	echo -e "  ${CDARKGRAY}list-filters${NC}                    List filters on domain"
-	echo -e "  ${CDARKGRAY}get-filter${NC} <id>                 Get specific filter by ID"
-	echo -e "  ${CDARKGRAY}delete-filter${NC} <id>              Delete specific filter by ID"
-	echo -e "  ${CDARKGRAY}delete-filters${NC}                  Delete all filters on domain"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}RULESET COMMANDS${NC}"
-	echo -e "  ${CGREEN}list-rulesets${NC}                   List rulesets on domain"
-	echo -e "  ${CGREEN}get-ruleset${NC} <id>                Get specific ruleset by ID"
-	echo -e "  ${CGREEN}get-ruleset-fw-custom${NC}           Get http_request_firewall_custom ruleset"
-	echo -e "  ${CGREEN}ruleset-get-entrypoint${NC}          Get the WAF custom rules entry point"
-	echo -e "  ${CGREEN}ruleset-add-rule${NC} <json>         Add a single rule to the entry point"
-	echo -e "  ${CGREEN}ruleset-update-rule${NC} <id> <json> Update a single rule in the entry point"
-	echo -e "  ${CGREEN}ruleset-delete-rule${NC} <id>        Delete a single rule from the entry point"
-	echo -e "  ${CGREEN}migrate-to-rulesets${NC} [--delete-old]  Migrate old Firewall Rules to Rulesets API"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}SETTINGS COMMANDS${NC}"
-	echo -e "  ${CGREEN}get-settings${NC}                    Get security settings on domain"
-	echo -e "  ${CGREEN}set-settings${NC} <setting> <value>  Set security setting"
-	echo -e "    ${CDARKGRAY}Settings: security_level, challenge_ttl, browser_integrity_check, always_use_https${NC}"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}AUTH COMMANDS${NC}"
-	echo -e "  ${CGREEN}list-auth-profiles${NC}              List available authentication profiles"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}OPTIONS${NC}"
-	echo -e "  ${CCYAN}-d${NC}, ${CCYAN}--domain${NC} <domain>         Domain or full URL, normalized to domain (can be used multiple times)"
-	echo -e "  ${CCYAN}-zf${NC}, ${CCYAN}--zones-file${NC} <file>      Load zones from file (one per line)"
-	echo -e "  ${CCYAN}-y${NC}, ${CCYAN}--yes${NC}                     Skip confirmation prompt for multi-zone ops"
-	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
-    echo -e "  ${CCYAN}--cf-profile${NC} <name>            Cloudflare auth profile from .cloudflare"
-    echo -e "  ${CDARKGRAY}--cf-auth-profile${NC} <name>      Alias for --cf-profile"
-    echo -e "  ${CCYAN}--config${NC} <file>                Credentials file instead of \$HOME/.cloudflare"
-    echo -e "  ${CCYAN}--challenge-ttl${NC} <seconds>       Challenge Passage TTL (bypasses interactive prompt)"
-	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
-    echo -e "  ${CCYAN}--json${NC}                          list-rules: one compact JSON object per zone"
-    echo -e "  ${CCYAN}--csv${NC}                           list-rules: CSV rows including expressions"
-    echo -e "  ${CCYAN}--raw${NC}                           list-rules: unmodified entry point response"
-    echo -e "  ${CCYAN}--long${NC}                          list-rules: detailed block per rule"
-    echo -e "  ${CDARKGRAY}--table-only${NC}                    DEPRECATED: alias for the default table"
-	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
-	echo -e "  ${CCYAN}-h${NC}, ${CCYAN}--help${NC}                    Show this help and exit"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}EXAMPLES${NC}"
-	echo -e "  ${CDARKGRAY}# Single domain${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default"
-    echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default ${CCYAN}--cf-profile${NC} PROD"
-	echo ""
-	echo -e "  ${CDARKGRAY}# List rules as JSON or CSV${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} list-rules ${CCYAN}--json"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} list-rules ${CCYAN}--csv"
-	echo ""
-	echo -e "  ${CDARKGRAY}# Multiple domains${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} site1.com ${CCYAN}-d${NC} site2.com ${CCYAN}-c${NC} create-rules default"
-	echo ""
-	echo -e "  ${CDARKGRAY}# With Challenge TTL (bypasses interactive prompt)${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default ${CCYAN}--challenge-ttl${NC} 3600"
-	echo ""
-	echo -e "  ${CDARKGRAY}# Using zones file${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-zf${NC} zones.txt ${CCYAN}-c${NC} create-rules default"
-	echo ""
-	echo -e "  ${CDARKGRAY}# Skip confirmation for batch operations${NC}"
-	echo -e "  $SCRIPT_NAME ${CCYAN}-zf${NC} zones.txt ${CCYAN}-c${NC} delete-rules ${CCYAN}-y${NC}"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}AUTHENTICATION${NC}"
-	echo -e "  Place credentials in ${CUNDERLINE}\$HOME/.cloudflare${NC}"
-	echo -e "  Supports multiple profiles: ${CGRAY}CF_TOKEN_PROD${NC}, ${CGRAY}CF_ACCOUNT_DEV/CF_KEY_DEV${NC}, etc."
-	echo -e "  Run '${CGREEN}list-auth-profiles${NC}' to see available profiles"
-	echo -e "  See ${CGRAY}.cloudflare.example${NC} for configuration format"
-	echo ""
-	
-	echo -e "${CBOLD}${CYELLOW}MULTI-ZONE SUPPORT${NC} ${CDARKGRAY}(v2.2.0+)${NC}"
-	echo -e "  Commands supporting multi-zone: ${CGREEN}create-rules${NC}, ${CGREEN}update-rules${NC}, ${CGREEN}list-rules${NC},"
-	echo -e "  ${CGREEN}delete-rules${NC}, ${CGREEN}get-settings${NC}, ${CGREEN}set-settings${NC}"
-	echo ""
-	
-	echo -e "${CDARKGRAY}Version: ${VERSION}${NC}"
-	echo ""
+	export UI_KV_WIDTH=30
+
+	ui_header "Cloudflare WordPress Rules" "Manage WAF rules across zones"
+	ui_section "Usage"
+	ui_list "$SCRIPT_NAME -d <domain> -c <command> [options]" "$SCRIPT_NAME <command> [options] -d <domain>"
+
+	ui_section "Rule commands"
+	ui_kv "create-rules <profile>" "Create rules on a zone from a profile"
+	ui_kv "update-rules <profile>" "Update rules on a zone from a profile"
+	ui_kv "upgrade-default-rules" "Upgrade the MWP default rules on a zone"
+	ui_kv "list-rules" "List the zone's WAF custom rules"
+	ui_kv "delete-rule <id>" "Delete one rule by ID"
+	ui_kv "delete-rules" "Delete every rule on a zone"
+
+	ui_section "Profile commands"
+	ui_kv "list-profiles" "List the available rule profiles"
+	ui_kv "print-profile <profile>" "Print the rules in a profile"
+	ui_kv "validate-profile <profile>" "Validate a profile's JSON and expressions"
+
+	ui_section "Options"
+	ui_kv "-d, --domain <domain>" "Zone, or a full URL normalised to one; repeatable"
+	ui_kv "-zf, --zones-file <file>" "Read zones from a file, one per line"
+	ui_kv "-c, --command <command>" "Command to run (optional with the positional form)"
+	ui_kv "-y, --yes" "Skip the multi-zone confirmation prompt"
+	ui_kv "--config <file>" "Credentials file instead of \$HOME/.cloudflare"
+	ui_kv "--cf-profile <name>" "Named credential profile inside that file"
+	ui_kv "--challenge-ttl <seconds>" "Set Challenge Passage at or below this TTL"
+	ui_kv "--json | --csv | --raw" "list-rules output: JSON, CSV, or the raw response"
+	ui_kv "--long" "list-rules: detailed block per rule"
+	ui_kv "--debug" "Verbose diagnostics on stderr"
+	ui_kv "--debug-json" "Diagnostics plus JSON bodies on stderr"
+	ui_kv "-h, --help" "Show this help and exit"
+
+	ui_section "Examples"
+	ui_list "$SCRIPT_NAME -d example.com -c create-rules default" \
+		"$SCRIPT_NAME create-rules default -d example.com" \
+		"$SCRIPT_NAME -d example.com -c create-rules default --challenge-ttl 3600" \
+		"$SCRIPT_NAME -d example.com -c list-rules --json" \
+		"$SCRIPT_NAME -d site-a.com -d site-b.com -c create-rules default" \
+		"$SCRIPT_NAME -zf zones.txt -c delete-rules -y"
+
+	ui_section "Authentication"
+	ui_kv "Credentials" "\$HOME/.cloudflare; see .cloudflare.example"
+	ui_kv "Profiles" "CF_TOKEN_PROD, CF_ACCOUNT_DEV/CF_KEY_DEV, and so on"
+
+	ui_kv "Version" "$VERSION"
 }
 
 # =============================================================================
@@ -213,12 +213,14 @@ TABLE_ONLY_EXPLICIT=0
 		;;
         --debug)
         # shellcheck disable=SC2034
-        DEBUG=1    
-        shift # past argument        
+        DEBUG=1
+        UI_VERBOSE=1
+        shift # past argument
         ;;
         --debug-json)
         # shellcheck disable=SC2034
         DEBUG=1
+        UI_VERBOSE=1
         # shellcheck disable=SC2034
         DEBUG_JSON=1
         shift # past argument
@@ -267,6 +269,22 @@ fi
 
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
+# ==================================
+# -- Commands
+# ==================================
+# One list drives the positional form, the whitelist and the help text.
+CORE_COMMANDS="create-rules update-rules upgrade-default-rules list-rules delete-rule delete-rules list-profiles print-profile validate-profile"
+COMMANDS_NO_AUTH="list-profiles print-profile validate-profile"
+COMMANDS_REQUIRING_AUTH="create-rules update-rules upgrade-default-rules list-rules delete-rule delete-rules"
+
+# Positional form: `cwr.sh create-rules default -d example.com`
+if [[ -z ${CMD:-} && -n ${1:-} ]]; then
+    if [[ " $CORE_COMMANDS " == *" $1 "* ]]; then
+        CMD=$1
+        shift
+    fi
+fi
+
 # -- Load zones from file if specified
 if [[ -n "$ZONES_FILE" ]]; then
     _load_zones_file "$ZONES_FILE"
@@ -293,11 +311,7 @@ if [[ -z $CMD ]]; then
 fi
 
 # -- Validate command and required arguments before authentication
-COMMANDS_NO_AUTH=("list-profiles" "print-profile" "list-auth-profiles" "validate-profile")
-COMMANDS_REQUIRING_AUTH=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rule" "delete-rules" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings" "ruleset-get-entrypoint" "ruleset-add-rule" "ruleset-update-rule" "ruleset-delete-rule" "migrate-to-rulesets")
-ALL_COMMANDS=("${COMMANDS_NO_AUTH[@]}" "${COMMANDS_REQUIRING_AUTH[@]}")
-
-if [[ ! " ${ALL_COMMANDS[*]} " =~ " ${CMD} " ]]; then
+if [[ ! " $CORE_COMMANDS " == *" ${CMD} "* ]]; then
     usage
     _error "Unknown command: $CMD"
     exit 1
@@ -312,55 +326,31 @@ fi
 
 # -- Argument validation
 if [[ $CMD == "create-rules" || $CMD == "update-rules" ]]; then
-    if [[ -z $1 ]]; then
+    if [[ -z ${1:-} ]]; then
+        _error "No profile provided"
+        cf_list_profiles
+        exit 1
+    fi
+elif [[ $CMD == "print-profile" || $CMD == "validate-profile" ]]; then
+    if [[ -z ${1:-} ]]; then
         _error "No profile provided"
         cf_list_profiles
         exit 1
     fi
 elif [[ $CMD == "delete-rule" ]]; then
-    if [[ -z $1 ]]; then
+    if [[ -z ${1:-} ]]; then
         _error "No rule ID provided"
-        exit 1
-    fi
-elif [[ $CMD == "get-filter" || $CMD == "delete-filter" ]]; then
-    if [[ -z $1 ]]; then
-        usage
-        _error "No filter ID provided"
-        exit 1
-    fi
-elif [[ $CMD == "get-ruleset" ]]; then
-    if [[ -z $1 ]]; then
-        usage
-        _error "No ruleset ID provided"
-        exit 1
-    fi
-elif [[ $CMD == "ruleset-update-rule" || $CMD == "ruleset-delete-rule" ]]; then
-    if [[ -z $1 ]]; then
-        usage
-        _error "No rule ID provided"
-        exit 1
-    fi
-elif [[ $CMD == "ruleset-add-rule" ]]; then
-    if [[ -z $1 ]]; then
-        usage
-        _error "No rule JSON provided"
-        exit 1
-    fi
-elif [[ $CMD == "set-settings" ]]; then
-    if [[ -z $1 || -z $2 ]]; then
-        usage
-        _error "set-settings requires <setting> <value>"
         exit 1
     fi
 fi
 
 # -- Check if domain is required for this command
-COMMANDS_REQUIRING_DOMAIN=("create-rules" "update-rules" "upgrade-default-rules" "list-rules" "delete-rules" "delete-rule" "list-filters" "get-filter" "delete-filter" "delete-filters" "list-rulesets" "get-ruleset" "get-ruleset-fw-custom" "set-settings" "get-settings" "ruleset-get-entrypoint" "ruleset-add-rule" "ruleset-update-rule" "ruleset-delete-rule" "migrate-to-rulesets")
+COMMANDS_REQUIRING_DOMAIN="create-rules update-rules upgrade-default-rules list-rules delete-rules delete-rule"
 
 # -- Commands that support multi-zone operations
-COMMANDS_SUPPORTING_MULTIZONE=("create-rules" "update-rules" "list-rules" "delete-rules" "get-settings" "set-settings" "ruleset-get-entrypoint")
+COMMANDS_SUPPORTING_MULTIZONE="create-rules update-rules list-rules delete-rules"
 
-if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
+if [[ " $COMMANDS_REQUIRING_DOMAIN " == *" ${CMD} "* ]]; then
     # Check if we have at least one domain
     if [[ ${#DOMAINS[@]} -eq 0 ]]; then
         usage
@@ -375,7 +365,7 @@ if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
     MULTI_ZONE=0
     if [[ ${#DOMAINS[@]} -gt 1 ]]; then
         # Check if command supports multi-zone
-        if [[ ! " ${COMMANDS_SUPPORTING_MULTIZONE[*]} " =~ " ${CMD} " ]]; then
+        if [[ " $COMMANDS_SUPPORTING_MULTIZONE " != *" ${CMD} "* ]]; then
             _error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
             exit 1
         fi
@@ -406,23 +396,6 @@ elif [[ $CMD == "print-profile" ]]; then
     fi
     cf_print_profile "$PROFILE"
     exit $?
-elif [[ $CMD == "list-auth-profiles" ]]; then
-    # Use CONFIG_FILE if set via --config, otherwise use first positional arg or default
-    if [[ -z "$CONFIG_FILE" ]]; then
-        CONFIG_FILE="${1:-$HOME/.cloudflare}"
-    fi
-    # Make sure it's an absolute path
-    if [[ ! "$CONFIG_FILE" =~ ^/ ]]; then
-        if [[ -f "$CONFIG_FILE" ]]; then
-            CONFIG_FILE="$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")"
-        elif [[ -f "$HOME/$CONFIG_FILE" ]]; then
-            CONFIG_FILE="$HOME/$CONFIG_FILE"
-        elif [[ -f "./$CONFIG_FILE" ]]; then
-            CONFIG_FILE="$(pwd)/$CONFIG_FILE"
-        fi
-    fi
-    cf_auth_list_profiles "$CONFIG_FILE"
-    exit 0
 elif [[ $CMD == "validate-profile" ]]; then
     PROFILE=$1
     if [[ -z $PROFILE ]]; then
@@ -582,153 +555,6 @@ elif [[ $CMD == "delete-rule" ]]; then
     RULE_ID=$1
 	[[ $RULE_ID == "" ]] && _error "No rule ID provided" && exit 1
 	cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
-# =====================================
-# -- list-filters (DEPRECATED)
-# =====================================
-elif [[ $CMD == "list-filters" ]]; then
-    _warning "Filters API is deprecated since 2025-06-15. Use 'list-rules' instead (Rulesets API)."
-    cf_list_filters_action "$DOMAIN" "$ZONE_ID"
-# =====================================
-# -- get-filter (DEPRECATED)
-# =====================================
-elif [[ $CMD == "get-filter" ]]; then
-    _warning "Filters API is deprecated since 2025-06-15. Use 'ruleset-get-entrypoint' instead."
-    FILTER_ID=$1
-	_running2 "Getting filter ID $FILTER_ID"
-    if [[ -z $FILTER_ID ]]; then
-        usage
-        _error "No filter ID provided"
-        exit 1
-    else
-        CF_GET_FILTER "$ZONE_ID" "$FILTER_ID"
-    fi
-# =====================================
-# -- delete-filter (DEPRECATED)
-# =====================================
-elif [[ $CMD == "delete-filter" ]]; then
-    _warning "Filters API is deprecated since 2025-06-15. Rulesets API does not use separate filters."
-	FILTER_ID=$1
-    [[ $FILTER_ID == "" ]] && _error "No filter ID provided" && exit 1
-	cf_delete_filter_action "$DOMAIN" "$ZONE_ID" "$FILTER_ID"
-# =====================================
-# -- delete-filters (DEPRECATED)
-# =====================================
-elif [[ $CMD == "delete-filters" ]]; then
-    _warning "Filters API is deprecated since 2025-06-15. Rulesets API does not use separate filters."
-	cf_delete_filters_action "$DOMAIN" "$ZONE_ID"
-
-# =====================================
-# -- list-rulesets
-# =====================================
-elif [[ $CMD == "list-rulesets" ]]; then
-	_running2 "Listing rulesets"
-	cf_list_rulesets "$ZONE_ID"
-# =====================================
-# -- get-ruleset
-# =====================================
-elif [[ $CMD == "get-ruleset" ]]; then
-	RULESET_ID=$1
-	_running2 "Getting ruleset ID $RULESET_ID"
-	if [[ -z $RULESET_ID ]]; then
-		usage
-		_error "No ruleset ID provided"
-		exit 1
-	else
-		cf_get_ruleset "$ZONE_ID" "$RULESET_ID"
-	fi
-# =====================================
-# -- get-ruleset-fw-custom
-# =====================================
-elif [[ $CMD == "get-ruleset-fw-custom" ]]; then	
-	_running2 "Getting http_request_firewall_custom ruleset"
-	cf_get_ruleset_fw_custom "$ZONE_ID"	
-# =====================================
-# -- ruleset-get-entrypoint
-# =====================================
-elif [[ $CMD == "ruleset-get-entrypoint" ]]; then
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_get_entrypoint_action "\$DOMAIN" "\$ZONE_ID"
-    else
-        cf_ruleset_get_entrypoint_action "$DOMAIN" "$ZONE_ID"
-    fi
-# =====================================
-# -- ruleset-add-rule
-# =====================================
-elif [[ $CMD == "ruleset-add-rule" ]]; then
-    RULE_JSON=$1
-    POSITION_JSON=${2:-}
-    if [[ -z $RULE_JSON ]]; then
-        _error "No rule JSON provided"
-        exit 1
-    fi
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_add_rule_action "\$DOMAIN" "\$ZONE_ID" "$RULE_JSON" "$POSITION_JSON"
-    else
-        cf_ruleset_add_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_JSON" "$POSITION_JSON"
-    fi
-# =====================================
-# -- ruleset-update-rule
-# =====================================
-elif [[ $CMD == "ruleset-update-rule" ]]; then
-    RULE_ID=$1
-    RULE_JSON=$2
-    if [[ -z $RULE_ID ]]; then
-        _error "No rule ID provided"
-        exit 1
-    fi
-    if [[ -z $RULE_JSON ]]; then
-        _error "No rule JSON provided"
-        exit 1
-    fi
-    cf_ruleset_update_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID" "$RULE_JSON"
-# =====================================
-# -- ruleset-delete-rule
-# =====================================
-elif [[ $CMD == "ruleset-delete-rule" ]]; then
-    RULE_ID=$1
-    if [[ -z $RULE_ID ]]; then
-        _error "No rule ID provided"
-        exit 1
-    fi
-    cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
-# =====================================
-# -- migrate-to-rulesets
-# =====================================
-elif [[ $CMD == "migrate-to-rulesets" ]]; then
-    DELETE_OLD=0
-    if [[ "$1" == "--delete-old" ]]; then
-        DELETE_OLD=1
-        shift
-    fi
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_migrate_existing "\$DOMAIN" "\$ZONE_ID" "$DELETE_OLD"
-    else
-        cf_ruleset_migrate_existing "$DOMAIN" "$ZONE_ID" "$DELETE_OLD"
-    fi
-# ================
-# -- set-settings
-# ================
-elif [[ $CMD == "set-settings" ]]; then	# -- Run set settings
-	_running "  Running Set settings"
-	if [[ $MULTI_ZONE -eq 1 ]]; then
-	    _run_on_zones _cf_set_settings "\$ZONE_ID" "$@"
-	else
-	    _cf_set_settings "$ZONE_ID" "$@"
-	fi
-# ================
-# -- get-settings
-# ================
-elif [[ $CMD == "get-settings" ]]; then	
-	if [[ $MULTI_ZONE -eq 1 ]]; then
-	    _run_on_zones _cf_get_settings "\$ZONE_ID" "$@"
-	else
-	    _cf_get_settings "$ZONE_ID" "$@"
-	fi
-# =====================================
-# -- list-auth-profiles
-# =====================================
-elif [[ $CMD == "list-auth-profiles" ]]; then
-	cf_auth_list_profiles
 else
     usage
     _error "No command provided"
