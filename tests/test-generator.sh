@@ -146,6 +146,33 @@ assert_eq "theme preference key matches in boot script and module" \
 assert_contains "page states the client-side guarantee" \
     "No account credentials, no tracking" "$(cat "$HTML_FILE")"
 
+# -- versions manifest -----------------------------------------------
+echo ""
+echo -e "${BLUE}=== versions manifest ===${NC}"
+versions_file="$PROFILES_DIR/versions.json"
+assert_file "versions manifest is committed" "$versions_file"
+
+manifest_versions="$(jq -r '.versions[].value' "$versions_file" 2>/dev/null | sort)"
+profile_versions="$(for f in "$REPO_DIR"/profiles/mwp-rules-v*.json "$REPO_DIR"/profiles/mwp-rules-beta.json; do
+    basename "$f" .json | sed 's/^mwp-rules-//; s/^v//'
+done | sort)"
+assert_eq "manifest lists every release profile" "$profile_versions" "$manifest_versions"
+
+assert_eq "manifest names the current release" \
+    "$(jq -r '.rules[0].rule_version' "$REPO_DIR/profiles/default.json")" \
+    "$(jq -r '.current' "$versions_file")"
+
+assert_empty "every manifest entry carries rules" \
+    "$(jq -r '.versions[] | select((.rules | length) == 0) | .value' "$versions_file")"
+
+assert_empty "every manifest entry names a real profile file" \
+    "$(jq -r '.versions[] | select(.source | startswith("profiles/") | not) | .value' "$versions_file")"
+
+manifest_tmp="$(mktemp)"
+bash "$REPO_DIR/bin/generate-versions.sh" --out "$manifest_tmp" >/dev/null 2>&1
+assert_empty "regenerating the manifest is a no-op" "$(diff -q "$versions_file" "$manifest_tmp" 2>/dev/null || true)"
+rm -f "$manifest_tmp"
+
 # -- presets ---------------------------------------------------------
 echo ""
 echo -e "${BLUE}=== presets ===${NC}"
