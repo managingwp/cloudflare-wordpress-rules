@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =====================================================================
 # test-beta-readme.sh
-# Offline tests for the generated beta rules block at the top of README.md.
+# Offline tests for the generated beta rules publishing contract.
 #
 # Covers:
 #   * README beta markers — one ordered pair, below the H1
-#   * Placement — above the release notice and the README changelog
-#   * Generated block — matches the rendered beta profile
-#   * AGENTS.md — documents the beta-first policy
+#   * README pointer — short, links the docs beta page, above Quick start
+#   * docs/reference/beta-rules.md — matches the rendered beta profile
+#   * AGENTS.md — documents the beta-first and docs-site policy
 #
 # No Cloudflare API access or credentials required; does not modify files.
 #
@@ -24,6 +24,7 @@ README_FILE="$REPO_DIR/README.md"
 AGENTS_FILE="$REPO_DIR/AGENTS.md"
 BETA_JSON="$REPO_DIR/profiles/mwp-rules-beta.json"
 BETA_MD="$REPO_DIR/profiles/mwp-rules-beta.md"
+BETA_DOCS="$REPO_DIR/docs/reference/beta-rules.md"
 
 TEST_COUNT=0
 PASS_COUNT=0
@@ -53,7 +54,7 @@ assert_contains() {
     local description="$1" needle="$2" haystack="$3"
     ((TEST_COUNT++))
 
-    if printf '%s' "$haystack" | grep -qF "$needle"; then
+    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
         echo -e "${GREEN}✓ PASS${NC}: $description"
         ((PASS_COUNT++))
     else
@@ -73,6 +74,20 @@ assert_gt() {
     else
         echo -e "${RED}✗ FAIL${NC}: $description"
         echo -e "  expected line $actual to be greater than line $expected"
+        ((FAIL_COUNT++))
+    fi
+}
+
+assert_le() {
+    local description="$1" actual="$2" limit="$3"
+    ((TEST_COUNT++))
+
+    if [[ "$actual" =~ ^[0-9]+$ && "$actual" -le "$limit" ]]; then
+        echo -e "${GREEN}✓ PASS${NC}: $description ($actual <= $limit)"
+        ((PASS_COUNT++))
+    else
+        echo -e "${RED}✗ FAIL${NC}: $description"
+        echo -e "  expected $actual to be at most $limit"
         ((FAIL_COUNT++))
     fi
 }
@@ -106,40 +121,46 @@ expected_beta_body=$(awk '
 ' "$BETA_MD" | sed '/^$/d')
 
 actual_beta_body=$(awk '
-    /^### R[0-9]/ { inblock=1 }
-    /<!-- BETA-RULES-END -->/ { inblock=0 }
+    /<!-- RULES-START -->/ { inblock=1; next }
+    /<!-- RULES-END -->/   { inblock=0; next }
     inblock { print }
-' "$README_FILE" | sed '/^$/d')
+' "$BETA_DOCS" | sed '/^$/d')
 
 h1_line=$(line_of '# Cloudflare WordPress Rules' "$README_FILE")
 start_line=$(line_of '<!-- BETA-RULES-START -->' "$README_FILE")
 end_line=$(line_of '<!-- BETA-RULES-END -->' "$README_FILE")
-whats_new_line=$(line_of "## What's New in v2.4.0" "$README_FILE")
-changelog_line=$(line_of '<!--- CHANGELOG --->' "$README_FILE")
-agents_policy_line=$(grep -n '^## Beta Rules Are Always At The Top' "$AGENTS_FILE" | head -1 | cut -d: -f1)
-agents_dev_line=$(grep -n '^## Development Documentation' "$AGENTS_FILE" | head -1 | cut -d: -f1)
-rule_count=$(grep -c '^### R[0-9]' "$README_FILE")
+quick_start_line=$(line_of '## Quick start' "$README_FILE")
+pointer_lines=$(awk '
+    /<!-- BETA-RULES-START -->/ { inblock=1 }
+    /<!-- BETA-RULES-END -->/   { inblock=0 }
+    inblock { print }
+' "$README_FILE" | wc -l | tr -d ' ')
+rule_count=$(grep -c '^### R[0-9]' "$BETA_DOCS")
 expected_rule_count=$(jq '.rules | length' "$BETA_JSON")
 
-echo -e "${BLUE}=== README beta block ===${NC}"
+echo -e "${BLUE}=== README beta pointer ===${NC}"
 assert_eq "exactly one beta start marker" "1" "$(grep -cF '<!-- BETA-RULES-START -->' "$README_FILE")"
 assert_eq "exactly one beta end marker" "1" "$(grep -cF '<!-- BETA-RULES-END -->' "$README_FILE")"
 assert_gt "beta start marker is below the H1" "$start_line" "$h1_line"
 assert_gt "beta end marker follows the start marker" "$end_line" "$start_line"
-assert_gt "beta block is above the release notice" "$whats_new_line" "$start_line"
-assert_gt "beta block is above the README changelog" "$changelog_line" "$start_line"
-assert_contains "beta block has a staging heading" "## Beta Rules (Staging)" "$(cat "$README_FILE")"
-assert_contains "beta block has a rules heading" "### Rules Data" "$(cat "$README_FILE")"
-assert_eq "beta block rule count matches the profile" "$expected_rule_count" "$rule_count"
-assert_same_text "beta block body matches the rendered beta profile" "$expected_beta_body" "$actual_beta_body"
+assert_gt "beta pointer is above Quick start" "$quick_start_line" "$start_line"
+assert_le "beta pointer stays short" "$pointer_lines" 12
+assert_contains "beta pointer links the docs beta page" "reference/beta-rules" "$(cat "$README_FILE")"
+assert_contains "beta pointer names the beta profile" "profiles/mwp-rules-beta.json" "$(cat "$README_FILE")"
 
 echo ""
-echo -e "${BLUE}=== AGENTS.md beta policy ===${NC}"
+echo -e "${BLUE}=== docs beta page ===${NC}"
+assert_contains "beta page carries the RULES markers" "<!-- RULES-START -->" "$(cat "$BETA_DOCS")"
+assert_eq "beta page rule count matches the profile" "$expected_rule_count" "$rule_count"
+assert_same_text "beta page body matches the rendered beta profile" "$expected_beta_body" "$actual_beta_body"
+
+echo ""
+echo -e "${BLUE}=== AGENTS.md policy ===${NC}"
 assert_contains "AGENTS.md has the top beta policy" "## Beta Rules Are Always At The Top" "$(cat "$AGENTS_FILE")"
-assert_gt "Development Documentation is below the beta policy" "$agents_dev_line" "$agents_policy_line"
+assert_contains "AGENTS.md names the docs beta page" "docs/reference/beta-rules.md" "$(cat "$AGENTS_FILE")"
 assert_contains "AGENTS.md names the beta generator" "bin/build.sh generate-md" "$(cat "$AGENTS_FILE")"
 assert_contains "AGENTS.md guards VERSION" 'Do not bump `VERSION`' "$(cat "$AGENTS_FILE")"
-assert_contains "AGENTS.md names CHANGELOG.md" "CHANGELOG.md" "$(cat "$AGENTS_FILE")"
+assert_contains "AGENTS.md names the release notes page" "docs/release-notes.md" "$(cat "$AGENTS_FILE")"
 assert_contains "AGENTS.md names the changelog generator" "bin/build.sh generate-readme" "$(cat "$AGENTS_FILE")"
 
 echo ""

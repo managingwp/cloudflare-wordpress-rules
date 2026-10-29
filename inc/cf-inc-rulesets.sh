@@ -376,57 +376,186 @@ function cf_ruleset_delete_rule () {
 # =============================================================================
 
 # =====================================
-# -- cf_ruleset_list_rules $ZONE_ID [$TABLE_ONLY]
+# -- _cf_ruleset_render_list $DOMAIN_NAME $ZONE_ID
+# -- Render the phase entry point held in RULESET_API_OUTPUT.
+# -- Globals: LIST_FORMAT (table|json|csv|raw), LIST_LONG (0|1),
+# -- CF_CSV_HEADER_PRINTED (set once the CSV header has been written).
+# -- Returns: 0 on success, 1 when the response cannot be rendered.
+# =====================================
+cf_ruleset_functions["_cf_ruleset_render_list"]="Render entry point rules as table/json/csv/raw"
+function _cf_ruleset_render_list () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local FORMAT=${LIST_FORMAT:-table}
+    local LONG=${LIST_LONG:-0}
+    local RESPONSE=${RULESET_API_OUTPUT:-}
+
+    if ! printf '%s' "$RESPONSE" | jq -e . >/dev/null 2>&1; then
+        _error "Could not parse the ruleset response for ${DOMAIN_NAME}"
+        return 1
+    fi
+
+    case "$FORMAT" in
+        raw)
+            # The unmodified API body, exactly as Cloudflare returned it.
+            printf '%s\n' "$RESPONSE"
+            ;;
+        json)
+            # One compact object per zone so multi-zone output is NDJSON.
+            printf '%s' "$RESPONSE" | jq -c \
+                --arg domain "$DOMAIN_NAME" \
+                --arg zone_id "$ZONE_ID" \
+                '{
+                    domain: $domain,
+                    zone_id: $zone_id,
+                    ruleset: (if .result then {
+                        id: .result.id,
+                        name: .result.name,
+                        phase: .result.phase,
+                        version: .result.version,
+                        last_updated: .result.last_updated,
+                        rule_count: ((.result.rules // []) | length)
+                    } else null end),
+                    rules: (.result.rules // [])
+                }'
+            ;;
+        csv)
+            _cf_ruleset_render_csv "$DOMAIN_NAME" "$ZONE_ID"
+            ;;
+        table)
+            if [[ $LONG -eq 1 ]]; then
+                _cf_ruleset_render_long "$DOMAIN_NAME" "$ZONE_ID"
+            else
+                _cf_ruleset_render_table "$DOMAIN_NAME" "$ZONE_ID"
+            fi
+            ;;
+        *)
+            _error "Unknown list-rules output format: $FORMAT"
+            return 1
+            ;;
+    esac
+}
+
+# =====================================
+# -- _cf_ruleset_render_table $DOMAIN_NAME $ZONE_ID
+# -- Compact aligned table: #, ACTION, ENABLED, RULE ID, DESCRIPTION.
+# =====================================
+function _cf_ruleset_render_table () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local RULE_COUNT
+    RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+
+    if [[ "$RULE_COUNT" -eq 0 ]]; then
+        printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
+            "$DOMAIN_NAME" "$(cf_ruleset_phase_name)"
+        return 0
+    fi
+
+    printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
+        '"\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated // "?")"'
+    printf '\n'
+
+    {
+        printf '#\tACTION\tENABLED\tRULE ID\tDESCRIPTION\n'
+        printf '%s' "$RULESET_API_OUTPUT" | jq -r '
+            (.result.rules // []) | to_entries[] | [
+                ((.key + 1) | tostring),
+                (.value.action // "?"),
+                (if .value.enabled == false then "no" else "yes" end),
+                (.value.id // ""),
+                (.value.description // "(no description)")
+            ] | @tsv
+        '
+    } | column -t -s $'\t'
+}
+
+# =====================================
+# -- _cf_ruleset_render_long $DOMAIN_NAME $ZONE_ID
+# -- Detail block per rule: id, enabled, logging, parameters, expression.
+# =====================================
+function _cf_ruleset_render_long () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local RULE_COUNT
+    RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+
+    if [[ "$RULE_COUNT" -eq 0 ]]; then
+        printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
+            "$DOMAIN_NAME" "$(cf_ruleset_phase_name)"
+        return 0
+    fi
+
+    printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
+        '"\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated // "?")"'
+    printf '\n'
+
+    printf '%s' "$RULESET_API_OUTPUT" | jq -r '
+        (.result.rules // []) | to_entries[] |
+        "#\(.key + 1)  \(.value.action // "?")\n" +
+        "    \(.value.description // "(no description)")\n" +
+        "    id:                \(.value.id // "")\n" +
+        "    enabled:           \(if .value.enabled == false then "no" else "yes" end)\n" +
+        "    logging:           \(if .value.logging.enabled == true then "enabled" else "disabled" end)\n" +
+        (if .value.action_parameters then "    action_parameters: \(.value.action_parameters | tojson)\n" else "" end) +
+        "    expression:        \(.value.expression // "")\n" +
+        "\n"
+    '
+}
+
+# =====================================
+# -- _cf_ruleset_render_csv $DOMAIN_NAME $ZONE_ID
+# -- One header per process, then one RFC 4180-quoted row per rule.
+# =====================================
+function _cf_ruleset_render_csv () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+
+    if [[ ${CF_CSV_HEADER_PRINTED:-0} -ne 1 ]]; then
+        printf 'domain,zone_id,position,rule_id,action,enabled,logging,description,expression\n'
+        CF_CSV_HEADER_PRINTED=1
+    fi
+
+    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
+        --arg domain "$DOMAIN_NAME" \
+        --arg zone_id "$ZONE_ID" \
+        '(.result.rules // []) | to_entries[] | [
+            $domain,
+            $zone_id,
+            (.key + 1),
+            (.value.id // ""),
+            (.value.action // ""),
+            (if .value.enabled == false then "no" else "yes" end),
+            (if .value.logging.enabled == true then "enabled" else "disabled" end),
+            (.value.description // ""),
+            (.value.expression // "")
+        ] | @csv'
+}
+
+# =====================================
+# -- cf_ruleset_list_rules $DOMAIN_NAME $ZONE_ID
 # -- List all rules from the http_request_firewall_custom entry point.
-# -- If TABLE_ONLY=1, prints a compact table with numbered entries.
-# -- Returns: raw ruleset JSON via RULESET_API_OUTPUT
+# -- Emits exactly one rendering of RULESET_API_OUTPUT in the selected format.
+# -- A missing entry point (404) renders as an empty rule set and succeeds.
 # =====================================
 cf_ruleset_functions["cf_ruleset_list_rules"]="List rules from entry point ruleset"
 function cf_ruleset_list_rules () {
-    local ZONE_ID=$1
-    local TABLE_ONLY=${2:-0}
-    
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+
     _debug "function:${FUNCNAME[0]} - Listing rules from entry point on zone $ZONE_ID"
-    
-    cf_ruleset_get_entrypoint "$ZONE_ID"
+
+    # cf_ruleset_get_entrypoint echoes the body; keep stdout for the renderer.
+    cf_ruleset_get_entrypoint "$ZONE_ID" >/dev/null
     local GET_EXIT=$?
-    if [[ $GET_EXIT -ne 0 ]]; then
-        if [[ $GET_EXIT -eq 1 ]]; then
-            _warning "No WAF custom rules found for zone $ZONE_ID (entry point not created yet)"
-        else
-            _error "Failed to retrieve rules for zone $ZONE_ID"
-        fi
+    if [[ $GET_EXIT -eq 2 ]]; then
+        _error "Failed to retrieve rules for zone $ZONE_ID"
         return 1
     fi
-    
-    # Extract the rules array from the entry point response
-    local RULES
-    RULES=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.rules // []')
-    local RULE_COUNT
-    RULE_COUNT=$(echo "$RULES" | jq 'length')
-    
-    if [[ "$RULE_COUNT" -eq 0 ]]; then
-        _warning "No rules in the entry point ruleset for zone $ZONE_ID"
-        echo "$RULESET_API_OUTPUT"
-        return 0
-    fi
-    
-    if [[ $TABLE_ONLY -eq 1 ]]; then
-        # Compact numbered list with position
-        echo "$RULESET_API_OUTPUT" | jq -r '.result.rules[] | "\(.id) \(.description // "(no description)")"' | \
-            awk '{print "#" NR, $0}'
-    else
-        _success "Found $RULE_COUNT rule(s) in entry point ruleset"
-        echo ""
-        echo "$RULESET_API_OUTPUT" | jq -r '
-            .result.rules | to_entries[] |
-            "#\(.key + 1) \(.value.id) [\(.value.action)] \(.value.description // "(no description)")"
-        '
-        echo ""
-        echo "$RULESET_API_OUTPUT"
-    fi
-    
-    return 0
+
+    _cf_ruleset_render_list "$DOMAIN_NAME" "$ZONE_ID"
 }
 
 # =====================================
@@ -801,7 +930,7 @@ function cf_ruleset_validate_profile_json () {
 # the ruleset_id from the entry point, confirmation prompts, etc.
 
 # =====================================
-# -- cf_ruleset_list_rules_action $DOMAIN_NAME $ZONE_ID [$TABLE_ONLY]
+# -- cf_ruleset_list_rules_action $DOMAIN_NAME $ZONE_ID
 # -- CLI wrapper for cf_ruleset_list_rules.
 # -- $DOMAIN_NAME is used only for display (compatible with _run_on_zones).
 # =====================================
@@ -809,11 +938,10 @@ cf_ruleset_functions["cf_ruleset_list_rules_action"]="CLI wrapper: list rules fr
 function cf_ruleset_list_rules_action () {
     local DOMAIN_NAME=$1
     local ZONE_ID=$2
-    local TABLE_ONLY=${3:-0}
-    
+
     _debug "function:${FUNCNAME[0]} - Listing rules for $DOMAIN_NAME / $ZONE_ID"
-    
-    cf_ruleset_list_rules "$ZONE_ID" "$TABLE_ONLY"
+
+    cf_ruleset_list_rules "$DOMAIN_NAME" "$ZONE_ID"
 }
 
 # =====================================

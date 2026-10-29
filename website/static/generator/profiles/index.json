@@ -1,0 +1,3 @@
+{
+  "presets": ["default", "woocommerce", "strict-geo", "beta"]
+}

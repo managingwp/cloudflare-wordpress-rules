@@ -1,39 +1,109 @@
+## test: enforce the docs-site layout and slim README contracts
+## ci: deploy the docs site to GitHub Pages
+## feat: generate docs pages and README pointer from profiles and changelog
+## docs: slim README to a docs-site entry point
+## docs: migrate documentation into the Docusaurus site
+## feat: scaffold Docusaurus docs site in website/
+## test: add offline Perplexity allowlist regression test
+## docs: regenerate beta profile output for the Perplexity allowlist
+## feat: allow Perplexity crawlers through beta R1 skip rule
+## docs: distinguish rules version from repository version
+## Release 2.4.3
+* (c7b5ea0) docs: document README release-notes contract and add v2.4.3 notes
+* (a6ae39f) test: add offline beta README regression test
+* (b49ffcf) docs: document beta-first workflow in AGENTS.md
+* (539af73) docs: document README beta block in build tooling
+* (c6c3ee4) feat: generate beta rules block at top of README
+* (a3ca63e) fix: scope beta login allow-through to Wordfence 2FA actions
+* (1fa1ecd) revert: undo over-broad 2FA/login allow-through in beta skip rule
+* (58274bc) test: add offline print-profile regression test for action parameters
+* (98dc68b) fix: correct jq $i interpolation in cf_print_profile action parameters
+* (f19c578) feat: add login/2FA allow-through to beta skip rule
+## Release 2.4.2
+* (fee03d9) docs: document default profile selector and name lookup
+* (546b244) test: add offline profile resolution tests
+* (357764a) feat: resolve profiles by filename or internal name
+* (1f83265) feat: add profile resolver and display-name helpers
+* (4fba9f1) chore: add /plans to .gitignore for external plans
+## Release 2.4.1
+* (72bbf48) feat: add Confirming Challenge Passage prompt with 604800 default and y/c/n options
+* (d221c26) chore: added .gitignore
+* (3eaac5f) feat: normalize -d domain args to bare domain (strip scheme, path, www)
+## Release 2.4.0
+* (940edcc) (HEAD -> main) fix: preserve .md symlinks in generate-md.sh
+* (32e1eb1) docs: update AGENTS.md, README.md, TODO.md for v2.4.0 workflow
+* (e60a75b) chore: remove stale mwp-rules-v206 profile
+* (44e99cc) fix: skip symlinked JSON files in generate-md.sh
+* (04144ac) feat: create bin/release.sh for beta→release promotion
+* (684a7d4) feat: create bin/build.sh unified build orchestrator
+* (c2ac306) chore: update .gitignore to allowlist bundled profiles
+* (ec18520) feat: create v207 release, default symlinks to latest stable
+* (e1efdb4) feat: replace mwp-rules-latest with mwp-rules-beta (v3 schema)
+* (29975f9) perf: combine challenge TTL + rules creation into single pass per zone
+* (f63009e) (origin/main, origin/HEAD) chore: added zones.txt to .gitignore
+* (87f0188) feat: add --challenge-ttl argument to set Challenge Passage TTL when creating rules
+## Release 2.3.2
+* (d413add) (HEAD -> dev, origin/dev) feat: show current Challenge Passage setting before prompting to change
+* (73885f3) feat: copy mwp-rules-latest to mwp-rules-v206
+* (d72d884) chore: update mwp-rules-latest.json and regenerate default.md
+* (f7fe977) docs: regenerate mwp-rules-latest.md from updated JSON
+* (3bdc75d) fix: add explicit rule positions and upgrade default profile to v3
+## Release 2.3.1
+* (bb8b32e) feat(create-rules): add interactive Challenge Passage prompt before rule creation
+* (aa3c276) feat: add Y/N confirmation before replacing existing rules in cf_ruleset_apply_profile
+* (932e4a2) fix: _success now writes to stderr to prevent stdout contamination in command substitutions
+* (27e6a50) docs: Updated TODO.md
 ## Release 2.3.0
-* **MAJOR: Migrated from deprecated Firewall Rules API to Rulesets API**
-* New include file: `inc/cf-inc-rulesets.sh` — Rulesets API functions (CRUD, entry point management, profile application)
-* New profile format: v3 schema with `enabled`, `logging`, `action_parameters` fields
-* New commands: `ruleset-get-entrypoint`, `ruleset-add-rule`, `ruleset-update-rule`, `ruleset-delete-rule`, `migrate-to-rulesets`
-* New features:
-  * `skip` action — replaces deprecated `allow`/`bypass` with support for ruleset/phases configuration
-  * Custom block responses — configurable status code, content, and content type
-  * Rate limiting configuration within custom rules
-  * Per-rule logging control
-* Migration tool: `migrate-to-rulesets [--delete-old]` — one-time migration from old API to new
-* Profile conversion: `bin/convert-profile-v2-to-v3.sh` — converts v2 profiles to v3 format
-* Filter commands (`list-filters`, `get-filter`, `delete-filter`, `delete-filters`) are deprecated
-* `cf-inc-old.sh` removed from includes (CF_PROTECT_WP was unused)
-* New documentation: `PROFILES.md` (v3 profile format), `docs/ruleset_plan.md` (migration plan)
-* Feature guides: `profiles/features-skip.md`, `profiles/features-block-response.md`, `profiles/features-rate-limiting.md`
+* (24fcd0d) docs: update README and CHANGELOG for v2.3.0 release
+* (de92844) docs: fill in missing CHANGELOG entries for v2.2.2 through v2.2.5
+* (64e50fa) chore: removed debugging
+* (a395adf) fix: add action_parameters back for skip action only
+* (b2d2ba5) fix: minimal payload for PUT replace-all endpoint
+* (a26e6b9) fix: strip enabled and logging fields from API payload
+* (f97fa00) fix: support numeric profile selection and case-insensitive --cf-profile matching
+* (05ef64a) chore: add debug logging for PUT payload in cf_ruleset_replace_all_rules
+* (62a8cfd) fix: strip empty action_parameters from API payload
+* (1835ed5) fix: strip internal rule_number/rule_version fields from API payload
+* (64b6ff6) fix: suppress stdout from cf_ruleset_get_entrypoint in _cf_ruleset_get_or_create_entrypoint
+* (8315b0a) feat: Phase 8 - Documentation & Testing
+* (2d71bfc) feat: Phase 7 - Deprecation & Cleanup, Migration Tool
+* (ed42f4c) feat: Phase 6 - New Rulesets API features
+* (94d146e) feat: Phase 5 - CLI Command Migration to Rulesets API
+* (22a9d99) feat: Phase 4 - Rule Management Migration to Rulesets API
+* (5d10ed4) feat: Phase 3 - Profile Format v3
+* (b82bc9d) feat: Phase 2 - Core Rulesets API functions
+* (bcdb312) feat: Phase 1 - Foundation for Rulesets API migration
+* (dbc2a5b) refactor: Move cf-inc*.sh files into inc/ directory and update all source paths
+* (7b082a9) docs: Updated AGENTS.md
+* docs: update README and CHANGELOG for v2.3.0 release
+* docs: fill in missing CHANGELOG entries for v2.2.2 through v2.2.5
+* chore: removed debugging
 ## Release 2.2.5
-* Added Cloudflare Rulesets API documentation (`docs/cf-*.md`)
-* Added `--cf-profile`/`--cf-auth-profile` CLI options to select auth profile across scripts
-* Added `--table-only` mode for `list-rules` output while preserving error visibility
-* Added `cfwpr` symlink for quick access
-* Improved auth gating — auth only runs when a valid command is entered
-* Updated AGENTS.md and TODO.md docs
+* (c2b8936) docs: Updated AGENTS.md
+* (31582ce) docs: Updated TODO.md
+* (a0f3bf0) chore: Renamed doc files
+* (3fe90eb) docs: Added Cloudflare docs.
+* (f36c768) chore: added cfwpr symlink
+* (5a06623) fix: suppress list-rules table-only startup chatter and restore no-rules
+* (74046fc) fix: add --table-only mode for list-rules output while preserving errors
+* (bc51b87) feat(auth): add --cf-profile/--cf-auth-profile to select Cloudflare auth profile across scripts
+* (657224c) fix: Added auth gate so auth is done when valid command is entered
 ## Release 2.2.4
-* Fixed inline comment stripping in Cloudflare config loader (`~/.cloudflare` parsing)
+* fix: Strips inline comments from Cloudflare config loader
 ## Release 2.2.3
-* Refactored authentication system — updated environment variable format
-* Added `--config` argument to use an alternative `.cloudflare` file for all commands
-* Added `list-auth-profiles` support with custom config file parameter
-* Unified authentication profile display format across scripts
-* Masked credentials in debug output, prioritized Account API auth over Token auth
-* Added challenge-ttl possible values
-* Created AGENTS.md for development conventions
+* fix: Added challenge-ttl possible values
+* refactor: update authentication environment variable format
+* fix: load config before listing auth profiles
+* feat: allow list-auth-profiles to use custom config file parameter
+* docs: Created AGENTS.md
+* test: Test file for .cloudflare
+* docs: Updated AGENTS.md
+* feat: add --config argument to use alternative .cloudflare file for all commands
+* fix: Unify authentication profile display format
+* Fix: Remove overly restrictive dash validation, mask credentials in debug output, prioritize Account API auth over Token auth
 ## Release 2.2.2
-* Created `mwp-rules-latest.json` and `mwp-rules-latest.md` for bleeding-edge rules
-* Added Infusionsoft user agent to allow list
+* * Created mwp-rules-latest.json for the latest bleeding edge rules.
+* * Added Infusionsoft to mwp-rules-latest.json
 ## Release 2.2.1
 * * Added Screaming Frog to allow list.
 * * Updated rules to v205

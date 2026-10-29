@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-
-# This script reads JSON profiles in "profiles" and injects rule sections into existing .md templates.
-# It also refreshes the beta rules block near the top of README.md.
-# Templates must have markers:
-#   <!-- RULES-START -->
-#   <!-- RULES-END -->
-# README.md must have markers:
-#   <!-- BETA-RULES-START -->
-#   <!-- BETA-RULES-END -->
+# =============================================================================
+# bin/generate-md.sh — Render profiles into markdown and docs pages
+#
+# Reads JSON profiles in profiles/ and:
+#   * injects rendered rule sections into profiles/<profile>.md templates
+#     (markers <!-- RULES-START --> / <!-- RULES-END -->)
+#   * regenerates docs/reference/beta-rules.md from the beta profile
+#   * regenerates docs/reference/stable-rules.md from the default profile
+#   * refreshes the short beta pointer in README.md
+#     (markers <!-- BETA-RULES-START --> / <!-- BETA-RULES-END -->)
+#
 # Prerequisites: jq
+# =============================================================================
 
 set -euo pipefail
 shopt -s nullglob
 
-PROFILES_DIR="$SCRIPT_DIR/../profiles"
-[[ -d "$PROFILES_DIR" ]] || { echo "Directory $PROFILES_DIR not found"; exit 1; }
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+PROFILES_DIR="$ROOT_DIR/profiles"
+DOCS_DIR="$ROOT_DIR/docs/reference"
+README_FILE="$ROOT_DIR/README.md"
+BETA_JSON="$PROFILES_DIR/mwp-rules-beta.json"
+DEFAULT_JSON="$PROFILES_DIR/default.json"
+REPO_URL="https://github.com/managingwp/cloudflare-wordpress-rules/blob/main"
 
-# Generate the Markdown section for rules & optional changelog
+[[ -d "$PROFILES_DIR" ]] || { echo "Directory $PROFILES_DIR not found" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+
+# Render a rules section (heading level ##) for a profile .md template.
 generate_rules_section() {
     local json_file="$1"
     local section=""
@@ -53,50 +64,139 @@ generate_rules_section() {
     printf "%s" "$section"
 }
 
-# Render the beta profile block near the top of README.md
-update_readme_beta_block() {
-    local readme_file="$SCRIPT_DIR/../README.md"
-    local beta_md="$PROFILES_DIR/mwp-rules-beta.md"
-    local start_marker='<!-- BETA-RULES-START -->'
-    local end_marker='<!-- BETA-RULES-END -->'
-    local tmp_block
-    local tmp_readme
+# Render the rules body (heading level ###) used by the docs pages.
+render_rules_body() {
+    local json_file="$1"
 
-    [[ -f "$readme_file" ]] || { echo "Error: $readme_file not found" >&2; exit 1; }
-    [[ -f "$beta_md" ]] || { echo "Error: $beta_md not found" >&2; exit 1; }
+    if jq -e 'has("rules")' "$json_file" >/dev/null; then
+        jq -r '.rules[] as $r |
+            "### R\($r.rule_number)V\($r.rule_version) – \($r.description)\n* Action: \($r.action | gsub("_"; " ") | ascii_upcase)\n```\n\($r.expression)\n```"' "$json_file"
+    elif jq -e 'has("clouflare_api")' "$json_file" >/dev/null; then
+        jq -r '.clouflare_api[] as $r |
+            "### R\($r.priority) – \($r.profile_name)\n* Action: \($r.action | gsub("_"; " ") | ascii_upcase)\n```\n\($r.filter)\n```"' "$json_file"
+    else
+        echo "Error: no rules or clouflare_api array in $json_file" >&2
+        return 1
+    fi
+}
 
-    if ! grep -qF "$start_marker" "$readme_file" || ! grep -qF "$end_marker" "$readme_file"; then
-        echo "Error: $readme_file must contain $start_marker and $end_marker" >&2
-        exit 1
+# Replace a file with a temp file only when the content changed.
+write_if_changed() {
+    local target="$1"
+    local tmp="$2"
+
+    if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
+        rm -f "$tmp"
+    else
+        mv "$tmp" "$target"
+        echo "Updated $target"
+    fi
+}
+
+render_beta_page() {
+    local tmp body
+    tmp=$(mktemp)
+    body=$(render_rules_body "$BETA_JSON") || exit 1
+
+    {
+        cat <<'EOF'
+---
+title: Beta rules (staging)
+description: Generated reference for the rules in profiles/mwp-rules-beta.json.
+---
+
+# Beta rules (staging)
+
+> **Unreleased** — generated from
+> [`profiles/mwp-rules-beta.json`](https://github.com/managingwp/cloudflare-wordpress-rules/blob/main/profiles/mwp-rules-beta.json)
+> by `bin/build.sh generate-md`; not part of a numbered release yet.
+
+Deploy them with:
+
+```bash
+./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+```
+
+<!-- RULES-START -->
+EOF
+        printf '%s\n' "$body"
+        cat <<'EOF'
+<!-- RULES-END -->
+EOF
+    } > "$tmp"
+
+    write_if_changed "$DOCS_DIR/beta-rules.md" "$tmp"
+}
+
+render_stable_page() {
+    local tmp body target version title
+    tmp=$(mktemp)
+    body=$(render_rules_body "$DEFAULT_JSON") || exit 1
+
+    target=$(readlink -f "$DEFAULT_JSON")
+    version=$(basename "$target" .json | sed -n 's/.*-v\([0-9][0-9]*\)$/\1/p')
+    if [[ -n "$version" ]]; then
+        title="Stable rules (v${version})"
+    else
+        title="Stable rules"
     fi
 
-    local beta_body
-    beta_body=$(awk '
-        /<!-- RULES-START -->/ { inblock=1; next }
-        /<!-- RULES-END -->/   { inblock=0; next }
-        inblock {
-            if ($0 == "# Rules Data") next
-            if ($0 ~ /^## R/) sub(/^## /, "### ")
-            print
-        }
-    ' "$beta_md")
+    {
+        cat <<EOF
+---
+title: ${title}
+description: Generated reference for the rules the default selector deploys.
+---
 
-    if [[ -z "$beta_body" ]]; then
-        echo "Error: no rules found between RULES markers in $beta_md" >&2
+# ${title}
+
+> Generated from \`profiles/default.json\` by \`bin/build.sh generate-md\`.
+
+Deploy them with:
+
+\`\`\`bash
+./cloudflare-wordpress-rules -d example.com -c create-rules default
+\`\`\`
+
+<!-- RULES-START -->
+EOF
+        printf '%s\n' "$body"
+        cat <<'EOF'
+<!-- RULES-END -->
+EOF
+    } > "$tmp"
+
+    write_if_changed "$DOCS_DIR/stable-rules.md" "$tmp"
+}
+
+# Refresh the short beta pointer at the top of README.md
+update_readme_beta_block() {
+    local start_marker='<!-- BETA-RULES-START -->'
+    local end_marker='<!-- BETA-RULES-END -->'
+    local tmp_block tmp_readme
+
+    [[ -f "$README_FILE" ]] || { echo "Error: $README_FILE not found" >&2; exit 1; }
+
+    if ! grep -qF "$start_marker" "$README_FILE" || ! grep -qF "$end_marker" "$README_FILE"; then
+        echo "Error: $README_FILE must contain $start_marker and $end_marker" >&2
         exit 1
     fi
 
     tmp_block=$(mktemp) || exit 1
     tmp_readme=$(mktemp) || exit 1
-    trap 'rm -f "$tmp_block" "$tmp_readme"' RETURN
 
     {
         printf '%s\n' "$start_marker"
-        printf '## Beta Rules (Staging)\n\n'
-        printf '> **Unreleased** — generated from [`profiles/mwp-rules-beta.json`](profiles/mwp-rules-beta.json); not part of a numbered release yet.\n'
-        printf '> See [Profile Management](#profile-management). Deploy with `cloudflare-wordpress-rules -c create-rules mwp-rules-beta`.\n\n'
-        printf '### Rules Data\n\n'
-        printf '%s\n' "$beta_body"
+        cat <<EOF
+## Beta rules (staging)
+
+Unreleased rule changes live in [\`profiles/mwp-rules-beta.json\`](profiles/mwp-rules-beta.json);
+the generated rules are on the [Beta rules page](https://managingwp.github.io/cloudflare-wordpress-rules/reference/beta-rules).
+
+\`\`\`bash
+./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+\`\`\`
+EOF
         printf '%s\n' "$end_marker"
     } > "$tmp_block"
 
@@ -109,13 +209,13 @@ update_readme_beta_block() {
         }
         $0 == "<!-- BETA-RULES-END -->" { skip=0; next }
         !skip { print }
-    ' "$readme_file" > "$tmp_readme"
+    ' "$README_FILE" > "$tmp_readme"
 
-    cp "$tmp_readme" "$readme_file"
-    echo "Updated $readme_file (beta rules block)"
+    write_if_changed "$README_FILE" "$tmp_readme"
+    rm -f "$tmp_block"
 }
 
-# Main loop: process each JSON profile
+# -- Main loop: process each JSON profile into profiles/<name>.md
 for json in "$PROFILES_DIR"/*.json; do
     # Skip symlinks — the real file will be processed directly
     if [[ -L "$json" ]]; then
@@ -147,5 +247,8 @@ for json in "$PROFILES_DIR"/*.json; do
     echo "Updated $md_file"
 done
 
-# Refresh the beta block at the top of README.md
+# -- Generated documentation pages and the README pointer
+mkdir -p "$DOCS_DIR"
+render_beta_page
+render_stable_page
 update_readme_beta_block

@@ -1,0 +1,15 @@
+{
+  "name": "strict-geo",
+  "label": "Strict geo",
+  "description": "Blocks visitors outside the allowed countries instead of challenging them, and keeps only the integrations that need to reach the site. Read the R1 ordering note in the docs before using it.",
+  "templateVersion": "207",
+  "extends": "default",
+  "options": {
+    "allowedUserAgents": ["Zapier", "Metorik API Client", "Better Uptime Bot", "Uptime-Kuma"],
+    "geo": {
+      "enabled": true,
+      "action": "block",
+      "allowedCountries": ["CA", "US"]
+    }
+  }
+}

@@ -13,6 +13,9 @@ DEBUG="0"
 DRYRUN="0"
 QUIET="0"
 TABLE_ONLY="0"
+LIST_FORMAT="table"
+LIST_LONG="0"
+LIST_DATA_MODE="0"
 export PROFILE_DIR="${SCRIPT_DIR}/profiles"
 
 # ==================================
@@ -93,7 +96,11 @@ usage () {
     echo -e "  ${CDARKGRAY}--cf-auth-profile${NC} <name>      Alias for --cf-profile"
     echo -e "  ${CCYAN}--challenge-ttl${NC} <seconds>       Challenge Passage TTL (bypasses interactive prompt)"
 	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
-    echo -e "  ${CCYAN}--table-only${NC}                    list-rules only: show table output and errors only"
+    echo -e "  ${CCYAN}--json${NC}                          list-rules: one compact JSON object per zone"
+    echo -e "  ${CCYAN}--csv${NC}                           list-rules: CSV rows including expressions"
+    echo -e "  ${CCYAN}--raw${NC}                           list-rules: unmodified entry point response"
+    echo -e "  ${CCYAN}--long${NC}                          list-rules: detailed block per rule"
+    echo -e "  ${CDARKGRAY}--table-only${NC}                    DEPRECATED: alias for the default table"
 	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
 	echo ""
 	
@@ -101,6 +108,10 @@ usage () {
 	echo -e "  ${CDARKGRAY}# Single domain${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default"
     echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} create-rules default ${CCYAN}--cf-profile${NC} PROD"
+	echo ""
+	echo -e "  ${CDARKGRAY}# List rules as JSON or CSV${NC}"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} list-rules ${CCYAN}--json"
+	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} domain.com ${CCYAN}-c${NC} list-rules ${CCYAN}--csv"
 	echo ""
 	echo -e "  ${CDARKGRAY}# Multiple domains${NC}"
 	echo -e "  $SCRIPT_NAME ${CCYAN}-d${NC} site1.com ${CCYAN}-d${NC} site2.com ${CCYAN}-c${NC} create-rules default"
@@ -143,6 +154,8 @@ MULTI_ZONE=0
 CONFIG_FILE=""
 CF_PROFILE=""
 CHALLENGE_TTL_ARG=""
+declare -a LIST_FORMAT_FLAGS=()
+TABLE_ONLY_EXPLICIT=0
 
 # -- Parse options
     POSITIONAL=()
@@ -204,7 +217,17 @@ CHALLENGE_TTL_ARG=""
         shift # past argument
         ;;
         --table-only)
+        # Deprecated: the compact table is now the default list-rules output.
         TABLE_ONLY="1"
+        TABLE_ONLY_EXPLICIT=1
+        shift # past argument
+        ;;
+        --json|--csv|--raw)
+        LIST_FORMAT_FLAGS+=("${key#--}")
+        shift # past argument
+        ;;
+        --long)
+        LIST_LONG="1"
         shift # past argument
         ;;
         -dr|--dryrun)
@@ -217,6 +240,24 @@ CHALLENGE_TTL_ARG=""
         ;;
     esac
     done
+
+# -- Resolve the list-rules output format (exactly one format at a time)
+if [[ ${#LIST_FORMAT_FLAGS[@]} -gt 1 ]]; then
+    _error "Choose only one of --json, --csv or --raw"
+    exit 2
+fi
+if [[ ${#LIST_FORMAT_FLAGS[@]} -eq 1 ]]; then
+    LIST_FORMAT="${LIST_FORMAT_FLAGS[0]}"
+    if [[ $TABLE_ONLY_EXPLICIT -eq 1 ]]; then
+        _error "--table-only cannot be combined with --${LIST_FORMAT}"
+        exit 2
+    fi
+fi
+if [[ $LIST_LONG -eq 1 && $LIST_FORMAT != "table" ]]; then
+    _error "--long only applies to the table output; drop --${LIST_FORMAT}"
+    exit 2
+fi
+
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # -- Load zones from file if specified
@@ -253,6 +294,13 @@ if [[ ! " ${ALL_COMMANDS[*]} " =~ " ${CMD} " ]]; then
     usage
     _error "Unknown command: $CMD"
     exit 1
+fi
+
+# ==================================
+# -- list-rules: stdout carries data only, diagnostics stay on stderr
+# ==================================
+if [[ "$CMD" == "list-rules" ]]; then
+    LIST_DATA_MODE=1
 fi
 
 # -- Argument validation
@@ -326,9 +374,12 @@ if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " ]]; then
         fi
         MULTI_ZONE=1
 
-        # Confirm with user unless -y flag was used
-        if ! _confirm_zones; then
-            exit 1
+        # list-rules is read-only and data-only: no confirmation prose on stdout.
+        if [[ $LIST_DATA_MODE -ne 1 ]]; then
+            # Confirm with user unless -y flag was used
+            if ! _confirm_zones; then
+                exit 1
+            fi
         fi
     fi
 fi
@@ -390,11 +441,6 @@ if ! cf_auth_init "$REQUESTED_CF_PROFILE" "$CONFIG_FILE"; then
     exit 1
 fi
 
-LIST_TABLE_ONLY_MODE=0
-if [[ $CMD == "list-rules" && $TABLE_ONLY -eq 1 ]]; then
-    LIST_TABLE_ONLY_MODE=1
-fi
-
 # For single zone, resolve zone ID now (backward compatibility)
 if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " && $MULTI_ZONE -eq 0 ]]; then
     DOMAIN="${DOMAINS[0]}"
@@ -403,13 +449,13 @@ if [[ " ${COMMANDS_REQUIRING_DOMAIN[*]} " =~ " ${CMD} " && $MULTI_ZONE -eq 0 ]];
         _error "No zone ID found for $DOMAIN"
         exit 1
     else
-        if [[ $LIST_TABLE_ONLY_MODE -ne 1 ]]; then
+        if [[ $LIST_DATA_MODE -ne 1 ]]; then
             _running2 "Zone ID found: $ZONE_ID"
         fi
     fi
 fi
 
-if [[ $LIST_TABLE_ONLY_MODE -ne 1 ]]; then
+if [[ $LIST_DATA_MODE -ne 1 ]]; then
     if [[ $MULTI_ZONE -eq 1 ]]; then
         _running "Running $CMD on ${#DOMAINS[@]} zones"
     else
@@ -509,9 +555,9 @@ elif [[ $CMD == "upgrade-default-rules" ]]; then
 # =====================================
 elif [[ $CMD == "list-rules" ]]; then
     if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_list_rules_action "\$DOMAIN" "\$ZONE_ID" "$TABLE_ONLY"
+        _run_on_zones cf_ruleset_list_rules_action "\$DOMAIN" "\$ZONE_ID"
     else
-        cf_ruleset_list_rules_action "$DOMAIN" "$ZONE_ID" "$TABLE_ONLY"
+        cf_ruleset_list_rules_action "$DOMAIN" "$ZONE_ID"
     fi
 # =====================================
 # -- delete-rules (Rulesets API)

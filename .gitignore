@@ -5,3 +5,8 @@ profiles/*.json
 !profiles/block-event-calendar.json
 zones.txt
 /plans
+
+# Docusaurus docs site
+website/node_modules/
+website/build/
+website/.docusaurus/

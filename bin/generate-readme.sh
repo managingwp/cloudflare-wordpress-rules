@@ -1,32 +1,48 @@
-#!/bin/bash
-# -- Combine README.md and CHANGELOG.md into README.md
+#!/usr/bin/env bash
+# =============================================================================
+# bin/generate-readme.sh — Regenerate the changelog
+#
+# Writes the git log to CHANGELOG.md and mirrors it into docs/changelog.md
+# between the markers:
+#   <!--- CHANGELOG --->
+#   <!--- END CHANGELOG --->
+# =============================================================================
+
+set -euo pipefail
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-README_PATH="$SCRIPT_DIR/.."
-README_FILE="${README_PATH}/README.md"
-CHANGELOG_FILE="${README_PATH}/CHANGELOG.md"
-# Check if README.md exists
-if [ ! -f README.md ]; then
-    echo "README.md does not exist"
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+CHANGELOG_FILE="$ROOT_DIR/CHANGELOG.md"
+DOCS_CHANGELOG="$ROOT_DIR/docs/changelog.md"
+START_MARKER='<!--- CHANGELOG --->'
+END_MARKER='<!--- END CHANGELOG --->'
+
+[[ -f "$DOCS_CHANGELOG" ]] || { echo "Error: $DOCS_CHANGELOG not found" >&2; exit 1; }
+
+if ! grep -qF "$START_MARKER" "$DOCS_CHANGELOG" || ! grep -qF "$END_MARKER" "$DOCS_CHANGELOG"; then
+    echo "Error: $DOCS_CHANGELOG must contain $START_MARKER and $END_MARKER" >&2
     exit 1
 fi
 
-# Read in the README.md file
-README=$(<${README_FILE})
+tmp_log=$(mktemp)
+tmp_docs=$(mktemp)
+trap 'rm -f "$tmp_log" "$tmp_docs"' EXIT
 
-# Check if README.md contains <!--- CHANGELOG ---> and <!--- END CHANGELOG ---> tags
-echo "Checking for <!--- CHANGELOG ---> and <!--- END CHANGELOG ---> tags in README.md"
-if ! grep -q '<!--- CHANGELOG --->' ${README_FILE} || ! grep -q '<!--- END CHANGELOG --->' ${README_FILE}; then
-    echo "File $README_FILE does not contain <!--- CHANGELOG ---> and <!--- END CHANGELOG ---> tags"
-    exit 1
-fi
+git -C "$ROOT_DIR" log --pretty=format:"## %s%n%b" | sed '/^## /b; /^$/d; s/^/* /' > "$tmp_log"
+cp "$tmp_log" "$CHANGELOG_FILE"
+echo "Updated $CHANGELOG_FILE"
 
-# Generate the CHANGELOG.md file
-git log --pretty=format:"## %s%n%b" | sed '/^## /b; /^$/d; s/^/* /' > ${CHANGELOG_FILE}
-CHANGELOG=$(<${CHANGELOG_FILE})
+awk -v block_file="$tmp_log" '
+    $0 == "<!--- CHANGELOG --->" {
+        print
+        while ((getline line < block_file) > 0) print line
+        close(block_file)
+        skip=1
+        next
+    }
+    $0 == "<!--- END CHANGELOG --->" { skip=0; print; next }
+    !skip { print }
+' "$DOCS_CHANGELOG" > "$tmp_docs"
 
-# Locate <!--- CHANGELOG ---> in the README.md file
-# Replace everything between the two tags with the CHANGELOG.md file and ensure <!--- are still in-place
-README=$(echo "$README" | sed -e "/<!--- CHANGELOG --->/,/<!--- END CHANGELOG --->/{ /<!--- CHANGELOG --->/{p; r CHANGELOG.md
-        }; /<!--- END CHANGELOG --->/p; d }")
-# Write the new README.md file
-echo "$README" > ${README_FILE}
+cp "$tmp_docs" "$DOCS_CHANGELOG"
+echo "Updated $DOCS_CHANGELOG"

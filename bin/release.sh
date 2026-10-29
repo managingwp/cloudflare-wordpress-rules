@@ -194,6 +194,8 @@ echo "Next steps:"
 echo "  git add profiles/${RELEASE_NAME}.* profiles/default.* VERSION"
 echo "  git commit -m \"feat: release ${RELEASE_NAME}\""
 if [[ $CREATE_TAG -eq 0 ]]; then
-    echo "  git tag v${VER}  (optional)"
+    echo "  (no repository tag: rules versions are not semver repository releases)"
 fi
-echo "  bin/build.sh generate-readme  # Update README changelog"
+echo "  bin/build.sh generate-md      # Refresh docs/reference/stable-rules.md"
+echo "  bin/build.sh generate-readme  # Refresh CHANGELOG.md and docs/changelog.md"
+echo "  bin/build.sh docs             # Verify the docs site build"

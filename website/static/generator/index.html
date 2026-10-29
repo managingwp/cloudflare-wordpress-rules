@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Cloudflare WAF rule generator</title>
+<meta name="description" content="Generate Cloudflare WordPress WAF custom rules (R1-R4) in your browser: dashboard expressions, Rulesets API JSON and v3 profiles.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f6821f'/%3E%3Cpath d='M9 22V10h3l4 7 4-7h3v12h-3v-7l-4 6-4-6v7z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./assets/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <div>
+      <h1>Cloudflare WAF rule generator</h1>
+      <p class="lead">Build the WordPress rule set (R1–R4) for Cloudflare <strong>WAF custom rules</strong>, then copy it
+        into the dashboard or the Rulesets API. Nothing is uploaded: every rule is built in this tab.</p>
+    </div>
+    <nav class="header-links" aria-label="Related">
+      <a href="../">Documentation</a>
+      <a href="https://github.com/managingwp/cloudflare-wordpress-rules" rel="noreferrer">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<p id="notice" class="notice" hidden></p>
+
+<main id="main" class="wrap layout">
+  <section class="panel" aria-labelledby="settings-heading">
+    <h2 id="settings-heading">Settings</h2>
+
+    <div class="presets">
+      <span class="presets-label" id="preset-label">Preset</span>
+      <div id="preset-tabs" class="preset-tabs" role="group" aria-labelledby="preset-label"></div>
+      <p id="preset-description" class="hint"></p>
+    </div>
+
+    <div class="row">
+      <label class="field">
+        <span>Template version</span>
+        <input id="opt-version" inputmode="numeric" autocomplete="off" spellcheck="false" size="6">
+        <span class="hint">Rules version stamped into each rule description (<code>t207-…</code>).</span>
+      </label>
+      <div class="field">
+        <span>Preset file</span>
+        <div class="button-row">
+          <button type="button" class="btn" id="preset-export">Download preset</button>
+          <label class="btn" for="preset-import">Load preset…</label>
+          <input id="preset-import" type="file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+    </div>
+
+    <fieldset class="card">
+      <legend>Trusted traffic (R1 — skip)</legend>
+
+      <label class="field" for="opt-ips">
+        <span>Trusted IP addresses <output id="ips-count" class="pill">0</output></span>
+        <textarea id="opt-ips" rows="6" spellcheck="false" autocomplete="off"
+          placeholder="203.0.113.10&#10;198.51.100.0/24"></textarea>
+        <span class="hint">One per line or comma-separated. IPv4, IPv6 and CIDR ranges are accepted.</span>
+      </label>
+
+      <div class="row">
+        <label class="toggle"><input type="checkbox" id="opt-ip-list"> Use an account IP list</label>
+        <label class="field inline">
+          <span>List name</span>
+          <input id="opt-ip-list-name" spellcheck="false" autocomplete="off" placeholder="trusted_sources">
+        </label>
+      </div>
+      <p class="hint">With a list, the rule becomes <code>ip.src in $list_name</code> and the inline addresses are ignored.
+        The list must already exist in the Cloudflare account.</p>
+
+      <label class="field" for="opt-queries">
+        <span>Allowed query strings</span>
+        <textarea id="opt-queries" rows="3" spellcheck="false" autocomplete="off"></textarea>
+        <span class="hint">Matched with <code>http.request.uri.query contains "…"</code>.</span>
+      </label>
+
+      <label class="field" for="opt-uas">
+        <span>Allowed user agents</span>
+        <textarea id="opt-uas" rows="5" spellcheck="false" autocomplete="off"></textarea>
+        <span class="hint">Matched with <code>http.user_agent contains "…"</code>. Spoofable: any client sending this
+          string skips every rule below.</span>
+      </label>
+      <div class="chips" id="ua-suggestions" aria-label="Suggested user agents"></div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Blocking (R2 — block)</legend>
+
+      <label class="field" for="opt-paths">
+        <span>Blocked paths</span>
+        <textarea id="opt-paths" rows="3" spellcheck="false" autocomplete="off"></textarea>
+        <span class="hint">Exact paths, e.g. <code>/wp-content/uploads/…/non_mirrored_logs.json</code>.</span>
+      </label>
+
+      <label class="toggle"><input type="checkbox" id="opt-xmlrpc"> Block <code>/xmlrpc.php</code></label>
+
+      <label class="field" for="opt-asns">
+        <span>Blocked ASNs</span>
+        <textarea id="opt-asns" rows="2" inputmode="numeric" spellcheck="false" autocomplete="off"></textarea>
+        <span class="hint">One ASN per line or comma-separated, e.g. <code>396982</code>.</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Challenges</legend>
+
+      <label class="toggle"><input type="checkbox" id="opt-login"> Managed Challenge on <code>/wp-login.php</code> and
+        <code>/wp-admin/</code> (R3)</label>
+
+      <div class="row">
+        <label class="toggle"><input type="checkbox" id="opt-geo-enabled"> Country challenge (R4)</label>
+        <label class="field inline">
+          <span>Action</span>
+          <select id="opt-geo-action">
+            <option value="js_challenge">JS Challenge</option>
+            <option value="managed_challenge">Managed Challenge</option>
+            <option value="challenge">Challenge</option>
+            <option value="block">Block</option>
+            <option value="log">Log only</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field">
+        <span>Allowed countries</span>
+        <div class="country-add">
+          <input id="country-input" list="country-options" placeholder="US" maxlength="2" aria-label="Add a country code">
+          <button type="button" class="btn" id="country-add">Add</button>
+        </div>
+        <datalist id="country-options"></datalist>
+        <div class="chips" id="country-chips" aria-label="Allowed countries"></div>
+        <span class="hint">Everyone outside these countries is challenged by R4.</span>
+      </div>
+
+      <label class="toggle"><input type="checkbox" id="opt-verified-bots"> Allow verified bots
+        (<code>cf.client.bot</code>)</label>
+      <label class="toggle"><input type="checkbox" id="opt-2fa"> Allow two-factor login actions
+        (<code>validate_2fa</code>, <code>backup_2fa</code>, <code>grace_2fa</code>)</label>
+    </fieldset>
+
+    <div class="button-row footer-actions">
+      <button type="button" class="btn" id="reset">Reset to preset</button>
+      <button type="button" class="btn" id="share">Copy share link</button>
+      <span class="hint" id="storage-note" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="panel output" aria-labelledby="output-heading">
+    <h2 id="output-heading">Output</h2>
+
+    <div class="summary card" id="summary">
+      <div class="summary-head">
+        <strong>Rules used</strong>
+        <span id="rules-used" class="pill">0 / 5</span>
+      </div>
+      <progress id="rules-progress" max="5" value="0" aria-label="Custom rules used"></progress>
+      <div class="summary-head">
+        <strong>Free plan</strong>
+        <span class="hint">5 custom rules · 4,096 characters per expression</span>
+      </div>
+      <ul id="messages" class="messages" aria-live="polite"></ul>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Output format">
+      <button type="button" role="tab" id="tab-expressions" aria-selected="true"
+        aria-controls="panel-expressions">Expressions</button>
+      <button type="button" role="tab" id="tab-api" aria-selected="false" aria-controls="panel-api" tabindex="-1">API JSON</button>
+      <button type="button" role="tab" id="tab-profile" aria-selected="false" aria-controls="panel-profile" tabindex="-1">Profile JSON</button>
+    </div>
+
+    <div id="panel-expressions" role="tabpanel" aria-labelledby="tab-expressions" class="tab-panel">
+      <p class="hint">Cloudflare dashboard → your zone → <em>Security</em> → <em>WAF</em> → <em>Custom rules</em> → <em>Create rule</em>.
+        Paste the expression and set the action shown on each card.</p>
+      <div id="rule-cards" class="rule-cards"></div>
+    </div>
+
+    <div id="panel-api" role="tabpanel" aria-labelledby="tab-api" class="tab-panel" hidden>
+      <p class="hint">Replaces the whole <code>http_request_firewall_custom</code> entry point. Merge any rule whose
+        <code>ref</code> does not start with <code>lmt-</code> back into the request first.</p>
+      <div class="code-head">
+        <code id="api-url"></code>
+        <button type="button" class="btn" id="copy-api">Copy JSON</button>
+      </div>
+      <pre id="api-json" class="code" tabindex="0"></pre>
+      <div class="button-row">
+        <button type="button" class="btn" id="download-api">Download ruleset.json</button>
+      </div>
+      <details class="upgrade">
+        <summary>Upgrade manifest and detection rules</summary>
+        <pre id="api-manifest" class="code" tabindex="0"></pre>
+        <ul id="upgrade-rules"></ul>
+      </details>
+      <h3>curl</h3>
+      <div class="code-head">
+        <span class="hint">Export <code>CF_API_TOKEN</code> first.</span>
+        <button type="button" class="btn" id="copy-curl">Copy curl</button>
+      </div>
+      <pre id="api-curl" class="code" tabindex="0"></pre>
+    </div>
+
+    <div id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" class="tab-panel" hidden>
+      <p class="hint">Same shape as <code>profiles/*.json</code>. Save it and deploy with
+        <code>./cloudflare-wordpress-rules -d example.com -c create-rules my-profile</code>.</p>
+      <div class="code-head">
+        <code id="profile-name"></code>
+        <button type="button" class="btn" id="copy-profile">Copy profile</button>
+      </div>
+      <pre id="profile-json" class="code" tabindex="0"></pre>
+      <div class="button-row">
+        <button type="button" class="btn" id="download-profile">Download profile</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer wrap">
+  <p>No account credentials, no tracking, no network calls beyond the preset files served with this page.
+    Settings stay in this browser (local storage and the URL hash).</p>
+</footer>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

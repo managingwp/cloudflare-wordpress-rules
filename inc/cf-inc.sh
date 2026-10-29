@@ -78,8 +78,10 @@ function _debug () {
 #  Print JSON debug to file
 # TODO - Should be removed.
 _debug_json () {
-    if [ -f $SCRIPT_DIR/.debug ]; then
-        echo "${*}" | jq
+    # Never write JSON to stdout: list-rules keeps stdout data-only, so the
+    # repo-local .debug switch must go to stderr too.
+    if [ -f "$SCRIPT_DIR/.debug" ]; then
+        echo "${*}" | jq >&2
     fi
 }
 
@@ -324,15 +326,11 @@ function _run_on_zones () {
     local success_count=0
     local fail_count=0
     local -a failed_zones=()
-    local table_only_mode=0
+    local data_mode=${LIST_DATA_MODE:-0}
 
-    if [[ "${TABLE_ONLY:-0}" -eq 1 && "$COMMAND" == "cf_list_rules_action" ]]; then
-        table_only_mode=1
-    fi
-    
     _debug "Running command '$COMMAND' on ${zone_count} zone(s)"
     
-    if [[ $table_only_mode -ne 1 ]]; then
+    if [[ $data_mode -ne 1 ]]; then
         echo ""
         _running "Processing ${zone_count} zone(s)..."
         echo ""
@@ -342,7 +340,7 @@ function _run_on_zones () {
     for DOMAIN in "${DOMAINS[@]}"; do
         ((current++))
         
-        if [[ $table_only_mode -ne 1 ]]; then
+        if [[ $data_mode -ne 1 ]]; then
             echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo -e "${CBLUEBG} Zone ${current} of ${zone_count}: ${DOMAIN} ${NC}"
             echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -380,7 +378,7 @@ function _run_on_zones () {
         # Execute the command
         if "$COMMAND" "${actual_args[@]}"; then
             ((success_count++))
-            if [[ $table_only_mode -ne 1 ]]; then
+            if [[ $data_mode -ne 1 ]]; then
                 _success "Completed: $DOMAIN"
             fi
         else
@@ -389,13 +387,13 @@ function _run_on_zones () {
             _error "Failed: $DOMAIN"
         fi
         
-        if [[ $table_only_mode -ne 1 ]]; then
+        if [[ $data_mode -ne 1 ]]; then
             echo ""
         fi
     done
     
     # Summary
-    if [[ $table_only_mode -ne 1 ]]; then
+    if [[ $data_mode -ne 1 ]]; then
         echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo -e "${CBLUEBG} Summary ${NC}"
         echo -e "${CCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

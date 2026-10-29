@@ -1,0 +1,26 @@
+{
+  "name": "beta",
+  "label": "Beta (staging)",
+  "description": "Mirrors profiles/mwp-rules-beta.json: the default rules plus the non-verified Perplexity crawlers and the two-factor login bypass.",
+  "templateVersion": "beta",
+  "extends": "default",
+  "options": {
+    "allowedUserAgents": [
+      "Zapier",
+      "Metorik API Client",
+      "Wordfence Central API",
+      "Better Uptime Bot",
+      "ShortPixel",
+      "WPUmbrella",
+      "Integrately",
+      "Let's Encrypt",
+      "Uptime-Kuma",
+      "Infusionsoft",
+      "Screaming Frog",
+      "InfiniteWP",
+      "PerplexityBot",
+      "Perplexity-User"
+    ],
+    "allowTwoFactorActions": true
+  }
+}

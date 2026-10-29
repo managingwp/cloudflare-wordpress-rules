@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0f172a"/>
+  <rect x="0" y="0" width="1200" height="10" fill="#f6821f"/>
+  <g transform="translate(96 190)">
+    <rect width="72" height="72" rx="16" fill="#f6821f"/>
+    <path d="M36 14l16 7v13c0 11-7 19-16 25-9-6-16-14-16-25V21z" fill="#fff" opacity=".92"/>
+  </g>
+  <text x="196" y="244" font-family="Helvetica, Arial, sans-serif" font-size="46" fill="#f8fafc">Cloudflare WordPress Rules</text>
+  <text x="96" y="330" font-family="Helvetica, Arial, sans-serif" font-size="30" fill="#94a3b8">WAF rules, API tokens and Turnstile widgets for WordPress</text>
+</svg>

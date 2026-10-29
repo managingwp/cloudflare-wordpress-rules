@@ -1,0 +1,26 @@
+{
+  "name": "woocommerce",
+  "label": "WooCommerce store",
+  "description": "WordPress default plus payment-gateway webhook user agents and the two-factor login bypass, for stores that take online payments.",
+  "templateVersion": "207",
+  "extends": "default",
+  "options": {
+    "allowedUserAgents": [
+      "Zapier",
+      "Metorik API Client",
+      "Wordfence Central API",
+      "Better Uptime Bot",
+      "ShortPixel",
+      "WPUmbrella",
+      "Integrately",
+      "Let's Encrypt",
+      "Uptime-Kuma",
+      "Infusionsoft",
+      "Screaming Frog",
+      "InfiniteWP",
+      "Stripe/",
+      "PayPal IPN"
+    ],
+    "allowTwoFactorActions": true
+  }
+}

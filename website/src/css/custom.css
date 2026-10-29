@@ -1,0 +1,42 @@
+/**
+ * Any CSS included here applies globally. The Docusaurus classic theme
+ * exposes its design tokens as --ifm-* custom properties.
+ */
+
+:root {
+  --ifm-color-primary: #f6821f;
+  --ifm-color-primary-dark: #e9730b;
+  --ifm-color-primary-darker: #dc6c0a;
+  --ifm-color-primary-darkest: #b55908;
+  --ifm-color-primary-light: #f79337;
+  --ifm-color-primary-lighter: #f79b45;
+  --ifm-color-primary-lightest: #f9b26d;
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --ifm-font-family-monospace:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #f9a94f;
+  --ifm-color-primary-dark: #f79728;
+  --ifm-color-primary-darker: #f69018;
+  --ifm-color-primary-darkest: #dd7a08;
+  --ifm-color-primary-light: #fabf76;
+  --ifm-color-primary-lighter: #fbc786;
+  --ifm-color-primary-lightest: #fdddb3;
+}
+
+/* Long rule expressions break out of the content column otherwise. */
+.markdown pre code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown table {
+  display: table;
+  width: 100%;
+}
