@@ -4,13 +4,13 @@
 import {
   DEFAULT_OPTIONS,
   DEFAULT_TEMPLATE_VERSION,
-  buildRules,
   isValidTemplateVersion,
   mergeOptions,
   normalizeOptions,
   splitList,
   validateOptions,
 } from "./rules.js";
+import { rulesFromOptions } from "./ruleset.js";
 import { builtinPreset, exportPreset, importPreset, loadPresets } from "./presets.js";
 import {
   UPGRADE_RULES,
@@ -49,12 +49,12 @@ const state = {
   presetName: "custom",
   preset: null,
   options: normalizeOptions(DEFAULT_OPTIONS),
+  rules: [],
   templateVersion: DEFAULT_TEMPLATE_VERSION,
   edited: false,
 };
 
 let countries = [];
-let rules = [];
 let hashTimer = null;
 let lastMessageSignature = null;
 let lastPresetSignature = null;
@@ -344,7 +344,7 @@ function renderMessages(validation, limits) {
     }
   }
 
-  if (rules.length === 0) {
+  if (state.rules.length === 0) {
     items.push(["No rules yet: enable a challenge or add a trusted source.", "ok"]);
   } else if (items.length === 0) {
     items.push(["All rules fit within the Free plan limits.", "ok"]);
@@ -377,7 +377,7 @@ function renderRuleCards(limits) {
   const container = el("rule-cards");
   container.textContent = "";
 
-  rules.forEach((rule, index) => {
+  state.rules.forEach((rule, index) => {
     const stats = limits.perRule[index];
     const card = document.createElement("article");
     card.className = `rule-card${stats.over ? " over" : ""}`;
@@ -441,7 +441,7 @@ function renderRuleCards(limits) {
   copyAll.className = "btn";
   copyAll.textContent = "Copy all expressions";
   copyAll.addEventListener("click", () => {
-    const text = rules
+    const text = state.rules
       .map((rule) => `# ${rule.ref} — ${rule.action}\n${rule.expression}`)
       .join("\n\n");
     copyText(text, copyAll);
@@ -451,8 +451,8 @@ function renderRuleCards(limits) {
 }
 
 function renderApi() {
-  const body = toApiBody(rules, state.templateVersion);
-  const manifest = toManifest(rules, state.templateVersion);
+  const body = toApiBody(state.rules, state.templateVersion);
+  const manifest = toManifest(state.rules, state.templateVersion);
   const json = JSON.stringify(body, null, 2);
 
   el("api-url").textContent = `PUT ${entrypointUrl()}`;
@@ -485,7 +485,7 @@ function renderProfile() {
   const profile = toV3Profile(
     name,
     (state.preset && state.preset.description) || "Generated with the Cloudflare WAF rule generator",
-    rules,
+    state.rules,
     state.templateVersion,
   );
   const json = JSON.stringify(profile, null, 2);
@@ -504,8 +504,8 @@ function update(fromForm = false) {
 
   const validation = validateOptions(state.options);
   state.options = validation.options;
-  rules = buildRules(state.options);
-  const limits = summarizeLimits(rules);
+  state.rules = rulesFromOptions(state.options);
+  const limits = summarizeLimits(state.rules);
 
   el("ips-count").textContent = String(state.options.trustedIps.inline.length);
   el("rules-used").textContent = `${limits.rules} / ${MAX_CUSTOM_RULES}`;
