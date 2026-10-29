@@ -117,7 +117,8 @@ A rules release does not imply a repository release, and a repository release do
 1. Add `## What's New in v<X.Y.Z>` to `docs/release-notes.md` per the release-notes contract above, so the notes land in the release commit.
 2. Ensure the tree is clean and the offline tests pass (`bash tests/*.sh`).
 3. Run the squash-release flow (`lmt-skills-git-squash-release`; `--bump minor` bumps the patch, e.g. `2.4.2` → `2.4.3`). It updates `VERSION`, squashes everything since the last tag into a `Release X.Y.Z` commit, and tags `X.Y.Z`.
-4. Force-push the branch and tags only after the user explicitly confirms.
+4. A repository release is announced by its git tag: the tag appears in the `releases.atom` feed, which is the public notification channel documented on the [Release notifications](https://managingwp.github.io/cloudflare-wordpress-rules/getting-started/release-notifications) page. A release that is not tagged is not announced.
+5. Force-push the branch and tags only after the user explicitly confirms.
 
 ## Agents Documentation
 

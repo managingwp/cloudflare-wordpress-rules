@@ -7,6 +7,7 @@
 #   * README — slim, one beta marker pair, repo links resolve
 #   * docs/ — front matter on every page, every page in the sidebar
 #   * docs/ — relative Markdown links resolve
+#   * docs/ — release notifications page documents the tag feed
 #   * generated pages — markers and rule counts
 #   * website/ — pinned Docusaurus version and build script
 #   * GitHub Pages workflow — permissions and artifact path
@@ -181,6 +182,21 @@ while IFS= read -r file; do
     done < <(grep -oE '\]\([^)]+\)' "$file" | sed -e 's/^](//' -e 's/)$//')
 done <<< "$docs_files"
 assert_eq "relative docs links resolve" "" "$broken_docs_links"
+
+# -- release notifications -------------------------------------------
+NOTIF_PAGE="$DOCS_DIR/getting-started/release-notifications.md"
+
+echo ""
+echo -e "${BLUE}=== release notifications ===${NC}"
+assert_file "release notifications page exists" "$NOTIF_PAGE"
+assert_contains "release notifications page documents the tag feed" \
+    "releases.atom" "$(cat "$NOTIF_PAGE" 2>/dev/null)"
+assert_contains "release notifications page states the semver filter" \
+    '^[0-9]+\.[0-9]+\.[0-9]+$' "$(cat "$NOTIF_PAGE" 2>/dev/null)"
+assert_contains "release notifications page is in the sidebar" \
+    "getting-started/release-notifications" "$(cat "$SIDEBAR_FILE" 2>/dev/null)"
+assert_contains "release notes link the release notifications page" \
+    "getting-started/release-notifications.md" "$(cat "$DOCS_DIR/release-notes.md" 2>/dev/null)"
 
 # -- generated pages -------------------------------------------------
 BETA_PAGE="$DOCS_DIR/reference/beta-rules.md"

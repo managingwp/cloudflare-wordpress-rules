@@ -9,16 +9,29 @@ Generated from `git log` by `bin/build.sh generate-readme`. The same content is
 written to `CHANGELOG.md` in the repository root.
 
 <!--- CHANGELOG --->
-## test: enforce the docs-site layout and slim README contracts
-## ci: deploy the docs site to GitHub Pages
-## feat: generate docs pages and README pointer from profiles and changelog
-## docs: slim README to a docs-site entry point
-## docs: migrate documentation into the Docusaurus site
-## feat: scaffold Docusaurus docs site in website/
-## test: add offline Perplexity allowlist regression test
-## docs: regenerate beta profile output for the Perplexity allowlist
-## feat: allow Perplexity crawlers through beta R1 skip rule
-## docs: distinguish rules version from repository version
+## test: assert the release notifications page documents the tag feed
+## docs: point release notes and release workflow at the feed
+## docs: add release notifications page for the tag feed
+## Release 2.5.0
+* (c059060) docs: add v2.5.0 release notes
+* (9fc29db) fix: keep the list-rules stdout stream free of multi-zone confirmation prose
+* (73e09b7) docs: document the list-rules table, json, csv, raw and long options
+* (cfdf149) test: cover list-rules table, long, json, csv and raw output offline
+* (d62a7af) feat: give list-rules a data-only table plus json, csv, raw and long modes
+* (62e219c) docs: link the generator app from the README documentation table
+* (7c503a9) docs: tighten README and surface the rule generator
+* (960d14e) feat: add static WAF rule generator under the docs site
+* (dc41271) docs: regenerate changelog for the docs site migration
+* (07761c2) test: enforce the docs-site layout and slim README contracts
+* (322d27d) ci: deploy the docs site to GitHub Pages
+* (aa41282) feat: generate docs pages and README pointer from profiles and changelog
+* (4bb13bb) docs: slim README to a docs-site entry point
+* (1aa7bfd) docs: migrate documentation into the Docusaurus site
+* (0ed7a91) feat: scaffold Docusaurus docs site in website/
+* (1207ec4) test: add offline Perplexity allowlist regression test
+* (e4857aa) docs: regenerate beta profile output for the Perplexity allowlist
+* (124807c) feat: allow Perplexity crawlers through beta R1 skip rule
+* (ca0443a) docs: distinguish rules version from repository version
 ## Release 2.4.3
 * (c7b5ea0) docs: document README release-notes contract and add v2.4.3 notes
 * (a6ae39f) test: add offline beta README regression test

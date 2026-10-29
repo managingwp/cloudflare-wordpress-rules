@@ -9,11 +9,30 @@ Newest first. The [beta channel](reference/beta-rules.md) is listed before
 released versions; beta changes appear there until they are promoted to a
 numbered rules release.
 
+To be told when a new release ships, subscribe to the
+[release feed](getting-started/release-notifications.md) — the tag is the
+release event.
+
 ## Beta channel (staging)
 
 Unreleased rule changes live in `profiles/mwp-rules-beta.json` and are published
 on the [Beta rules page](reference/beta-rules.md). They are not part of a
 numbered release yet and need no version bump, tag or changelog entry.
+
+## What's New in v2.5.1
+
+- **Release notifications** — a new [Release notifications](getting-started/release-notifications.md)
+  page explains how to be told about a new release: subscribe to the tag-derived
+  `releases.atom` feed, read only `X.Y.Z` tags, and ignore rules-release tags such
+  as `v208`.
+- **Why not the obvious signals** — the page records why `VERSION` on `main` and
+  GitHub's "Latest release"/"Watch → Releases" are not the notification path: a
+  rules release rewrites `VERSION` without a tag, and `/releases/latest` lagged six
+  tags behind on 2026-10-29.
+- **Release workflow** — `AGENTS.md` now states that a release is announced by its
+  tag and that the feed is the public notification channel.
+- **Offline tests** — `tests/test-docs-site.sh` asserts the page, its sidebar entry,
+  the feed URL and the semver filter.
 
 ## What's New in v2.5.0
 
@@ -54,16 +73,4 @@ numbered release yet and need no version bump, tag or changelog entry.
   numbered-release promotion path, and the release-notes contract.
 - **Beta: Wordfence 2FA** — the login/2FA allow-through in the beta skip rule is
   scoped to Wordfence 2FA actions.
-
-## What's New in v2.4.0
-
-- **Beta channel** — `mwp-rules-beta.json` is the new staging profile for rule
-  changes.
-- **Default symlink** — `default.json` is a symlink to the latest numbered
-  release, selectable as `default`.
-- **`bin/build.sh`** — unified build orchestrator (`generate-md`,
-  `generate-readme`, or all).
-- **`bin/release.sh`** — promote beta to a numbered release with one command.
-- **v3 schema** — all bundled profiles now use the v3 Rulesets API format
-  natively.
 

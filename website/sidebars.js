@@ -7,7 +7,7 @@ const sidebars = {
       type: 'category',
       label: 'Getting started',
       collapsed: false,
-      items: ['intro', 'getting-started/installation', 'getting-started/authentication'],
+      items: ['intro', 'getting-started/installation', 'getting-started/authentication', 'getting-started/release-notifications'],
     },
     {
       type: 'category',
