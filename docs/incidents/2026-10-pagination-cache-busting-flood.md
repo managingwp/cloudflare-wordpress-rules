@@ -12,7 +12,7 @@ instances:
   - { date: 2026-10-28, site_ref: site-a }
 rules: []
 confidence: observed
-tags: [cache-busting, php-fpm, ipv6, pagination, free-plan]
+tags: [cache-busting, php-fpm, proxy-networks, pagination, free-plan]
 ---
 
 # Nested pagination cache-busting flood
