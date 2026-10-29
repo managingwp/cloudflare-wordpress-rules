@@ -56,11 +56,13 @@ The migration tool:
 
 ## Profile conversion
 
-Convert existing v2 profiles to v3 format:
+A v2 profile needs three mechanical changes before it can be applied — `priority`
+removed, `allow`/`bypass` replaced by `skip`, and `enabled`/`logging` added to
+each rule. [The profile format reference](../reference/profile-format.md#converting-v2-to-v3)
+lists the mapping line by line.
 
-```bash
-bin/convert-profile-v2-to-v3.sh profiles/default.json profiles/default-v3.json
-```
+The profiles in `profiles/` are already v3, so there is usually nothing to
+convert: start from `profiles/mwp-rules-beta.json` and edit it.
 
 ## Required API token permissions
 

@@ -152,12 +152,8 @@ Rate limiting can be applied to any action:
 
 ### Converting v2 to v3
 
-Use the conversion script:
-```bash
-bin/convert-profile-v2-to-v3.sh profiles/default.json profiles/default-v3.json
-```
-
-Key conversions:
+There is no conversion script; the change is small enough to do by hand, and
+every profile in `profiles/` is already v3. Key conversions:
 - `priority` → removed (order is array position)
 - `allow` → `skip` with `"action_parameters": { "ruleset": "current" }`
 - `bypass` → `skip` with `"action_parameters": { "phases": [...] }`

@@ -47,7 +47,6 @@ const sidebars = {
         'reference/stable-rules',
         'release-notes',
         'changelog',
-        'reference/repository-layout',
         {
           type: 'category',
           label: 'Cloudflare Rulesets API',
@@ -68,7 +67,6 @@ const sidebars = {
         'contributing/development',
         'contributing/docs-site',
         'contributing/incident-template',
-        'contributing/roadmap',
       ],
     },
     {

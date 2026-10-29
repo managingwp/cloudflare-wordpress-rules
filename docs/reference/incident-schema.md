@@ -158,6 +158,4 @@ the profile changes, update the record in the same commit.
 
 ## Related pages
 
-- [Repository layout](repository-layout.md) — where the docs and the profiles
-  live.
 - [Profile format](profile-format.md) — the profile a shipped rule belongs to.
