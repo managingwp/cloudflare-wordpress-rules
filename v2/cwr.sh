@@ -94,7 +94,7 @@ CF_DEFAULTS_ALWAYS_USE_HTTPS=("on" "off")
 CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 
 # ============================================================
-# -- from inc/cf-inc.sh
+# -- Helpers: domain normalisation, zone loading and multi-zone runs
 # ============================================================
 # =====================================
 # -- _normalize_domain $DOMAIN
@@ -327,7 +327,7 @@ function _run_on_zones () {
 }
 
 # ============================================================
-# -- from inc/cf-inc-api.sh
+# -- Cloudflare API, settings and Challenge TTL
 # ============================================================
 function cf_api() {
     # -- Run cf_api with tokens
@@ -742,7 +742,7 @@ function _cf_set_challenge_ttl_if_lower () {
 }
 
 # ============================================================
-# -- from inc/cf-inc-auth.sh
+# -- Configuration and authentication
 # ============================================================
 # ==================================================
 # Load .cloudflare configuration file
@@ -1127,7 +1127,7 @@ function cf_auth_init() {
 
 
 # ============================================================
-# -- from inc/cf-inc-wp.sh
+# -- Profiles and applying them to a zone
 # ============================================================
 # =====================================
 # -- _cf_ruleset_read_profile_rules $PROFILE_FILE
@@ -1738,7 +1738,7 @@ _validate_expression_syntax() {
 }
 
 # ============================================================
-# -- from inc/cf-inc-rulesets.sh
+# -- Rulesets API: entry points, rule payloads and rendering
 # ============================================================
 function cf_ruleset_phase_name () {
     echo "http_request_firewall_custom"
@@ -2287,9 +2287,9 @@ function cf_ruleset_delete_rules_action () {
 # ==================================
 # -- Output layer
 # ==================================
-# inc/cf-inc.sh still defines the v1 message helpers; these definitions win
-# because they come after the includes. Every one of them now goes to stderr,
-# so stdout stays data-only.
+# The v1 message helpers, kept as names so the engine reads the same, but now
+# backed by bash-ui. Every one of them writes to stderr, so stdout stays
+# data-only.
 _error() { ui_err "$*"; }
 _warning() { ui_warn "$*"; }
 _success() { ui_ok "$*"; }
@@ -2357,422 +2357,308 @@ usage () {
 # -- main
 # =============================================================================
 
-# -- Multi-zone support variables
 declare -a DOMAINS=()
+declare -a LIST_FORMAT_FLAGS=()
 ZONES_FILE=""
 SKIP_CONFIRM=0
 MULTI_ZONE=0
 CONFIG_FILE=""
 CF_PROFILE=""
 CHALLENGE_TTL_ARG=""
-declare -a LIST_FORMAT_FLAGS=()
 TABLE_ONLY_EXPLICIT=0
+CMD=""
+DOMAIN=""
+ZONE_ID=""
 
 # -- Parse options
-    POSITIONAL=()
-    while [[ $# -gt 0 ]]
-    do
-    key="$1"
+POSITIONAL=()
+while (( $# )); do
+	case $1 in
+		-d | --domain)
+			# Repeatable; a full URL is normalised to its bare domain.
+			NORM_DOMAIN=$(_normalize_domain "${2:-}")
+			if [[ -z $NORM_DOMAIN ]]; then
+				_warning "Could not normalize domain: '${2:-}', using as-is"
+				NORM_DOMAIN=${2:-}
+			fi
+			DOMAINS+=("$NORM_DOMAIN")
+			shift 2
+			;;
+		-zf | --zones-file) ZONES_FILE=${2:-}; shift 2 ;;
+		--config) CONFIG_FILE=${2:-}; shift 2 ;;
+		--cf-profile | --cf-auth-profile) CF_PROFILE=${2:-}; shift 2 ;;
+		--challenge-ttl) CHALLENGE_TTL_ARG=${2:-}; shift 2 ;;
+		-y | --yes) SKIP_CONFIRM=1; shift ;;
+		-c | --command) CMD=${2:-}; shift 2 ;;
+		-h | --help) usage; exit 0 ;;
+		--debug)
+			DEBUG=1
+			# shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
+			UI_VERBOSE=1
+			shift
+			;;
+		--debug-json)
+			# shellcheck disable=SC2034
+			DEBUG=1
+			# shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
+			UI_VERBOSE=1
+			# shellcheck disable=SC2034
+			DEBUG_JSON=1
+			shift
+			;;
+		--table-only)
+			# Deprecated: the compact table is the default list-rules output.
+			TABLE_ONLY_EXPLICIT=1
+			shift
+			;;
+		--json | --csv | --raw) LIST_FORMAT_FLAGS+=("${1#--}"); shift ;;
+		--long) LIST_LONG=1; shift ;;
+		-dr | --dryrun) DRYRUN=1; shift ;;
+		*) POSITIONAL+=("$1"); shift ;;
+	esac
+done
+set -- "${POSITIONAL[@]}"
 
-    case $key in
-		-d|--domain)
-		# Accumulate multiple -d arguments (full URLs are normalized to bare domain)
-		NORM_DOMAIN="$(_normalize_domain "$2")"
-		if [[ -z "$NORM_DOMAIN" ]]; then
-			_warning "Could not normalize domain: '$2', using as-is"
-			NORM_DOMAIN="$2"
-		fi
-		DOMAINS+=("$NORM_DOMAIN")
-		shift # past argument
-		shift # past variable
-		;;
-		-zf|--zones-file)
-		ZONES_FILE="$2"
-		shift # past argument
-		shift # past variable
-		;;
-		--config)
-		CONFIG_FILE="$2"
-		shift # past argument
-		shift # past variable
-		;;
-        --cf-profile|--cf-auth-profile)
-        CF_PROFILE="$2"
-        shift # past argument
-        shift # past variable
-        ;;
-        --challenge-ttl)
-        CHALLENGE_TTL_ARG="$2"
-        shift # past argument
-        shift # past variable
-        ;;
-		-y|--yes)
-		SKIP_CONFIRM=1
-		shift # past argument
-		;;
-		-c|--command)
-		CMD="$2"
-		shift # past argument
-		shift # past variable
-		;;
-		-h|--help)
-		usage
-		exit 0
-		;;
-        --debug)
-        # shellcheck disable=SC2034
-        DEBUG=1
-        # shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
-        UI_VERBOSE=1
-        shift # past argument
-        ;;
-        --debug-json)
-        # shellcheck disable=SC2034
-        DEBUG=1
-        # shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
-        UI_VERBOSE=1
-        # shellcheck disable=SC2034
-        DEBUG_JSON=1
-        shift # past argument
-        ;;
-        --table-only)
-        # Deprecated: the compact table is now the default list-rules output.
-        TABLE_ONLY_EXPLICIT=1
-        shift # past argument
-        ;;
-        --json|--csv|--raw)
-        LIST_FORMAT_FLAGS+=("${key#--}")
-        shift # past argument
-        ;;
-        --long)
-        LIST_LONG="1"
-        shift # past argument
-        ;;
-        -dr|--dryrun)
-        DRYRUN="1"
-        shift # past argument
-        ;;
-        *)    # unknown option
-        POSITIONAL+=("$1") # save it in an array for later
-        shift # past argument
-        ;;
-    esac
-    done
-
-# -- Resolve the list-rules output format (exactly one format at a time)
-if [[ ${#LIST_FORMAT_FLAGS[@]} -gt 1 ]]; then
-    _error "Choose only one of --json, --csv or --raw"
-    exit 2
+# -- Resolve the list-rules output format (exactly one at a time)
+if (( ${#LIST_FORMAT_FLAGS[@]} > 1 )); then
+	_error "Choose only one of --json, --csv or --raw"
+	exit 2
 fi
-if [[ ${#LIST_FORMAT_FLAGS[@]} -eq 1 ]]; then
-    LIST_FORMAT="${LIST_FORMAT_FLAGS[0]}"
-    if [[ $TABLE_ONLY_EXPLICIT -eq 1 ]]; then
-        _error "--table-only cannot be combined with --${LIST_FORMAT}"
-        exit 2
-    fi
+if (( ${#LIST_FORMAT_FLAGS[@]} == 1 )); then
+	LIST_FORMAT=${LIST_FORMAT_FLAGS[0]}
+	if [[ $TABLE_ONLY_EXPLICIT -eq 1 ]]; then
+		_error "--table-only cannot be combined with --${LIST_FORMAT}"
+		exit 2
+	fi
 fi
 if [[ $LIST_LONG -eq 1 && $LIST_FORMAT != "table" ]]; then
-    _error "--long only applies to the table output; drop --${LIST_FORMAT}"
-    exit 2
+	_error "--long only applies to the table output; drop --${LIST_FORMAT}"
+	exit 2
 fi
 
-set -- "${POSITIONAL[@]}" # restore positional parameters
-
-# ==================================
 # -- Commands
-# ==================================
 # One list drives the positional form, the whitelist and the help text.
 CORE_COMMANDS="create-rules update-rules upgrade-default-rules list-rules delete-rule delete-rules list-profiles print-profile validate-profile"
+COMMANDS_REQUIRING_DOMAIN="create-rules update-rules upgrade-default-rules list-rules delete-rules delete-rule"
+COMMANDS_SUPPORTING_MULTIZONE="create-rules update-rules list-rules delete-rules"
 
 # Positional form: `cwr.sh create-rules default -d example.com`
-if [[ -z ${CMD:-} && -n ${1:-} ]]; then
-    if [[ " $CORE_COMMANDS " == *" $1 "* ]]; then
-        CMD=$1
-        shift
-    fi
+if [[ -z $CMD && -n ${1:-} && " $CORE_COMMANDS " == *" $1 "* ]]; then
+	CMD=$1
+	shift
 fi
 
-# -- Load zones from file if specified
-if [[ -n "$ZONES_FILE" ]]; then
-    _load_zones_file "$ZONES_FILE"
+# -- Dry run is advertised but not implemented; say so instead of pretending
+if [[ ${DRYRUN:-0} == "1" ]]; then
+	_error "Dry run is not implemented in cwr.sh yet"
+	exit 2
 fi
 
-# -- For backward compatibility, set DOMAIN to first zone if only one
-if [[ ${#DOMAINS[@]} -eq 1 ]]; then
-    DOMAIN="${DOMAINS[0]}"
-fi
-
-# -- Commands
-_debug "ARGS: ${*}@"
-
-# -- Dryrun
-if [[ ${DRYRUN:-0} = "1" ]]; then
-    _error "Dry run is not implemented in cwr.sh yet"
-    exit 2
-fi
-
-# -- Check $CMD
+# -- Require a known command
 if [[ -z $CMD ]]; then
-    usage
-    _error "No command provided"
-    exit 1
+	usage
+	_error "No command provided"
+	exit 1
 fi
-
-# -- Validate command and required arguments before authentication
-if [[ ! " $CORE_COMMANDS " == *" ${CMD} "* ]]; then
-    usage
-    _error "Unknown command: $CMD"
-    exit 1
-fi
-
-# ==================================
-# -- list-rules: stdout carries data only, diagnostics stay on stderr
-# ==================================
-if [[ "$CMD" == "list-rules" ]]; then
-    LIST_DATA_MODE=1
+if [[ " $CORE_COMMANDS " != *" ${CMD} "* ]]; then
+	usage
+	_error "Unknown command: $CMD"
+	exit 1
 fi
 
 # -- Dependencies: jq and curl carry every command that talks to Cloudflare
 for app in jq curl; do
-    if ! command -v "$app" >/dev/null 2>&1; then
-        _error "$app is required but was not found on PATH"
-        exit 1
-    fi
+	if ! command -v "$app" >/dev/null 2>&1; then
+		_error "$app is required but was not found on PATH"
+		exit 1
+	fi
 done
 
-# -- Argument validation
-if [[ $CMD == "create-rules" || $CMD == "update-rules" ]]; then
-    if [[ -z ${1:-} ]]; then
-        _error "No profile provided"
-        cf_list_profiles
-        exit 1
-    fi
-elif [[ $CMD == "print-profile" || $CMD == "validate-profile" ]]; then
-    if [[ -z ${1:-} ]]; then
-        _error "No profile provided"
-        cf_list_profiles
-        exit 1
-    fi
-elif [[ $CMD == "delete-rule" ]]; then
-    if [[ -z ${1:-} ]]; then
-        _error "No rule ID provided"
-        exit 1
-    fi
+# -- Load zones from a file, if one was given
+if [[ -n $ZONES_FILE ]]; then
+	_load_zones_file "$ZONES_FILE"
 fi
 
-# -- Check if domain is required for this command
-COMMANDS_REQUIRING_DOMAIN="create-rules update-rules upgrade-default-rules list-rules delete-rules delete-rule"
+# -- Per-command arguments
+case $CMD in
+	create-rules | update-rules | print-profile | validate-profile)
+		if [[ -z ${1:-} ]]; then
+			_error "No profile provided"
+			cf_list_profiles
+			exit 1
+		fi
+		;;
+	delete-rule)
+		if [[ -z ${1:-} ]]; then
+			_error "No rule ID provided"
+			exit 1
+		fi
+		;;
+esac
 
-# -- Commands that support multi-zone operations
-COMMANDS_SUPPORTING_MULTIZONE="create-rules update-rules list-rules delete-rules"
-
+# -- Domains: required, deduplicated, and single-zone unless supported
 if [[ " $COMMANDS_REQUIRING_DOMAIN " == *" ${CMD} "* ]]; then
-    # Check if we have at least one domain
-    if [[ ${#DOMAINS[@]} -eq 0 ]]; then
-        usage
-        _error "Command '$CMD' requires at least one domain to be specified with -d or -zf"
-        exit 1
-    fi
+	if (( ${#DOMAINS[@]} == 0 )); then
+		usage
+		_error "Command '$CMD' requires at least one domain to be specified with -d or -zf"
+		exit 1
+	fi
 
-    # Deduplicate zones
-    _deduplicate_zones
+	_deduplicate_zones
 
-    # For multi-zone operations
-    MULTI_ZONE=0
-    if [[ ${#DOMAINS[@]} -gt 1 ]]; then
-        # Check if command supports multi-zone
-        if [[ " $COMMANDS_SUPPORTING_MULTIZONE " != *" ${CMD} "* ]]; then
-            _error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
-            exit 1
-        fi
-        MULTI_ZONE=1
+	if (( ${#DOMAINS[@]} > 1 )); then
+		if [[ " $COMMANDS_SUPPORTING_MULTIZONE " != *" ${CMD} "* ]]; then
+			_error "Command '$CMD' does not support multiple zones. Please specify a single domain with -d"
+			exit 1
+		fi
+		MULTI_ZONE=1
 
-        # list-rules is read-only and data-only: no confirmation prose on stdout.
-        if [[ $LIST_DATA_MODE -ne 1 ]]; then
-            # Confirm with user unless -y flag was used
-            if ! _confirm_zones; then
-                exit 1
-            fi
-        fi
-    fi
+		# list-rules is read-only and data-only: no confirmation prose.
+		if [[ $LIST_DATA_MODE -ne 1 ]] && ! _confirm_zones; then
+			exit 1
+		fi
+	fi
+
+	if (( ${#DOMAINS[@]} == 1 )); then
+		DOMAIN=${DOMAINS[0]}
+	fi
 fi
 
-# ==================================
-# -- Commands that don't need authentication
-# ==================================
-if [[ $CMD == "list-profiles" ]]; then
-    cf_list_profiles
-    exit 0
-elif [[ $CMD == "print-profile" ]]; then
-    PROFILE=$1
-    if [[ -z $PROFILE ]]; then
-        _error "No profile provided"
-        cf_list_profiles
-        exit 1
-    fi
-    cf_print_profile "$PROFILE"
-    exit $?
-elif [[ $CMD == "validate-profile" ]]; then
-    PROFILE=$1
-    if [[ -z $PROFILE ]]; then
-        _error "No profile provided"
-        cf_list_profiles
-        exit 1
-    fi
-    cf_validate_profile "$PROFILE"
-    exit $?
+# -- Commands that need no credentials
+case $CMD in
+	list-profiles)
+		cf_list_profiles
+		exit 0
+		;;
+	print-profile)
+		cf_print_profile "$1"
+		exit $?
+		;;
+	validate-profile)
+		cf_validate_profile "$1"
+		exit $?
+		;;
+esac
+
+# -- Authentication
+if [[ -z $CONFIG_FILE ]]; then
+	CONFIG_FILE="$HOME/.cloudflare"
+fi
+if ! cf_auth_init "${CF_PROFILE:-}" "$CONFIG_FILE"; then
+	_error "Authentication failed"
+	exit 1
 fi
 
-# ==================================
-# -- Initialize Authentication (for commands that need it)
-# ==================================
-# Use default config file if not specified
-if [[ -z "$CONFIG_FILE" ]]; then
-    CONFIG_FILE="$HOME/.cloudflare"
-fi
-
-REQUESTED_CF_PROFILE="${CF_PROFILE:-${CF_AUTH_PROFILE:-}}"
-if ! cf_auth_init "$REQUESTED_CF_PROFILE" "$CONFIG_FILE"; then
-    _error "Authentication failed"
-    exit 1
-fi
-
-# For single zone, resolve zone ID now (backward compatibility)
+# -- Resolve the zone ID once for single-zone runs
 if [[ " $COMMANDS_REQUIRING_DOMAIN " == *" ${CMD} "* && $MULTI_ZONE -eq 0 ]]; then
-    DOMAIN="${DOMAINS[0]}"
-    ZONE_ID=$(_cf_zone_id "$DOMAIN")
-    if [[ -z $ZONE_ID ]]; then
-        _error "No zone ID found for $DOMAIN"
-        exit 1
-    else
-        if [[ $LIST_DATA_MODE -ne 1 ]]; then
-            _running2 "Zone ID found: $ZONE_ID"
-        fi
-    fi
+	ZONE_ID=$(_cf_zone_id "$DOMAIN")
+	if [[ -z $ZONE_ID ]]; then
+		_error "No zone ID found for $DOMAIN"
+		exit 1
+	fi
+	if [[ $LIST_DATA_MODE -ne 1 ]]; then
+		_running2 "Zone ID found: $ZONE_ID"
+	fi
 fi
 
 if [[ $LIST_DATA_MODE -ne 1 ]]; then
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _running "Running $CMD on ${#DOMAINS[@]} zones"
-    else
-        _running "Running $CMD on $DOMAIN with ID $ZONE_ID"
-    fi
+	if [[ $MULTI_ZONE -eq 1 ]]; then
+		_running "Running $CMD on ${#DOMAINS[@]} zones"
+	else
+		_running "Running $CMD on $DOMAIN with ID $ZONE_ID"
+	fi
 fi
 
 # =====================================
 # -- _cf_create_rules_with_ttl $DOMAIN $ZONE_ID $PROFILE [$CHALLENGE_TTL]
-# -- Combined operation: optionally set challenge TTL (if provided), then create rules.
-# -- Returns 0 if both (or the one that runs) succeed. Fails fast on TTL failure.
+# -- Optionally set the Challenge Passage TTL, then create the rules.
+# -- Returns non-zero if either step fails.
 # =====================================
 function _cf_create_rules_with_ttl () {
-    local DOMAIN_NAME=$1
-    local ZONE_ID=$2
-    local PROFILE_NAME=$3
-    local CHALLENGE_TTL=${4:-}
+	local DOMAIN_NAME=$1
+	local ZONE_ID=$2
+	local PROFILE_NAME=$3
+	local CHALLENGE_TTL=${4:-}
 
-    # If a challenge TTL was provided, set it (if-lower logic — skips if current >= desired)
-    if [[ -n "$CHALLENGE_TTL" ]]; then
-        _cf_set_challenge_ttl_if_lower "$ZONE_ID" "$CHALLENGE_TTL" || return 1
-    fi
+	# Set the TTL only when the current value is lower (skips otherwise)
+	if [[ -n $CHALLENGE_TTL ]]; then
+		_cf_set_challenge_ttl_if_lower "$ZONE_ID" "$CHALLENGE_TTL" || return 1
+	fi
 
-    # Create rules via profile
-    cf_profile_create "$DOMAIN_NAME" "$ZONE_ID" "$PROFILE_NAME"
+	cf_profile_create "$DOMAIN_NAME" "$ZONE_ID" "$PROFILE_NAME"
 }
 
-# =====================================
-# -- create-rules
-# =====================================
-if [[ $CMD == "create-rules" ]]; then
-    PROFILE=$1
-    if [[ -z $PROFILE ]]; then
-        _error "No profile provided"
-        cf_list_profiles
-        exit 1
-    fi
+# -- Dispatch
+case $CMD in
+	create-rules)
+		PROFILE=$1
+		if [[ -z $PROFILE ]]; then
+			_error "No profile provided"
+			cf_list_profiles
+			exit 1
+		fi
 
-    # -- Handle Challenge Passage setting
-    # If --challenge-ttl was passed, apply it directly (bypasses interaction).
-    # Otherwise, prompt interactively (existing behavior).
-    if [[ -n "$CHALLENGE_TTL_ARG" ]]; then
-        # --challenge-ttl path: single pass per zone — set TTL then create rules
-        if [[ $MULTI_ZONE -eq 1 ]]; then
-            _run_on_zones _cf_create_rules_with_ttl "\$DOMAIN" "\$ZONE_ID" "$PROFILE" "$CHALLENGE_TTL_ARG"
-        else
-            _cf_create_rules_with_ttl "$DOMAIN" "$ZONE_ID" "$PROFILE" "$CHALLENGE_TTL_ARG"
-        fi
-    else
-        # -- Prompt for Challenge Passage setting (once, before zone iteration)
-        # Pass a zone ID to query the current setting — for single zone it's already
-        # resolved; for multi-zone we resolve the first domain to show the info.
-        if [[ $MULTI_ZONE -eq 1 ]]; then
-            FIRST_ZONE_ID=$(_cf_zone_id "${DOMAINS[0]}")
-            CHOSEN_TTL=$(_cf_prompt_challenge_passage "$FIRST_ZONE_ID")
-        else
-            CHOSEN_TTL=$(_cf_prompt_challenge_passage "$ZONE_ID")
-        fi
-        if [[ -n "$CHOSEN_TTL" ]]; then
-            if [[ $MULTI_ZONE -eq 1 ]]; then
-                _run_on_zones _cf_create_rules_with_ttl "\$DOMAIN" "\$ZONE_ID" "$PROFILE" "$CHOSEN_TTL"
-            else
-                _cf_create_rules_with_ttl "$DOMAIN" "$ZONE_ID" "$PROFILE" "$CHOSEN_TTL"
-            fi
-        else
-            if [[ $MULTI_ZONE -eq 1 ]]; then
-                _run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
-            else
-                cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
-            fi
-        fi
-    fi
-# =====================================
-# -- update-rules
-# =====================================
-elif [[ $CMD == "update-rules" ]]; then
-    PROFILE=$1
-    if [[ -z $PROFILE ]]; then
-        _error "No profile provided"
-		cf_list_profiles    
-        exit 1
-    fi
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_update_rules "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
-    else
-        cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
-    fi
-# =====================================
-# -- upgrade-default-rules
-# =====================================
-elif [[ $CMD == "upgrade-default-rules" ]]; then
-    PROFILE="default"
-    cf_upgrade_rules_default "$DOMAIN" "$ZONE_ID" "$PROFILE"
+		# --challenge-ttl applies the value directly; without it, ask once
+		if [[ -n $CHALLENGE_TTL_ARG ]]; then
+			TTL=$CHALLENGE_TTL_ARG
+		else
+			if [[ $MULTI_ZONE -eq 1 ]]; then
+				TTL=$(_cf_prompt_challenge_passage "$(_cf_zone_id "${DOMAINS[0]}")")
+			else
+				TTL=$(_cf_prompt_challenge_passage "$ZONE_ID")
+			fi
+		fi
 
-# =====================================
-# -- list-rules (Rulesets API)
-# =====================================
-elif [[ $CMD == "list-rules" ]]; then
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_list_rules_action "\$DOMAIN" "\$ZONE_ID"
-    else
-        cf_ruleset_list_rules_action "$DOMAIN" "$ZONE_ID"
-    fi
-# =====================================
-# -- delete-rules (Rulesets API)
-# =====================================
-elif [[ $CMD == "delete-rules" ]]; then
-    if [[ $MULTI_ZONE -eq 1 ]]; then
-        _run_on_zones cf_ruleset_delete_rules_action "\$DOMAIN" "\$ZONE_ID"
-    else
-        cf_ruleset_delete_rules_action "$DOMAIN" "$ZONE_ID"
-    fi
-# =====================================
-# -- delete-rule (Rulesets API)
-# =====================================
-elif [[ $CMD == "delete-rule" ]]; then
-    RULE_ID=$1
-	[[ $RULE_ID == "" ]] && _error "No rule ID provided" && exit 1
-	cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$RULE_ID"
-else
-    usage
-    _error "No command provided"
-    exit 1
-fi
+		if [[ $MULTI_ZONE -eq 1 ]]; then
+			if [[ -n $TTL ]]; then
+				_run_on_zones _cf_create_rules_with_ttl "\$DOMAIN" "\$ZONE_ID" "$PROFILE" "$TTL"
+			else
+				_run_on_zones cf_profile_create "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
+			fi
+		else
+			if [[ -n $TTL ]]; then
+				_cf_create_rules_with_ttl "$DOMAIN" "$ZONE_ID" "$PROFILE" "$TTL"
+			else
+				cf_profile_create "$DOMAIN" "$ZONE_ID" "$PROFILE"
+			fi
+		fi
+		;;
+	update-rules)
+		PROFILE=$1
+		if [[ -z $PROFILE ]]; then
+			_error "No profile provided"
+			cf_list_profiles
+			exit 1
+		fi
+		if [[ $MULTI_ZONE -eq 1 ]]; then
+			_run_on_zones cf_update_rules "\$DOMAIN" "\$ZONE_ID" "$PROFILE"
+		else
+			cf_update_rules "$DOMAIN" "$ZONE_ID" "$PROFILE"
+		fi
+		;;
+	upgrade-default-rules)
+		cf_upgrade_rules_default "$DOMAIN" "$ZONE_ID" "default"
+		;;
+	list-rules)
+		if [[ $MULTI_ZONE -eq 1 ]]; then
+			_run_on_zones cf_ruleset_list_rules_action "\$DOMAIN" "\$ZONE_ID"
+		else
+			cf_ruleset_list_rules_action "$DOMAIN" "$ZONE_ID"
+		fi
+		;;
+	delete-rules)
+		if [[ $MULTI_ZONE -eq 1 ]]; then
+			_run_on_zones cf_ruleset_delete_rules_action "\$DOMAIN" "\$ZONE_ID"
+		else
+			cf_ruleset_delete_rules_action "$DOMAIN" "$ZONE_ID"
+		fi
+		;;
+	delete-rule)
+		cf_ruleset_delete_rule_action "$DOMAIN" "$ZONE_ID" "$1"
+		;;
+	*)
+		usage
+		_error "No command provided"
+		exit 1
+		;;
+esac
