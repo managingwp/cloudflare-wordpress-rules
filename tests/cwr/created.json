@@ -1,0 +1,25 @@
+{
+  "result": {
+    "id": "fedcba9876543210fedcba9876543210",
+    "name": "default",
+    "description": "",
+    "kind": "zone",
+    "phase": "http_request_firewall_custom",
+    "version": 1,
+    "last_updated": "2026-10-29T12:00:00.000000Z",
+    "rules": [
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "1",
+        "action": "block",
+        "description": "R4V207 - Block (Block)",
+        "enabled": true,
+        "expression": "(ip.src in { 192.0.2.10 })",
+        "last_updated": "2026-10-29T12:00:00.000000Z"
+      }
+    ]
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}

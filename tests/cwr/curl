@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# =====================================================================
+# tests/cwr/curl — stand-in for curl, used by tests/test-cwr.sh
+#
+# Answers Cloudflare API calls from fixtures so cwr.sh can be exercised
+# end to end with no credentials and no network. Every request is logged
+# as "METHOD URL BODY" to $CWR_CURL_LOG for payload assertions.
+#
+# Knobs (all paths are set by the test runner):
+#   CWR_CURL_LOG        request log file
+#   CWR_ZONE_JSON       body for the zone lookup
+#   CWR_CREATED_JSON    body for a created ruleset
+#   CWR_ENTRYPOINT_JSON body when the entry point exists
+#   CWR_ENTRYPOINT_MODE "missing" (default) answers the entry point with 404
+# =====================================================================
+
+set -uo pipefail
+
+out=""
+method="GET"
+url=""
+data=""
+
+while (( $# )); do
+    case "$1" in
+        --output) out=${2:-}; shift 2 ;;
+        --request) method=${2:-}; shift 2 ;;
+        --url) url=${2:-}; shift 2 ;;
+        --data | --data-binary | -d) data=${2:-}; shift 2 ;;
+        -H | -w) shift 2 ;;
+        -s) shift ;;
+        *) shift ;;
+    esac
+done
+
+# Keep the log one line per request so tests can grep a whole payload.
+if [[ -n $data ]]; then
+    compact=$(printf '%s' "$data" | jq -c . 2>/dev/null) && data=$compact
+fi
+
+if [[ -n ${CWR_CURL_LOG:-} ]]; then
+    printf '%s %s %s\n' "$method" "$url" "$data" >>"$CWR_CURL_LOG"
+fi
+
+status=200
+case "$method $url" in
+    "GET "*"zones?name="*)
+        body=$(cat "${CWR_ZONE_JSON:?}")
+        ;;
+    "GET "*"/rulesets/phases/http_request_firewall_custom/entrypoint")
+        if [[ ${CWR_ENTRYPOINT_MODE:-missing} == missing ]]; then
+            body='{"result":null,"success":false,"errors":[{"code":10012,"message":"entry point not found"}],"messages":[]}'
+            status=404
+        else
+            body=$(cat "${CWR_ENTRYPOINT_JSON:?}")
+        fi
+        ;;
+    "PUT "*"/rulesets/"*)
+        body='{"result":{"id":"rs1","name":"default","phase":"http_request_firewall_custom","version":1,"rules":[]},"success":true}'
+        ;;
+    *)
+        body=$(cat "${CWR_CREATED_JSON:?}")
+        ;;
+esac
+
+if [[ -n $out ]]; then
+    printf '%s' "$body" >"$out"
+fi
+printf '%s' "$status"
