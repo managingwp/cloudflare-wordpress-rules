@@ -1,13 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light" data-theme-preference="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Cloudflare WAF rule generator</title>
 <meta name="description" content="Generate Cloudflare WordPress WAF custom rules (R1-R4) in your browser: dashboard expressions, Rulesets API JSON and v3 profiles.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f6821f'/%3E%3Cpath d='M9 22V10h3l4 7 4-7h3v12h-3v-7l-4 6-4-6v7z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="./assets/app.css">
+<!-- Resolves the stored light/dark preference before the first paint; without
+     it the deferred module would show the light palette first. -->
+<script src="./js/theme-boot.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -19,14 +23,22 @@
       <p class="lead">Build the WordPress rule set (R1–R4) for Cloudflare <strong>WAF custom rules</strong>, then copy it
         into the dashboard or the Rulesets API. Nothing is uploaded: every rule is built in this tab.</p>
     </div>
-    <nav class="header-links" aria-label="Related">
-      <a href="../">Documentation</a>
-      <a href="https://github.com/managingwp/cloudflare-wordpress-rules" rel="noreferrer">GitHub</a>
-    </nav>
+    <div class="header-side">
+      <nav class="header-links" aria-label="Related">
+        <a href="../">Documentation</a>
+        <a href="https://github.com/managingwp/cloudflare-wordpress-rules" rel="noreferrer">GitHub</a>
+      </nav>
+      <div class="theme-switch" role="group" aria-label="Colour theme">
+        <button type="button" class="btn" data-theme-value="auto" aria-pressed="true"
+          title="Follow the operating system">Auto</button>
+        <button type="button" class="btn" data-theme-value="light" aria-pressed="false">Light</button>
+        <button type="button" class="btn" data-theme-value="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
   </div>
 </header>
 
-<p id="notice" class="notice" hidden></p>
+<p id="notice" class="notice" role="status" hidden></p>
 
 <main id="main" class="wrap layout">
   <section class="panel" aria-labelledby="settings-heading">
@@ -48,8 +60,9 @@
         <span>Preset file</span>
         <div class="button-row">
           <button type="button" class="btn" id="preset-export">Download preset</button>
-          <label class="btn" for="preset-import">Load preset…</label>
-          <input id="preset-import" type="file" accept="application/json,.json" hidden>
+          <label class="btn">Load preset…
+            <input id="preset-import" type="file" accept="application/json,.json" class="sr-only">
+          </label>
         </div>
       </div>
     </div>

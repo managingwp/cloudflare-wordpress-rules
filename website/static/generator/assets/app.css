@@ -1,5 +1,8 @@
 /* Cloudflare WAF rule generator — no external assets, no fetched fonts. */
 
+/* Two palettes, selected by data-theme on <html>. js/theme-boot.js resolves the
+   stored preference (auto/light/dark) before the first paint, so the OS setting
+   is only consulted by script; the switch itself lives in js/theme.js. */
 :root {
   --bg: #ffffff;
   --fg: #1b1b1f;
@@ -18,25 +21,25 @@
   --radius: 10px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14161a;
-    --fg: #e9ecf1;
-    --muted: #9aa4b2;
-    --card: #1b1f25;
-    --card-2: #171b20;
-    --border: #2c333b;
-    --accent: #f6821f;
-    --accent-ink: #14161a;
-    --danger: #ff8a80;
-    --danger-bg: #3a1b19;
-    --warn: #e3b341;
-    --warn-bg: #33280c;
-    --ok: #6ee787;
-    --code-bg: #0f1317;
-  }
+:root[data-theme="dark"] {
+  --bg: #14161a;
+  --fg: #e9ecf1;
+  --muted: #9aa4b2;
+  --card: #1b1f25;
+  --card-2: #171b20;
+  --border: #2c333b;
+  --accent: #f6821f;
+  --accent-ink: #14161a;
+  --danger: #ff8a80;
+  --danger-bg: #3a1b19;
+  --warn: #e3b341;
+  --warn-bg: #33280c;
+  --ok: #6ee787;
+  --code-bg: #0f1317;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -49,6 +52,12 @@ body {
   color: var(--fg);
   font: 16px/1.55 var(--font);
 }
+
+/* Buttons do not inherit text colour from the UA stylesheet (they default to
+   the platform's button text colour), which is how the suggestion chips ended
+   up black on black in the dark palette. Every button class must still win,
+   but the inherited default is now the page colour. */
+button { font: inherit; color: inherit; }
 
 .wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 1.25rem; }
 
@@ -74,8 +83,29 @@ a:hover { color: var(--accent); }
 .site-header .wrap { display: flex; gap: 1.5rem; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
 .site-header h1 { margin: 0 0 0.5rem; font-size: 1.6rem; line-height: 1.2; letter-spacing: -0.01em; }
 .lead { margin: 0; max-width: 60ch; color: var(--muted); }
+.header-side { display: flex; flex-direction: column; gap: 0.85rem; align-items: flex-end; }
 .header-links { display: flex; gap: 1rem; font-size: 0.95rem; }
 .header-links a { font-weight: 600; }
+
+.theme-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-2);
+}
+.theme-switch .btn {
+  min-height: 2rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.theme-switch .btn:first-child { border-radius: 7px 0 0 7px; }
+.theme-switch .btn:last-child { border-radius: 0 7px 7px 0; }
+.theme-switch .btn + .btn { border-left: 1px solid var(--border); }
+.theme-switch .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.theme-switch .btn[aria-pressed="true"]:hover { border-color: transparent; }
 
 .notice {
   margin: 0 auto 1.5rem; max-width: 1240px; padding: 0.75rem 1rem;
@@ -151,6 +181,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
+  position: relative;
   min-height: 2.25rem; padding: 0.4rem 0.8rem;
   font: inherit; font-size: 0.88rem; font-weight: 600;
   color: var(--fg); background: var(--card-2);
@@ -162,6 +193,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .btn[disabled] { opacity: 0.6; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.flash { border-color: var(--ok); color: var(--ok); }
+/* A <label class="btn"> holding the visually hidden file input: the ring has to
+   be drawn on the label, because the input itself is clipped. */
+.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .button-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .footer-actions { margin-top: 0.5rem; }
@@ -183,13 +217,16 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   padding: 0.15rem 0.25rem 0.15rem 0.55rem;
   background: var(--card-2); border: 1px solid var(--border); border-radius: 999px;
   font-family: var(--mono); font-size: 0.8rem;
+  color: var(--fg);
 }
 .chip button {
   border: 0; background: transparent; color: var(--muted);
   font: inherit; cursor: pointer; padding: 0 0.25rem; line-height: 1;
 }
 .chip button:hover { color: var(--danger); }
-.chip.suggest { padding-right: 0.55rem; font-family: var(--font); }
+.chip.suggest { padding-right: 0.55rem; font-family: var(--font); cursor: pointer; }
+.chip.suggest:hover { border-color: var(--accent); }
+.chip.suggest[disabled] { opacity: 0.6; cursor: default; border-color: var(--border); }
 
 .country-add { display: flex; gap: 0.5rem; align-items: center; max-width: 20rem; }
 .country-add input { text-transform: uppercase; max-width: 7rem; }
@@ -197,8 +234,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .summary { margin-bottom: 1rem; }
 .summary-head { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
 .summary-head + .summary-head { margin-top: 0.6rem; }
-progress { width: 100%; height: 0.6rem; margin: 0.4rem 0 0.2rem; }
-progress::-webkit-progress-bar { background: var(--card-2); border: 1px solid var(--border); border-radius: 999px; }
+progress {
+  width: 100%; height: 0.6rem; margin: 0.4rem 0 0.2rem;
+  -webkit-appearance: none; appearance: none;
+  background: var(--card-2); border: 1px solid var(--border); border-radius: 999px;
+  overflow: hidden;
+}
+progress::-webkit-progress-bar { background: var(--card-2); border-radius: 999px; }
 progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
 progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
 
@@ -261,5 +303,6 @@ h3 { font-size: 1rem; margin: 1.25rem 0 0.25rem; }
 @media (max-width: 620px) {
   .site-header { padding: 1.5rem 0 1rem; }
   .site-header h1 { font-size: 1.35rem; }
+  .header-side { align-items: flex-start; }
   .rule-card .code { max-height: 9rem; }
 }

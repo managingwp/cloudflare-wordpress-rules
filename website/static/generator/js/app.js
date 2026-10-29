@@ -24,6 +24,7 @@ import {
 } from "./format.js";
 import { MAX_CUSTOM_RULES, MAX_EXPRESSION_CHARS, summarizeLimits } from "./limits.js";
 import { ISO_COUNTRIES, countryName } from "./countries.js";
+import { initTheme } from "./theme.js";
 
 const STORAGE_KEY = "cfwpr.generator.options.v1";
 const UA_SUGGESTIONS = [
@@ -55,6 +56,8 @@ const state = {
 let countries = [];
 let rules = [];
 let hashTimer = null;
+let lastMessageSignature = null;
+let lastPresetSignature = null;
 
 const el = (id) => document.getElementById(id);
 
@@ -251,29 +254,43 @@ function readForm() {
 
 function renderPresetTabs() {
   const container = el("preset-tabs");
-  container.textContent = "";
-  for (const preset of state.presets) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn";
-    button.textContent = preset.label || preset.name;
-    const active = preset.name === state.presetName && !state.edited;
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-    button.addEventListener("click", () => {
-      if (state.edited && !window.confirm(`Discard your edits and load "${preset.label || preset.name}"?`)) {
-        return;
-      }
-      applyPreset(preset);
-    });
-    container.append(button);
+  const names = state.presets.map((preset) => preset.name);
+  const labels = state.presets.map((preset) => preset.label || preset.name);
+  const signature = JSON.stringify({ names, labels });
+
+  // The buttons are only rebuilt when the preset list itself changes: recreating
+  // them on every keystroke (or on every preset click) would drop keyboard focus.
+  if (signature !== lastPresetSignature) {
+    lastPresetSignature = signature;
+    container.textContent = "";
+    for (const preset of state.presets) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn";
+      button.textContent = preset.label || preset.name;
+      button.dataset.preset = preset.name;
+      button.addEventListener("click", () => {
+        if (state.edited && !window.confirm(`Discard your edits and load "${preset.label || preset.name}"?`)) {
+          return;
+        }
+        applyPreset(preset);
+      });
+      container.append(button);
+    }
+    const custom = document.createElement("button");
+    custom.type = "button";
+    custom.className = "btn";
+    custom.textContent = "Custom";
+    custom.dataset.preset = "";
+    custom.disabled = true;
+    container.append(custom);
   }
-  const custom = document.createElement("button");
-  custom.type = "button";
-  custom.className = "btn";
-  custom.textContent = "Custom";
-  custom.setAttribute("aria-pressed", state.edited ? "true" : "false");
-  custom.disabled = true;
-  container.append(custom);
+
+  for (const button of container.querySelectorAll("button")) {
+    const name = button.dataset.preset || "";
+    const active = name === "" ? state.edited : (name === state.presetName && !state.edited);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
 }
 
 function applyPreset(preset, saved) {
@@ -299,40 +316,49 @@ function messageItem(text, tone) {
 }
 
 function renderMessages(validation, limits) {
-  const list = el("messages");
-  list.textContent = "";
+  const items = [];
 
-  for (const error of validation.errors) list.append(messageItem(error.message, "error"));
-  for (const warning of validation.warnings) list.append(messageItem(warning.message, "warn"));
+  for (const error of validation.errors) items.push([error.message, "error"]);
+  for (const warning of validation.warnings) items.push([warning.message, "warn"]);
 
   if (!isValidTemplateVersion(state.templateVersion)) {
-    list.append(messageItem('Template version must be a rules version such as "207" or "beta".', "error"));
+    items.push(['Template version must be a rules version such as "207" or "beta".', "error"]);
   }
   if (limits.rulesOver) {
-    list.append(messageItem(
+    items.push([
       `Free plan allows ${limits.maxRules} custom rules; this set uses ${limits.rules}.`,
       "error",
-    ));
+    ]);
   }
   for (const item of limits.perRule) {
     if (item.over) {
-      list.append(messageItem(
+      items.push([
         `${item.ref} is ${item.chars} characters, over the ${limits.maxChars} limit. Use an IP list or split the rule.`,
         "error",
-      ));
+      ]);
     } else if (item.near) {
-      list.append(messageItem(
+      items.push([
         `${item.ref} is at ${item.chars} of ${limits.maxChars} characters.`,
         "warn",
-      ));
+      ]);
     }
   }
 
   if (rules.length === 0) {
-    list.append(messageItem("No rules yet: enable a challenge or add a trusted source.", "ok"));
-  } else if (list.children.length === 0) {
-    list.append(messageItem("All rules fit within the Free plan limits.", "ok"));
+    items.push(["No rules yet: enable a challenge or add a trusted source.", "ok"]);
+  } else if (items.length === 0) {
+    items.push(["All rules fit within the Free plan limits.", "ok"]);
   }
+
+  // The list is an aria-live region: rebuilding it on every keystroke would
+  // re-announce the same messages, so only redraw when the set changed.
+  const signature = JSON.stringify(items);
+  if (signature === lastMessageSignature) return;
+  lastMessageSignature = signature;
+
+  const list = el("messages");
+  list.textContent = "";
+  for (const [text, tone] of items) list.append(messageItem(text, tone));
 }
 
 function ipClauseInfo(rule) {
@@ -627,6 +653,7 @@ function bindEvents() {
 // -- boot ------------------------------------------------------------------
 
 async function init() {
+  initTheme();
   fillCountryDatalist();
   bindTabs();
   bindEvents();

@@ -60,19 +60,24 @@ lives in `website/static/generator/` because Docusaurus copies `static/`
 verbatim into the build — it needs no bundler and no workflow of its own.
 
 Layout: `index.html`, `assets/app.css`, `js/` (`rules.js` builder, `format.js`
-renderers, `presets.js` loader, `limits.js`, `countries.js`, `app.js` UI) and
-`profiles/*.json` presets listed in `profiles/index.json`.
+renderers, `presets.js` loader, `limits.js`, `countries.js`, `theme.js` switch,
+`theme-boot.js` pre-paint palette, `app.js` UI) and `profiles/*.json` presets
+listed in `profiles/index.json`.
 
 Contracts:
 
 * `js/rules.js` is the only place rule expressions are composed. The UI and the
   Node tests import the same module, so the generator and `profiles/*.json`
   cannot drift.
+* The palette is two token sets in `assets/app.css` selected by `data-theme` on
+  `<html>`. `js/theme-boot.js` (a classic script, so it runs before first paint)
+  sets that attribute from `localStorage`; it must keep its storage key and
+  preference values in sync with `js/theme.js`, which owns the switch.
 * `bash tests/test-generator.sh` must stay green. It runs
   `tests/generator/*.test.mjs` (parity against `profiles/default.json` and
-  `profiles/mwp-rules-beta.json`, preset schema, `extends`, renderers) and greps
-  the app for root-absolute paths, outbound requests, analytics and inline
-  scripts.
+  `profiles/mwp-rules-beta.json`, preset schema, `extends`, renderers, theme
+  resolution) and greps the app for root-absolute paths, outbound requests,
+  analytics, inline scripts and inline styles.
 * New presets are JSON files in `website/static/generator/profiles/`, listed in
   `profiles/index.json`; `templateVersion` must equal `profiles/default.json`'s
   `rule_version` (the test enforces it).

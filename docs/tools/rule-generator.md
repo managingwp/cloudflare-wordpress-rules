@@ -24,6 +24,22 @@ Free-plan limit a rule consumes.
 - Client-side only: nothing is uploaded, there is no analytics, and the page
   makes no network requests except for its own `profiles/*.json` files.
 
+## Colour theme
+
+The header carries a three-way switch: **Auto**, **Light** and **Dark**.
+
+| Choice | What it does |
+| --- | --- |
+| Auto | Follows the operating system and keeps following it if the setting changes while the page is open. |
+| Light | Pins the light palette, whatever the OS says. |
+| Dark | Pins the dark palette, whatever the OS says. |
+
+The choice is stored in `localStorage` under `cfwpr.generator.theme.v1` and is
+applied before the first paint, so the page never flashes the other palette.
+Clearing the site's storage returns it to Auto. Both palettes are contrast
+checked; the page also declares `color-scheme` so native controls (checkboxes,
+selects, scrollbars) follow the active theme.
+
 ## Presets
 
 Presets are JSON files under
@@ -181,6 +197,8 @@ npm --prefix website start
 - Settings are kept in `localStorage` and the URL hash (`#s=…`), both on your
   machine. **Copy share link** produces a URL containing the whole
   configuration, so treat it like the rule list itself.
+- The colour-theme choice is the only other stored value
+  (`cfwpr.generator.theme.v1`); it is not part of the share link.
 
 ## Tests
 
@@ -190,6 +208,7 @@ bash tests/test-generator.sh
 
 The suite runs the rule builder under Node (parity against
 `profiles/default.json` and `profiles/mwp-rules-beta.json`), checks preset schema
-and `extends` resolution, and greps the app for root-absolute paths, outbound
-requests and analytics. When `website/node_modules` is installed it also builds
-the docs site and asserts `/generator/` is in the output.
+and `extends` resolution, checks the theme switch and its storage key, and greps
+the app for root-absolute paths, outbound requests, inline styles and analytics.
+When `website/node_modules` is installed it also builds the docs site and asserts
+`/generator/` is in the output.

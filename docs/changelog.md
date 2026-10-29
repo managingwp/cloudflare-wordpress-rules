@@ -9,9 +9,23 @@ Generated from `git log` by `bin/build.sh generate-readme`. The same content is
 written to `CHANGELOG.md` in the repository root.
 
 <!--- CHANGELOG --->
-## test: assert the release notifications page documents the tag feed
-## docs: point release notes and release workflow at the feed
-## docs: add release notifications page for the tag feed
+## Release 2.6.1
+* (eb2863c) docs: add release notes for 2.6.1
+* (540b9b4) fix: repair dark-mode chip contrast and add an Auto/Light/Dark switch to the WAF rule generator
+* (8da027f) docs: regenerate the changelog for 2.6.0
+## Release 2.6.0
+* (c773790) docs: add release notes for 2.6.0
+* (b7ac6cf) test: cover apply-profile reporting and the UPDATED column
+* (5c5980c) fix: format the ruleset summary timestamp like the UPDATED column
+* (83b8403) docs: document the dated rule tables in the command reference
+* (d0a5020) fix: report the setting change instead of the API body
+* (e37a82a) feat: show rules as dated tables when applying a profile
+* (3fc5f64) fix: carry entry point ruleset state out of the command substitution
+## Release 2.5.1
+* (d82ccf8) docs: add v2.5.1 release notes and regenerate changelog
+* (37c0904) test: assert the release notifications page documents the tag feed
+* (c8ee89a) docs: point release notes and release workflow at the feed
+* (d2019e4) docs: add release notifications page for the tag feed
 ## Release 2.5.0
 * (c059060) docs: add v2.5.0 release notes
 * (9fc29db) fix: keep the list-rules stdout stream free of multi-zone confirmation prose

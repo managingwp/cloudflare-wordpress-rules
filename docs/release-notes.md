@@ -19,6 +19,29 @@ Unreleased rule changes live in `profiles/mwp-rules-beta.json` and are published
 on the [Beta rules page](reference/beta-rules.md). They are not part of a
 numbered release yet and need no version bump, tag or changelog entry.
 
+## What's New in v2.6.1
+
+- **Dark mode fix in the rule generator** — the "Allowed user agents" suggestion
+  chips (PerplexityBot, GPTBot, ClaudeBot, CCBot, Stripe/, PayPal IPN, and the
+  rest) rendered black text on a near-black background, because a `<button>` never
+  inherited the page colour. They now follow the palette: 1.21:1 → 12.9:1.
+- **Colour theme switch** — the generator header now carries **Auto / Light /
+  Dark**. Auto follows the operating system (and keeps following it if you change
+  the setting with the page open); Light and Dark pin the palette. The choice is
+  stored in `localStorage` and applied before the first paint, so there is no
+  flash of the wrong theme.
+- **Native controls follow the theme** — the page declares `color-scheme`, so
+  checkboxes, the action `<select>`, the file input, scrollbars and progress bars
+  stop rendering in light colours on the dark palette.
+- **Keyboard and screen-reader fixes** — **Load preset…** is now reachable with
+  the keyboard (it was a label around a `hidden` input), the preset buttons keep
+  focus when you click one, the notice is announced as a status message, and the
+  results list no longer re-announces unchanged messages on every keystroke.
+- **Offline tests** — `tests/generator/theme.test.mjs` covers Auto/Light/Dark
+  resolution and the boot-script/module contract; `tests/test-generator.sh` now
+  also rejects inline styles and asserts the switch, the theme attribute and the
+  `color-scheme` declaration.
+
 ## What's New in v2.6.0
 
 - **Apply-profile reporting fix** — `create-rules`, `update-rules` and
@@ -52,31 +75,3 @@ numbered release yet and need no version bump, tag or changelog entry.
   tag and that the feed is the public notification channel.
 - **Offline tests** — `tests/test-docs-site.sh` asserts the page, its sidebar entry,
   the feed URL and the semver filter.
-
-## What's New in v2.5.0
-
-- **`list-rules` overhaul** — the default output is now a compact, aligned
-  table (position, action, enabled state, rule ID, description) with a zone and
-  ruleset summary. The raw entry point JSON is no longer printed by default or
-  twice, and startup chatter (`Authenticated…`, `Zone ID found…`,
-  `Running…`) no longer pollutes stdout.
-- **New output formats** — `--json` (one compact object per zone for `jq`),
-  `--csv` (one header plus a row per rule, expressions included), `--raw` (the
-  unmodified Cloudflare response) and `--long` (per-rule logging, action
-  parameters and full expression). `--table-only` remains as a deprecated alias
-  for the default table.
-- **Behaviour changes** — a zone with no custom rules now exits `0` instead of
-  looking like a failed zone, conflicting format flags exit `2`, and multi-zone
-  `list-rules` no longer prompts for confirmation. **The default `list-rules`
-  output is no longer raw JSON** — scripts that parsed it should use `--raw` or
-  `--json`.
-- **Documentation site** — the docs moved into a Docusaurus 3 site (`docs/` and
-  `website/`) published from GitHub Actions, with the hand-written release
-  notes, generated rule pages and reference material.
-- **Rule generator** — a client-side WAF rule generator is published at
-  `/generator/` of the docs site, with presets that stay in parity with the
-  bundled profiles.
-- **Offline tests** — `tests/test-list-rules-output.sh` covers every output
-  format, plus docs-site and generator layout/parity checks. No credentials are
-  required for any of them.
-

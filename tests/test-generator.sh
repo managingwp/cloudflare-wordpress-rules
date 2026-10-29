@@ -126,6 +126,23 @@ assert_contains "CSP restricts the page to same-origin assets" \
 inline_scripts="$(grep -cE '<script[^>]*>[^<]' "$HTML_FILE")"
 assert_eq "external scripts only (CSP-safe)" "0" "$inline_scripts"
 
+inline_styles="$(grep -nE 'style="' "$HTML_FILE" "$GENERATOR_DIR"/js/*.js 2>/dev/null)"
+assert_empty "no inline style attributes (style-src 'self')" "$inline_styles"
+
+assert_file "theme boot script exists (pre-paint palette)" "$GENERATOR_DIR/js/theme-boot.js"
+assert_file "theme module exists" "$GENERATOR_DIR/js/theme.js"
+assert_contains "page offers a theme switch" \
+    'data-theme-value="auto"' "$(cat "$HTML_FILE")"
+assert_contains "theme switch exposes its pressed state" \
+    'aria-pressed' "$(cat "$HTML_FILE")"
+assert_contains "stylesheet declares a colour scheme for native controls" \
+    "color-scheme: dark" "$(cat "$GENERATOR_DIR/assets/app.css")"
+
+theme_key_module="$(grep -ohE '"cfwpr\.generator\.theme\.v1"' "$GENERATOR_DIR/js/theme.js" | head -1)"
+theme_key_boot="$(grep -ohE '"cfwpr\.generator\.theme\.v1"' "$GENERATOR_DIR/js/theme-boot.js" | head -1)"
+assert_eq "theme preference key matches in boot script and module" \
+    "$theme_key_module" "$theme_key_boot"
+
 assert_contains "page states the client-side guarantee" \
     "No account credentials, no tracking" "$(cat "$HTML_FILE")"
 
