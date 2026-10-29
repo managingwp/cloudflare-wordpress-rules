@@ -34,17 +34,39 @@ The offline suite needs no Cloudflare credentials and never modifies tracked
 files:
 
 ```bash
-bash tests/test-docs-site.sh
-bash tests/test-beta-readme.sh
+bash tests/test-apply-profile.sh
 bash tests/test-beta-perplexity.sh
-bash tests/test-profile-resolution.sh
-bash tests/test-print-profile.sh
+bash tests/test-beta-readme.sh
+bash tests/test-docs-site.sh
 bash tests/test-generator.sh
+bash tests/test-incidents.sh
+bash tests/test-list-rules-output.sh
+bash tests/test-print-profile.sh
+bash tests/test-profile-resolution.sh
+bash tests/test-rulesets-api.sh
 ```
 
 `tests/test-generator.sh` runs the rule builder under Node, so the generator and
 `profiles/*.json` cannot drift. It also builds the docs site, to prove
 `/generator/` survives the Docusaurus build.
+
+What each one guards:
+
+| Script | Guards |
+| --- | --- |
+| `test-apply-profile.sh` | applying a profile against a stubbed API: new zone, existing zone accepted and declined, `-y`, and the counted result table |
+| `test-list-rules-output.sh` | the `list-rules` formats — default table, `--long`, `--json`, `--csv`, `--raw` — and their stdout/stderr split |
+| `test-print-profile.sh` | `print-profile` output, including action parameters |
+| `test-profile-resolution.sh` | resolving a profile by filename and by internal name, and how `default` is labelled |
+| `test-rulesets-api.sh` | the `cf-inc-rulesets.sh` builders, validators and converters that need no API access |
+| `test-beta-perplexity.sh` | the beta R1 skip rule: the Perplexity allowlist, its position, and the 4,096-character Free-plan limit |
+| `test-beta-readme.sh` | the generated beta block at the top of `README.md` |
+| `test-docs-site.sh` | docs front matter, sidebar/page parity, relative links, generated-page markers and the README |
+| `test-incidents.sh` | the incident registry: schema, site placeholders, section order and a domain sweep |
+| `test-generator.sh` | the static rule generator, its presets and the Node tests behind them |
+
+Run the one that covers your change before committing, and the whole list
+before a release.
 
 ## Releasing
 
