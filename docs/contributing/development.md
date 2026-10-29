@@ -40,6 +40,7 @@ bash tests/test-beta-readme.sh
 bash tests/test-docs-site.sh
 bash tests/test-generator.sh
 bash tests/test-incidents.sh
+bash tests/test-ipblocks-data.sh
 bash tests/test-list-rules-output.sh
 bash tests/test-print-profile.sh
 bash tests/test-profile-resolution.sh
@@ -63,6 +64,7 @@ What each one guards:
 | `test-beta-readme.sh` | the generated beta block at the top of `README.md` |
 | `test-docs-site.sh` | docs front matter, sidebar/page parity, relative links, generated-page markers and the README |
 | `test-incidents.sh` | the incident registry: schema, site placeholders, section order and a domain sweep |
+| `test-ipblocks-data.sh` | the published ipblocks JSON against its source lists, plus its regeneration |
 | `test-generator.sh` | the static rule generator, its presets and the Node tests behind them |
 
 Run the one that covers your change before committing, and the whole list

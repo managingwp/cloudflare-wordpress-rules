@@ -169,6 +169,8 @@ The `docs/` folder is the documentation site's content directory:
 
 - **`docs/reference/incident-schema.md`** — The incident record contract: required front-matter fields, allowed values, the fixed body sections and the redaction rules.
 
+- **`docs/reference/allowlist-data.md`** — The `ipblocks-ua-qs/` IP, ASN, user-agent and query-string lists, and the JSON document published from them at `/data/ipblocks-ua-qs.json`.
+
 - **`docs/guides/tracking-parameters.md`** — Why blocking on `trk=`, `fbclid`, `gclid`, `msclkid` or `utm_*` blocks real visitors, and what to match instead.
 
 - **`docs/contributing/incident-template.md`** — Copy-paste skeleton for a new incident record.

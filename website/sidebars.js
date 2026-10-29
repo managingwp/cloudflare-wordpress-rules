@@ -43,6 +43,7 @@ const sidebars = {
       items: [
         'reference/profile-format',
         'reference/incident-schema',
+        'reference/allowlist-data',
         'reference/beta-rules',
         'reference/stable-rules',
         'release-notes',

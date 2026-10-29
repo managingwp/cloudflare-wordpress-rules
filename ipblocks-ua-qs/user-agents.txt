@@ -2,9 +2,9 @@ bvVersion
 Zapier
 Metorik API Client
 Wordfence Central API
-Btter Uptime Bot
-ShortPixel 
+Better Uptime Bot
+ShortPixel
 WPUmbrella
 Integrately
 Let's Encrypt
-Uptime-Kumaor
+Uptime-Kuma
