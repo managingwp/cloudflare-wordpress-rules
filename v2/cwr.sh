@@ -20,8 +20,6 @@ REPO_DIR=$( cd -- "${SCRIPT_DIR}/.." &> /dev/null && pwd )
 VERSION=$(cat "${REPO_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
-QUIET="0"
-TABLE_ONLY="0"
 LIST_FORMAT="table"
 LIST_LONG="0"
 LIST_DATA_MODE="0"
@@ -64,6 +62,7 @@ if ! command -v ui_ok >/dev/null 2>&1; then
 	ui_debug() { :; }
 	ui_summary() { :; }
 fi
+# shellcheck disable=SC2034  # read by ui_header inside vendor/bash-ui/ui.sh
 UI_APP_NAME="cwr"
 
 # ============================================================
@@ -72,14 +71,7 @@ UI_APP_NAME="cwr"
 API_URL="https://api.cloudflare.com"
 DEBUG_CURL_OUTPUT="0"
 DEBUG_FILE="${DEBUG_FILE:-0}"
-REQUIRED_APPS=("jq" "column")
-
 # -- Authentication state
-declare -g CF_AUTH_ACCOUNT=""
-declare -g CF_AUTH_TOKEN=""
-declare -g CF_AUTH_KEY=""
-declare -g CF_AUTH_PROFILE=""
-declare -g CF_AUTH_METHOD=""
 declare -gA _profile_selection_map=()
 declare -g _PROFILE_SELECTION_COUNT=0
 
@@ -91,9 +83,14 @@ CF_SETTINGS["browser_check"]="Browser Check"
 CF_SETTINGS["always_use_https"]="Always Use HTTPS"
 CF_SETTINGS["min_tls_version"]="Minimum TLS Version"
 CF_DEFAULTS_CHALLENGE_TTL=(300 900 1800 2700 3600 7200 10800 14400 28800 57600 86400 604800 2592000 31536000)
+# The value lists are read through eval in _cf_check_setting_value.
+# shellcheck disable=SC2034
 CF_DEFAULTS_SECURITY_LEVEL=("essentially_off" "low" "medium" "high" "under_attack")
+# shellcheck disable=SC2034
 CF_DEFAULTS_BROWSER_CHECK=("on" "off")
+# shellcheck disable=SC2034
 CF_DEFAULTS_ALWAYS_USE_HTTPS=("on" "off")
+# shellcheck disable=SC2034
 CF_DEFAULTS_MIN_TLS_VERSION=("1.0" "1.1" "1.2" "1.3")
 
 # ============================================================
@@ -483,20 +480,6 @@ function _cf_zone_id () {
     fi
 }
 
-# ==========================================
-# -- usage_set_settings
-# ===========================================
-function usage_set_settings () {
-	echo "Usage: $SCRIPT_NAME set-settings <domain> <setting> <value>"
-	echo ""
-	echo " Settings"
-	# -- Loop through CF_SETTINGS array and print out key
-	for i in "${!CF_SETTINGS[@]}"; do
-		echo "   ${i}"
-	done
-	echo ""
-}
-
 # ==================================================
 # -- _convert_seconds $SECONDS
 # -- returns $HUMAN_TIME
@@ -534,7 +517,7 @@ _cf_set_settings () {
 
 	# -- Check if setting was provided
 	if [[ -z "$SETTING" ]]; then
-		usage_set_settings
+		_error "No setting given"
 		return 1
 	fi
 
@@ -546,10 +529,9 @@ _cf_set_settings () {
 		return 1
 	fi
 
-	# -- If no value provided, show available options
+	# -- If no value provided, say so
 	if [[ -z "$VALUE" ]]; then
-		echo "Setting: $SETTING"
-		_cf_settings_values "$SETTING"
+		_error "$SETTING needs a value"
 		return 1
 	fi
 
@@ -616,27 +598,6 @@ function _cf_check_setting_value () {
     fi
 }
 
-# ==================================================
-# -- _cf_settings_values $SETTING
-# ==================================================
-function _cf_settings_values () {
-    local SETTING=${1^^}
-    _debug "function:${FUNCNAME[0]}"
-    _debug "Getting values for $SETTING"
-    local CF_SETTINGS_VALUES
-    # Load up CF_SETTINGS_{SETTING} array into $CF_SETTINGS_VALUES
-    eval "CF_SETTINGS_VALUES=(\"\${CF_DEFAULTS_${SETTING}[@]}\")"
-    _debug "Allowed values for $SETTING are: ${CF_SETTINGS_VALUES[*]}"
-
-    if [[ $SETTING == "CHALLENGE_TTL" ]]; then
-        echo "Possible Values:"
-        for SECONDS in "${CF_SETTINGS_VALUES[@]}"; do
-            echo -e "\t$SECONDS - $(_convert_seconds $SECONDS)"
-        done            
-    else
-        echo "Possible Values: ${CF_SETTINGS_VALUES[*]}"
-    fi   
-}
 
 # ==================================================
 # -- _cf_prompt_challenge_passage [$ZONE_ID]
@@ -1143,43 +1104,1185 @@ function cf_auth_init() {
         return 1
     fi
     
-    # Set global variables
-    CF_AUTH_ACCOUNT="$account"
-    CF_AUTH_TOKEN="$token"
-    CF_AUTH_KEY="$key"
-    CF_AUTH_PROFILE="$profile"
-    
-    # ==================================================
-    # Backwards compatibility - Set legacy variables
-    # ==================================================
-    export API_ACCOUNT="$account"
-    export API_TOKEN="$token"
-    export API_APIKEY="$key"
-    
+    # Set the credentials cf_api reads
+    API_ACCOUNT="$account"
+    API_TOKEN="$token"
+    API_APIKEY="$key"
+
     # Determine authentication method
     if [[ -n "$token" ]]; then
-        CF_AUTH_METHOD="token"
         if [[ ${LIST_DATA_MODE:-0} -ne 1 ]]; then
             _success "Authenticated using token (profile: $profile)"
         fi
-        _debug "Set API_TOKEN for backwards compatibility"
+        _debug "Using API_TOKEN"
     else
-        CF_AUTH_METHOD="key"
         if [[ ${LIST_DATA_MODE:-0} -ne 1 ]]; then
             _success "Authenticated using account/key (profile: $profile, account: $account)"
         fi
-        _debug "Set API_ACCOUNT and API_APIKEY for backwards compatibility"
+        _debug "Using API_ACCOUNT and API_APIKEY"
     fi
     
     return 0
 }
 
 
-# ==================================
-# -- Include cf-inc files (still folding)
-# ==================================
-source "$REPO_DIR/inc/cf-inc-wp.sh"
-source "$REPO_DIR/inc/cf-inc-rulesets.sh"
+# ============================================================
+# -- from inc/cf-inc-wp.sh
+# ============================================================
+# =====================================
+# -- _cf_ruleset_read_profile_rules $PROFILE_FILE
+# -- Read rules from a profile file (v2 or v3) and output a JSON array
+# -- suitable for the Rulesets API.
+# -- v2 → v3 conversion: allow→skip, bypass→skip, drop priority, add enabled/logging
+# -- Returns: JSON array via stdout
+# =====================================
+function _cf_ruleset_read_profile_rules () {
+    local PROFILE_FILE=$1
+    
+    if [[ ! -f "$PROFILE_FILE" ]]; then
+        _error "Profile file not found: $PROFILE_FILE"
+        return 1
+    fi
+    
+    local SCHEMA_VERSION
+    SCHEMA_VERSION=$(jq -r '.version // 2' "$PROFILE_FILE")
+    
+    if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
+        # v3: keep expression, action, description, action_parameters
+        # Strip internal tracking fields (enabled, logging, rule_number, rule_version)
+        jq -c '[.rules[] | del(.rule_number, .rule_version, .enabled, .logging) | if .action_parameters == {} then del(.action_parameters) else . end]' "$PROFILE_FILE"
+    else
+        # v2: convert to v3 format
+        # - allow → skip with action_parameters.ruleset = "current"
+        # - bypass → skip with action_parameters.phases
+        # - drop all other non-API fields
+        _warning "v2 profile detected — converting action names (allow→skip) and removing non-API fields"
+        jq -c '
+            [
+                .rules[] | {
+                    description: .description,
+                    expression: .expression,
+                    action: (
+                        if .action == "allow" then "skip"
+                        elif .action == "bypass" then "skip"
+                        else .action
+                        end
+                    )
+                } + (
+                    if .action == "allow" then { action_parameters: { "ruleset": "current" } }
+                    elif .action == "bypass" then { action_parameters: { "phases": ["http_request_firewall_managed", "http_ratelimit", "http_request_firewall_custom"] } }
+                    else {}
+                    end
+                )
+            ]
+        ' "$PROFILE_FILE"
+    fi
+}
+
+# =====================================
+# -- _cf_profile_path $SELECTOR
+# -- Resolve a profile selector to a JSON file path.
+# -- Resolution order:
+# --   1. Exact filename: $PROFILE_DIR/<selector>.json
+# --   2. Internal name: first file whose .name == <selector>
+# -- Prints the resolved path on success; returns 1 when nothing matches.
+# =====================================
+_cf_profile_path () {
+    local SELECTOR=$1
+    local DIRECT="$PROFILE_DIR/$SELECTOR.json"
+
+    if [[ -f "$DIRECT" ]]; then
+        printf '%s\n' "$DIRECT"
+        return 0
+    fi
+
+    local FILE NAME
+    for FILE in "$PROFILE_DIR"/*.json; do
+        [[ -e "$FILE" ]] || continue
+        NAME=$(jq -r '.name // empty' "$FILE" 2>/dev/null)
+        if [[ "$NAME" == "$SELECTOR" ]]; then
+            printf '%s\n' "$FILE"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# =====================================
+# -- _cf_profile_display_name $FILE
+# -- Name to show for a profile in listings:
+# --   * symlink   → the symlink's basename (default.json → default)
+# --   * otherwise → the profile's .name (fallback: basename)
+# =====================================
+_cf_profile_display_name () {
+    local FILE=$1
+
+    if [[ -L "$FILE" ]]; then
+        basename "$FILE" .json
+        return 0
+    fi
+
+    local NAME
+    NAME=$(jq -r '.name // empty' "$FILE" 2>/dev/null)
+    printf '%s\n' "${NAME:-$(basename "$FILE" .json)}"
+}
+
+# =====================================
+# -- cf_profile_create $DOMAIN_NAME $ZONE_ID $PROFILE_NAME
+# -- Create a set of rules based on a profile using the Rulesets API.
+# -- Supports both v2 and v3 profile formats (auto-converts v2).
+# =====================================
+cf_profile_create () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
+
+    _running2 "Creating profile $PROFILE_NAME on $OBJECT (Rulesets API)"
+
+    # -- Check profile dir
+    if [[ ! -d $PROFILE_DIR ]]; then
+        _error "$PROFILE_DIR doesn't exist, failing"
+        exit 1
+    fi
+
+    local PROFILE_FILE
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME") || {
+        _error "Profile not found: $PROFILE_NAME"
+        exit 1
+    }
+
+    # -- Validate JSON
+    if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
+        _error "Invalid JSON in $PROFILE_FILE"
+        return 1
+    fi
+    _running2 "Profile file found: $PROFILE_FILE"
+
+    # -- Read and convert rules to Rulesets API format
+    local RULES_JSON
+    RULES_JSON=$(_cf_ruleset_read_profile_rules "$PROFILE_FILE")
+    if [[ -z "$RULES_JSON" || "$RULES_JSON" == "null" ]]; then
+        _error "Failed to read rules from profile $PROFILE_NAME"
+        return 1
+    fi
+
+    # -- Apply rules via Rulesets API (get-or-create + replace-all)
+    if cf_ruleset_apply_profile "$ZONE_ID" "$RULES_JSON"; then
+        _success "Created profile $PROFILE_NAME on $OBJECT"
+        return 0
+    else
+        _error "Failed to create profile $PROFILE_NAME on $OBJECT"
+        return 1
+    fi
+}
+
+# =====================================
+# -- cf_update_rules $DOMAIN_NAME $ZONE_ID $PROFILE_NAME
+# -- Update rules on a zone by replacing all rules with those from the profile.
+# -- Uses cf_ruleset_apply_profile() which handles get-or-create + replace-all.
+# =====================================
+cf_update_rules () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
+
+    _running2 "Updating rules on $OBJECT via Rulesets API"
+
+    local PROFILE_FILE
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME") || {
+        _error "Profile not found: $PROFILE_NAME"
+        return 1
+    }
+
+    if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
+        _error "Invalid JSON in $PROFILE_FILE"
+        return 1
+    fi
+
+    local RULES_JSON
+    RULES_JSON=$(_cf_ruleset_read_profile_rules "$PROFILE_FILE")
+    if [[ -z "$RULES_JSON" || "$RULES_JSON" == "null" ]]; then
+        _error "Failed to read rules from profile $PROFILE_NAME"
+        return 1
+    fi
+
+    if cf_ruleset_apply_profile "$ZONE_ID" "$RULES_JSON"; then
+        _success "Updated rules on $OBJECT"
+        return 0
+    else
+        _error "Failed to update rules on $OBJECT"
+        return 1
+    fi
+}
+
+# =====================================
+# -- cf_upgrade_rules_default $DOMAIN_NAME $ZONE_ID $PROFILE_NAME
+# -- Compare existing rule versions against the profile and upgrade if needed.
+# -- Parses rule prefix format R#V### from existing rule descriptions.
+# -- Uses replace-all (PUT) when any rule version differs.
+# =====================================
+function cf_upgrade_rules_default () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local PROFILE_NAME=$3
+    local OBJECT="${DOMAIN_NAME}/${ZONE_ID}"
+    local PROFILE_FILE
+
+    _running2 "Upgrading rules on $OBJECT"
+
+    # -- Validate profile
+    [[ ! -d $PROFILE_DIR ]] && _error "$PROFILE_DIR doesn't exist, failing" && exit 1
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    [[ -z "$PROFILE_FILE" ]] && _error "Profile not found: $PROFILE_NAME" && return 1
+
+    # -- Get existing entry point
+    if ! cf_ruleset_get_entrypoint "$ZONE_ID"; then
+        _warning "No existing ruleset found for $OBJECT — creating new one from profile"
+        local RULES_JSON
+        RULES_JSON=$(_cf_ruleset_read_profile_rules "$PROFILE_FILE")
+        cf_ruleset_apply_profile "$ZONE_ID" "$RULES_JSON"
+        return $?
+    fi
+
+    # -- Parse existing rule versions from descriptions (R#V### format)
+    local NEEDS_UPGRADE=false
+    local EXISTING_DESCRIPTIONS
+    EXISTING_DESCRIPTIONS=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.rules[].description // empty')
+
+    while IFS= read -r desc; do
+        [[ -z "$desc" ]] && continue
+
+        local RULE_PREFIX
+        RULE_PREFIX=$(echo "$desc" | cut -d' ' -f1)
+
+        # Parse format: R#V### (e.g., R1V205)
+        if [[ "$RULE_PREFIX" =~ ^R([0-9]+)V([0-9]{3})$ ]]; then
+            local RULE_NUMBER="${BASH_REMATCH[1]}"
+            local RULE_VERSION="${BASH_REMATCH[2]}"
+
+            # Get the profile version for this rule number
+            local PROFILE_VERSION
+            PROFILE_VERSION=$(jq -r --arg NUM "$RULE_NUMBER" '.rules[] | select(.rule_number == $NUM) | .rule_version' "$PROFILE_FILE")
+
+            if [[ -n "$PROFILE_VERSION" && "$RULE_VERSION" != "$PROFILE_VERSION" ]]; then
+                _warning "Rule R${RULE_NUMBER}: version $RULE_VERSION → $PROFILE_VERSION (upgrade needed)"
+                NEEDS_UPGRADE=true
+            fi
+        else
+            _debug "Skipping non-standard description format: '$desc'"
+        fi
+    done <<< "$EXISTING_DESCRIPTIONS"
+
+    # -- No upgrade needed
+    if [[ "$NEEDS_UPGRADE" == "false" ]]; then
+        _success "All rules are up to date on $OBJECT"
+        return 0
+    fi
+
+    # -- Upgrade: replace all rules from profile
+    _running2 "Upgrading rules on $OBJECT..."
+    local RULES_JSON
+    RULES_JSON=$(_cf_ruleset_read_profile_rules "$PROFILE_FILE")
+    if [[ -z "$RULES_JSON" || "$RULES_JSON" == "null" ]]; then
+        _error "Failed to read rules from profile $PROFILE_NAME"
+        return 1
+    fi
+
+    if cf_ruleset_apply_profile "$ZONE_ID" "$RULES_JSON"; then
+        _success "Upgraded rules on $OBJECT"
+        return 0
+    else
+        _error "Failed to upgrade rules on $OBJECT"
+        return 1
+    fi
+}
+
+# =====================================
+# -- cf_list_profiles
+# -- List profiles
+# =====================================
+cf_list_profiles () {
+	# -- Check if profile dir exists
+	if [[ ! -d $PROFILE_DIR ]]; then
+		_error "$PROFILE_DIR doesn't exist, failing"
+		exit 1
+	fi
+
+	# -- List profiles; each file has a root json name and description
+	local i=1
+	{
+		printf '#\tFile\tName\tDescription\n'
+		for FILE in "$PROFILE_DIR"/*.json; do
+			_debug "Processing file: $FILE"
+			printf '%s\t%s\t%s\t%s\n' \
+				"$i" \
+				"$(basename "$FILE")" \
+				"$(_cf_profile_display_name "$FILE")" \
+				"$(jq -r '.description' "$FILE")"
+			i=$((i+1))
+		done
+	} | ui_table
+}
+
+# =====================================
+# -- cf_print_profile $PROFILE_NAME
+# -- Print rules from profile (supports v2 and v3 schemas)
+# =====================================
+function cf_print_profile () {
+    PROFILE_NAME=$1
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    if [[ -z "$PROFILE_FILE" ]]; then
+        _error "Profile not found: $PROFILE_NAME"
+        return 1
+    fi
+    
+    # Schema detection
+    local SCHEMA_VERSION
+    SCHEMA_VERSION=$(jq -r '.version // 2' "$PROFILE_FILE")
+    local PHASE
+    PHASE=$(jq -r '.phase // "http_request_firewall_custom (legacy)"' "$PROFILE_FILE")
+    
+    # Get rule count
+    local RULE_COUNT
+	RULE_COUNT=$(jq '.rules | length' "$PROFILE_FILE")
+    
+    printf '\n'
+    printf 'Profile: %s\n' "$PROFILE_NAME"
+    printf '  Schema:      v%s\n' "$SCHEMA_VERSION"
+    printf '  Phase:       %s\n' "$PHASE"
+    printf '  Rules:       %s\n' "$RULE_COUNT"
+    printf '\n'
+    
+    # Loop through each rule
+    for ((i=0; i<RULE_COUNT; i++)); do
+        # Extract common rule details
+        local DESCRIPTION ACTION EXPRESSION ENABLED
+		DESCRIPTION=$(jq -r ".rules[$i].description" "$PROFILE_FILE")
+		ACTION=$(jq -r ".rules[$i].action" "$PROFILE_FILE")
+        ENABLED=$(jq -r ".rules[$i].enabled // true" "$PROFILE_FILE")
+		EXPRESSION=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" | sed 's/\\"/"/g')
+        
+        # Build status line
+        local STATUS_LINE=""
+        STATUS_LINE="Rule $((i+1)): ${DESCRIPTION} (Action: ${ACTION}"
+        
+        # Priority only for v2
+        if [[ "$SCHEMA_VERSION" -lt 3 ]]; then
+            local PRIORITY
+            PRIORITY=$(jq -r ".rules[$i].priority // \"\"" "$PROFILE_FILE")
+            if [[ -n "$PRIORITY" ]]; then
+                STATUS_LINE+=", Priority: ${PRIORITY}"
+            fi
+        fi
+        
+        # Enabled status
+        if [[ "$ENABLED" == "true" ]]; then
+            STATUS_LINE+=", Enabled"
+        else
+            STATUS_LINE+=", Disabled"
+        fi
+        STATUS_LINE+=")"
+        
+        printf '%s\n' "$STATUS_LINE"
+        
+        # Logging (v3)
+        if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
+            local LOGGING_ENABLED
+            LOGGING_ENABLED=$(jq -r ".rules[$i].logging.enabled // true" "$PROFILE_FILE")
+            if [[ "$LOGGING_ENABLED" == "false" ]]; then
+                printf '  Logging: Disabled\n'
+            fi
+        fi
+        
+        # Action parameters (v3)
+        if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
+            local HAS_AP
+            HAS_AP=$(jq ".rules[$i].action_parameters // {} | length" "$PROFILE_FILE")
+            if [[ "$HAS_AP" -gt 0 ]]; then
+                printf '  Action Parameters:\n'
+                jq -r ".rules[$i].action_parameters" "$PROFILE_FILE" | while IFS= read -r line; do
+                    printf '    %s\n' "$line"
+                done
+            fi
+        fi
+        
+        # Expression
+        printf 'Expression:\n'
+        printf '%s\n' "$EXPRESSION" | while IFS= read -r line; do
+            printf '  %s\n' "$line"
+        done
+        
+        printf '%s\n' "$(printf '=%.0s' {1..80})"
+    done
+}
+
+# =====================================
+# -- cf_validate_profile $PROFILE_NAME
+# -- Validate a JSON profile file for syntax and structure errors
+# =====================================
+cf_validate_profile() {
+    local PROFILE_NAME=$1
+    local PROFILE_FILE
+    local total_errors=0
+    
+    if [[ -z "$PROFILE_NAME" ]]; then
+        _error "No profile name provided"
+        return 1
+    fi
+    
+    _running2 "Validating profile: $PROFILE_NAME"
+    
+    # Resolve profile (by filename or internal .name)
+    PROFILE_FILE=$(_cf_profile_path "$PROFILE_NAME")
+    if [[ -z "$PROFILE_FILE" ]]; then
+        _error "Profile not found: $PROFILE_NAME"
+        return 1
+    fi
+    
+    # Step 1: JSON syntax validation
+    _debug "Checking JSON syntax..."
+    if ! jq empty "$PROFILE_FILE" 2>/dev/null; then
+        _error "Invalid JSON syntax in $PROFILE_FILE"
+        return 1
+    fi
+    _success "JSON syntax is valid"
+    
+    # Step 2: Structure validation
+    _debug "Checking JSON structure..."
+    
+    # Check required top-level fields
+    local required_fields=("name" "description" "rules")
+    for field in "${required_fields[@]}"; do
+        if ! jq -e ".$field" "$PROFILE_FILE" >/dev/null 2>&1; then
+            _error "Missing required field: '$field'"
+            ((total_errors++))
+        fi
+    done
+    
+    # Check if rules is an array
+    if ! jq -e '.rules | type == "array"' "$PROFILE_FILE" >/dev/null 2>&1; then
+        _error "'rules' must be an array"
+        ((total_errors++))
+    fi
+    
+    # Step 3: Detect schema version
+    local SCHEMA_VERSION
+    SCHEMA_VERSION=$(jq -r '.version // 2' "$PROFILE_FILE")
+    
+    if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
+        _running2 "Detected v3 schema (version=$SCHEMA_VERSION)"
+    else
+        _warning "Profile uses v$SCHEMA_VERSION schema. Consider upgrading to v3 for full Rulesets API support."
+    fi
+    
+    # Step 4: Rules validation
+    local rule_count
+    rule_count=$(jq '.rules | length' "$PROFILE_FILE" 2>/dev/null || echo "0")
+    _debug "Validating $rule_count rules..."
+    
+    # Common rule fields (both v2 and v3)
+    local common_fields=("rule_number" "rule_version" "description" "expression" "action")
+    
+    for ((i=0; i<rule_count; i++)); do
+        local rule_num=$((i+1))
+        _debug "Checking rule $rule_num..."
+        
+        # Check common required rule fields
+        for field in "${common_fields[@]}"; do
+            if ! jq -e ".rules[$i].$field" "$PROFILE_FILE" >/dev/null 2>&1; then
+                _error "Rule $rule_num: Missing required field '$field'"
+                ((total_errors++))
+            fi
+        done
+        
+        # v2-specific checks
+        if [[ "$SCHEMA_VERSION" -lt 3 ]]; then
+            # v2 requires priority
+            if ! jq -e ".rules[$i].priority" "$PROFILE_FILE" >/dev/null 2>&1; then
+                _error "Rule $rule_num: Missing required v2 field 'priority'"
+                ((total_errors++))
+            fi
+            
+            # Validate v2 priority is a number
+            local priority
+            priority=$(jq -r ".rules[$i].priority" "$PROFILE_FILE" 2>/dev/null)
+            if [[ -n "$priority" && "$priority" != "null" ]]; then
+                if ! [[ "$priority" =~ ^[0-9]+$ ]]; then
+                    _error "Rule $rule_num: Priority must be a number, got '$priority'"
+                    ((total_errors++))
+                fi
+            fi
+        fi
+        
+        # v3-specific checks
+        if [[ "$SCHEMA_VERSION" -ge 3 ]]; then
+            # v3 does not use priority
+            if jq -e ".rules[$i].priority" "$PROFILE_FILE" >/dev/null 2>&1; then
+                local v3_priority
+                v3_priority=$(jq -r ".rules[$i].priority" "$PROFILE_FILE")
+                if [[ -n "$v3_priority" && "$v3_priority" != "null" ]]; then
+                    _warning "Rule $rule_num: v3 schema does not use 'priority' field (order is array position)"
+                fi
+            fi
+            
+            # Validate enabled is boolean if present
+            if jq -e ".rules[$i].enabled" "$PROFILE_FILE" >/dev/null 2>&1; then
+                local enabled_type
+                enabled_type=$(jq -r ".rules[$i].enabled | type" "$PROFILE_FILE")
+                if [[ "$enabled_type" != "boolean" ]]; then
+                    _error "Rule $rule_num: 'enabled' must be a boolean, got $enabled_type"
+                    ((total_errors++))
+                fi
+            fi
+            
+            # Validate logging.enabled is boolean if present
+            if jq -e ".rules[$i].logging.enabled" "$PROFILE_FILE" >/dev/null 2>&1; then
+                local logging_type
+                logging_type=$(jq -r ".rules[$i].logging.enabled | type" "$PROFILE_FILE")
+                if [[ "$logging_type" != "boolean" ]]; then
+                    _error "Rule $rule_num: 'logging.enabled' must be a boolean, got $logging_type"
+                    ((total_errors++))
+                fi
+            fi
+        fi
+        
+        # Validate action values (combined list for both schemas)
+        local action
+        action=$(jq -r ".rules[$i].action" "$PROFILE_FILE" 2>/dev/null)
+        if [[ -n "$action" && "$action" != "null" ]]; then
+            # v2 and v3 share common actions; v3 adds 'skip' and 'execute'
+            case "$action" in
+                "allow"|"block"|"challenge"|"js_challenge"|"managed_challenge"|"log"|"bypass"|"skip"|"execute")
+                    # Valid actions
+                    ;;
+                *)
+                    _error "Rule $rule_num: Invalid action '$action'"
+                    _error "Valid actions: allow, block, challenge, js_challenge, managed_challenge, log, bypass (v2), skip, execute (v3)"
+                    ((total_errors++))
+                    ;;
+            esac
+        fi
+        
+        # Validate expression syntax (basic parentheses check)
+        local expression
+        expression=$(jq -r ".rules[$i].expression" "$PROFILE_FILE" 2>/dev/null)
+        if [[ -n "$expression" && "$expression" != "null" ]]; then
+            if ! _validate_expression_syntax "$expression" "$rule_num"; then
+                ((total_errors++))
+            fi
+        fi
+    done
+    
+    # Summary
+    if [ $total_errors -eq 0 ]; then
+        _success "Profile validation passed: $PROFILE_NAME"
+
+        # Profile summary stays on stderr: stdout carries data only
+        local description
+        description=$(jq -r '.description' "$PROFILE_FILE")
+        ui_section "Profile summary"
+        ui_kv "Name" "$PROFILE_NAME"
+        ui_kv "Description" "$description"
+        ui_kv "Rules" "$rule_count"
+
+        return 0
+    else
+        _error "Profile validation failed with $total_errors error(s): $PROFILE_NAME"
+        return 1
+    fi
+}
+
+# =====================================
+# -- _validate_expression_syntax $expression $rule_num
+# -- Basic expression syntax validation (helper function)
+# =====================================
+_validate_expression_syntax() {
+    local expression="$1"
+    local rule_num="$2"
+    local paren_count=0
+    local i=0
+    
+    # Check for balanced parentheses
+    while [ $i -lt ${#expression} ]; do
+        char="${expression:$i:1}"
+        case "$char" in
+            "(")
+                ((paren_count++))
+                ;;
+            ")")
+                ((paren_count--))
+                if [ $paren_count -lt 0 ]; then
+                    _error "Rule $rule_num: Unmatched closing parenthesis at position $i"
+                    return 1
+                fi
+                ;;
+        esac
+        ((i++))
+    done
+    
+    if [ $paren_count -ne 0 ]; then
+        _error "Rule $rule_num: Unbalanced parentheses: $paren_count unmatched opening parentheses"
+        return 1
+    fi
+    
+    # Check for empty expression
+    if [[ -z "${expression// /}" ]]; then
+        _error "Rule $rule_num: Empty expression"
+        return 1
+    fi
+    
+    return 0
+}
+
+# ============================================================
+# -- from inc/cf-inc-rulesets.sh
+# ============================================================
+function cf_ruleset_phase_name () {
+    echo "http_request_firewall_custom"
+}
+
+function _cf_ruleset_api () {
+    local REQUEST=$1
+    local API_PATH=$2
+    shift 2
+    local EXTRA=("$@")
+    
+    local CURL_HEADERS=()
+    if [[ -n $API_ACCOUNT && -n $API_APIKEY ]]; then
+        CURL_HEADERS=("-H" "X-Auth-Key: ${API_APIKEY}" -H "X-Auth-Email: ${API_ACCOUNT}")
+        _debug "Using API_KEY auth for Rulesets API"
+    elif [[ -n $API_TOKEN ]]; then
+        CURL_HEADERS=("-H" "Authorization: Bearer ${API_TOKEN}")
+        _debug "Using API_TOKEN auth for Rulesets API"
+    else
+        _error "No API Token or API Key found for Rulesets API"
+        RULESET_CURL_EXIT_CODE=0
+        RULESET_API_OUTPUT='{"success":false,"errors":[{"code":0,"message":"No authentication configured"}]}'
+        return 1
+    fi
+    
+    local CURL_OUTPUT
+    CURL_OUTPUT=$(mktemp)
+    
+    RULESET_CURL_EXIT_CODE=$(curl -s --output "$CURL_OUTPUT" -w "%{http_code}" \
+        --request "$REQUEST" \
+        --url "${API_URL}${API_PATH}" \
+        "${CURL_HEADERS[@]}" \
+        "${EXTRA[@]}")
+    RULESET_API_OUTPUT=$(<"$CURL_OUTPUT")
+    rm "$CURL_OUTPUT"
+    
+    _debug "Rulesets API: $REQUEST $API_PATH → $RULESET_CURL_EXIT_CODE"
+    _debug_json "$RULESET_API_OUTPUT"
+    
+    return 0
+}
+
+function cf_ruleset_get_entrypoint () {
+    local ZONE_ID=$1
+    local PHASE
+    PHASE=$(cf_ruleset_phase_name)
+    
+    _debug "function:${FUNCNAME[0]} - Getting entry point ruleset for phase $PHASE on zone $ZONE_ID"
+    
+    _cf_ruleset_api GET "/client/v4/zones/${ZONE_ID}/rulesets/phases/${PHASE}/entrypoint"
+    
+    if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
+        _debug "Entry point ruleset found for zone $ZONE_ID"
+        echo "$RULESET_API_OUTPUT"
+        return 0
+    elif [[ $RULESET_CURL_EXIT_CODE == "404" ]]; then
+        _debug "Entry point ruleset not yet created for zone $ZONE_ID"
+        return 1
+    else
+        _error "Error getting entry point ruleset (HTTP $RULESET_CURL_EXIT_CODE)"
+        parse_cf_error "$RULESET_API_OUTPUT"
+        return 2
+    fi
+}
+
+function cf_ruleset_create_entrypoint () {
+    local ZONE_ID=$1
+    local RULES_JSON=$2
+    local NAME=${3:-"Cloudflare WordPress Rules"}
+    local PHASE
+    PHASE=$(cf_ruleset_phase_name)
+    
+    _debug "function:${FUNCNAME[0]} - Creating entry point ruleset '$NAME' for phase $PHASE on zone $ZONE_ID"
+    
+    # Add explicit position indexes to enforce correct evaluation order
+    local RULES_JSON_WITH_POS
+    RULES_JSON_WITH_POS=$(_cf_ruleset_add_positions "$RULES_JSON")
+    _debug "Rules with positions: $RULES_JSON_WITH_POS"
+    
+    # Build the POST body
+    local POST_DATA
+    POST_DATA=$(jq -n \
+        --arg name "$NAME" \
+        --arg kind "zone" \
+        --arg phase "$PHASE" \
+        --argjson rules "$RULES_JSON_WITH_POS" \
+        '{
+            name: $name,
+            kind: $kind,
+            phase: $phase,
+            rules: $rules
+        }')
+    
+    _debug_json "$POST_DATA"
+    
+    _cf_ruleset_api POST "/client/v4/zones/${ZONE_ID}/rulesets" \
+        -H "Content-Type: application/json" \
+        -d "$POST_DATA"
+    
+    if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
+        local RULE_COUNT
+        CF_CREATED_RULESET_JSON=$RULESET_API_OUTPUT
+        CF_CREATED_RULESET_ID=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '.result.id // empty')
+        RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+        _success "Created entry point ruleset $CF_CREATED_RULESET_ID with ${RULE_COUNT} rule(s)"
+        return 0
+    else
+        _error "Failed to create entry point ruleset (HTTP $RULESET_CURL_EXIT_CODE)"
+        parse_cf_error "$RULESET_API_OUTPUT"
+        return 1
+    fi
+}
+
+function _cf_ruleset_add_positions () {
+    local RULES_JSON=$1
+    echo "$RULES_JSON" | jq -c '
+        [to_entries[] | .value + {position: {index: .key}}]
+    '
+}
+
+function cf_ruleset_replace_all_rules () {
+    local ZONE_ID=$1
+    local RULESET_ID=$2
+    local RULES_JSON=$3
+    
+    _debug "function:${FUNCNAME[0]} - Replacing all rules in ruleset $RULESET_ID on zone $ZONE_ID"
+    
+    # Add explicit position indexes to enforce correct evaluation order
+    local RULES_JSON_WITH_POS
+    RULES_JSON_WITH_POS=$(_cf_ruleset_add_positions "$RULES_JSON")
+    _debug "Rules with positions: $RULES_JSON_WITH_POS"
+    
+    local PUT_DATA
+    PUT_DATA=$(jq -n \
+        --argjson rules "$RULES_JSON_WITH_POS" \
+        '{rules: $rules}')
+    
+    _debug_json "$PUT_DATA"
+    
+    _cf_ruleset_api PUT "/client/v4/zones/${ZONE_ID}/rulesets/${RULESET_ID}" \
+        -H "Content-Type: application/json" \
+        -d "$PUT_DATA"
+    
+    if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
+        local RULE_COUNT
+        RULE_COUNT=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '(.result.rules // []) | length')
+        _success "Replaced ${RULE_COUNT} rule(s) in ruleset $RULESET_ID"
+        return 0
+    else
+        _error "Failed to replace rules in ruleset $RULESET_ID (HTTP $RULESET_CURL_EXIT_CODE)"
+        parse_cf_error "$RULESET_API_OUTPUT"
+        return 1
+    fi
+}
+
+function cf_ruleset_delete_rule () {
+    local ZONE_ID=$1
+    local RULESET_ID=$2
+    local RULE_ID=$3
+    
+    _debug "function:${FUNCNAME[0]} - Deleting rule $RULE_ID from ruleset $RULESET_ID on zone $ZONE_ID"
+    
+    _cf_ruleset_api DELETE "/client/v4/zones/${ZONE_ID}/rulesets/${RULESET_ID}/rules/${RULE_ID}"
+    
+    if [[ $RULESET_CURL_EXIT_CODE == "200" ]]; then
+        _success "Deleted rule: $RULE_ID"
+        return 0
+    else
+        _error "Failed to delete rule $RULE_ID (HTTP $RULESET_CURL_EXIT_CODE)"
+        parse_cf_error "$RULESET_API_OUTPUT"
+        return 1
+    fi
+}
+
+function _cf_ruleset_render_list () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local FORMAT=${LIST_FORMAT:-table}
+    local LONG=${LIST_LONG:-0}
+    local RESPONSE=${RULESET_API_OUTPUT:-}
+
+    if ! printf '%s' "$RESPONSE" | jq -e . >/dev/null 2>&1; then
+        _error "Could not parse the ruleset response for ${DOMAIN_NAME}"
+        return 1
+    fi
+
+    case "$FORMAT" in
+        raw)
+            # The unmodified API body, exactly as Cloudflare returned it.
+            printf '%s\n' "$RESPONSE"
+            ;;
+        json)
+            # One compact object per zone so multi-zone output is NDJSON.
+            printf '%s' "$RESPONSE" | jq -c \
+                --arg domain "$DOMAIN_NAME" \
+                --arg zone_id "$ZONE_ID" \
+                '{
+                    domain: $domain,
+                    zone_id: $zone_id,
+                    ruleset: (if .result then {
+                        id: .result.id,
+                        name: .result.name,
+                        phase: .result.phase,
+                        version: .result.version,
+                        last_updated: .result.last_updated,
+                        rule_count: ((.result.rules // []) | length)
+                    } else null end),
+                    rules: (.result.rules // [])
+                }'
+            ;;
+        csv)
+            _cf_ruleset_render_csv "$DOMAIN_NAME" "$ZONE_ID"
+            ;;
+        table)
+            if [[ $LONG -eq 1 ]]; then
+                _cf_ruleset_render_long "$DOMAIN_NAME" "$ZONE_ID" >&2
+            else
+                _cf_ruleset_render_table "$DOMAIN_NAME" "$ZONE_ID" >&2
+            fi
+            ;;
+        *)
+            _error "Unknown list-rules output format: $FORMAT"
+            return 1
+            ;;
+    esac
+}
+
+# =====================================
+# -- _cf_ruleset_render_table $DOMAIN_NAME $ZONE_ID [$RESPONSE_JSON]
+# -- Compact aligned table: #, ACTION, ENABLED, RULE ID, UPDATED, DESCRIPTION.
+# -- RESPONSE_JSON defaults to the RULESET_API_OUTPUT global; pass it explicitly
+# -- when the caller holds a body that is no longer in the global.
+# -- An empty DOMAIN_NAME makes the header name the zone instead.
+# =====================================
+function _cf_ruleset_render_table () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local RESPONSE=${3:-${RULESET_API_OUTPUT:-}}
+    local RULE_COUNT
+    RULE_COUNT=$(printf '%s' "$RESPONSE" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+    RULE_COUNT=${RULE_COUNT:-0}
+
+    if [[ "$RULE_COUNT" -eq 0 ]]; then
+        printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
+            "${DOMAIN_NAME:-$ZONE_ID}" "$(cf_ruleset_phase_name)"
+        return 0
+    fi
+
+    if [[ -n "$DOMAIN_NAME" ]]; then
+        printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    else
+        printf 'zone %s\n' "$ZONE_ID"
+    fi
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
+        "\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated | human_date)"
+    '
+    printf '\n'
+
+    {
+        printf '#\tACTION\tENABLED\tRULE ID\tUPDATED\tDESCRIPTION\n'
+        printf '%s' "$RESPONSE" | jq -r '
+            def human_date:
+                if . == null or . == "" then "?"
+                else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+                end;
+            (.result.rules // []) | to_entries[] | [
+                ((.key + 1) | tostring),
+                (.value.action // "?"),
+                (if .value.enabled == false then "no" else "yes" end),
+                (.value.id // ""),
+                (.value.last_updated | human_date),
+                (.value.description // "(no description)")
+            ] | @tsv
+        '
+    } | ui_table
+}
+
+# =====================================
+# -- _cf_ruleset_render_long $DOMAIN_NAME $ZONE_ID [$RESPONSE_JSON]
+# -- Detail block per rule: id, enabled, logging, updated, parameters,
+# -- expression. RESPONSE_JSON defaults to the RULESET_API_OUTPUT global.
+# =====================================
+function _cf_ruleset_render_long () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local RESPONSE=${3:-${RULESET_API_OUTPUT:-}}
+    local RULE_COUNT
+    RULE_COUNT=$(printf '%s' "$RESPONSE" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+    RULE_COUNT=${RULE_COUNT:-0}
+
+    if [[ "$RULE_COUNT" -eq 0 ]]; then
+        printf 'No WAF custom rules: %s (%s entry point empty or not created)\n' \
+            "${DOMAIN_NAME:-$ZONE_ID}" "$(cf_ruleset_phase_name)"
+        return 0
+    fi
+
+    if [[ -n "$DOMAIN_NAME" ]]; then
+        printf '%s · %s\n' "$DOMAIN_NAME" "$ZONE_ID"
+    else
+        printf 'zone %s\n' "$ZONE_ID"
+    fi
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
+        "\(.result.name // "default") · \(.result.phase // "") · \(((.result.rules // []) | length)) rules · version \(.result.version // "?") · updated \(.result.last_updated | human_date)"
+    '
+    printf '\n'
+
+    printf '%s' "$RESPONSE" | jq -r '
+        def human_date:
+            if . == null or . == "" then "?"
+            else (sub("\\.[0-9]+Z$"; "Z") | sub("T"; " ") | sub("Z$"; ""))
+            end;
+        (.result.rules // []) | to_entries[] |
+        "#\(.key + 1)  \(.value.action // "?")\n" +
+        "    \(.value.description // "(no description)")\n" +
+        "    id:                \(.value.id // "")\n" +
+        "    enabled:           \(if .value.enabled == false then "no" else "yes" end)\n" +
+        "    logging:           \(if .value.logging.enabled == true then "enabled" else "disabled" end)\n" +
+        "    last_updated:      \(.value.last_updated | human_date)\n" +
+        (if .value.action_parameters then "    action_parameters: \(.value.action_parameters | tojson)\n" else "" end) +
+        "    expression:        \(.value.expression // "")\n" +
+        "\n"
+    '
+}
+
+# =====================================
+# -- _cf_ruleset_render_csv $DOMAIN_NAME $ZONE_ID
+# -- One header per process, then one RFC 4180-quoted row per rule.
+# =====================================
+function _cf_ruleset_render_csv () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+
+    if [[ ${CF_CSV_HEADER_PRINTED:-0} -ne 1 ]]; then
+        printf 'domain,zone_id,position,rule_id,action,enabled,logging,description,expression\n'
+        CF_CSV_HEADER_PRINTED=1
+    fi
+
+    printf '%s' "$RULESET_API_OUTPUT" | jq -r \
+        --arg domain "$DOMAIN_NAME" \
+        --arg zone_id "$ZONE_ID" \
+        '(.result.rules // []) | to_entries[] | [
+            $domain,
+            $zone_id,
+            (.key + 1),
+            (.value.id // ""),
+            (.value.action // ""),
+            (if .value.enabled == false then "no" else "yes" end),
+            (if .value.logging.enabled == true then "enabled" else "disabled" end),
+            (.value.description // ""),
+            (.value.expression // "")
+        ] | @csv'
+}
+
+function cf_ruleset_list_rules () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+
+    _debug "function:${FUNCNAME[0]} - Listing rules from entry point on zone $ZONE_ID"
+
+    # cf_ruleset_get_entrypoint echoes the body; keep stdout for the renderer.
+    cf_ruleset_get_entrypoint "$ZONE_ID" >/dev/null
+    local GET_EXIT=$?
+    if [[ $GET_EXIT -eq 2 ]]; then
+        _error "Failed to retrieve rules for zone $ZONE_ID"
+        return 1
+    fi
+
+    _cf_ruleset_render_list "$DOMAIN_NAME" "$ZONE_ID"
+}
+
+function _cf_ruleset_get_or_create_entrypoint () {
+    local ZONE_ID=$1
+    local RULES_JSON=${2:-"[]"}
+    
+    _debug "function:${FUNCNAME[0]} - Getting or creating entry point on zone $ZONE_ID"
+    
+    # shellcheck disable=SC2034
+    GET_OR_CREATE_RULESET_ID=""
+    GET_OR_CREATE_RULESET_JSON=""
+    GET_OR_CREATE_WAS_CREATED=0
+    
+    # Try to get existing entry point.
+    # Redirect stdout to /dev/null: cf_ruleset_get_entrypoint echoes the full
+    # API response JSON, but we only need the exit code + RULESET_API_OUTPUT global.
+    cf_ruleset_get_entrypoint "$ZONE_ID" > /dev/null
+    local GET_EXIT=$?
+    if [[ $GET_EXIT -eq 0 ]]; then
+        # Entry point exists — snapshot the body before anything else writes it
+        GET_OR_CREATE_RULESET_JSON=$RULESET_API_OUTPUT
+        GET_OR_CREATE_RULESET_ID=$(printf '%s' "$RULESET_API_OUTPUT" | jq -r '.result.id // empty')
+        _debug "Existing entry point ruleset found: $GET_OR_CREATE_RULESET_ID"
+        return 0
+    fi
+    
+    if [[ $GET_EXIT -eq 1 ]]; then
+        # 404 - not found, create a new one
+        _debug "Entry point not found, creating new one"
+        local CREATE_EXIT
+        if cf_ruleset_create_entrypoint "$ZONE_ID" "$RULES_JSON"; then
+            CREATE_EXIT=0
+        else
+            CREATE_EXIT=1
+        fi
+        
+        if [[ $CREATE_EXIT -eq 0 ]]; then
+            # shellcheck disable=SC2034
+            GET_OR_CREATE_WAS_CREATED=1
+            GET_OR_CREATE_RULESET_ID=$CF_CREATED_RULESET_ID
+            GET_OR_CREATE_RULESET_JSON=$CF_CREATED_RULESET_JSON
+            return 0
+        else
+            _error "Failed to create entry point ruleset"
+            return 1
+        fi
+    else
+        # Other error
+        _error "Failed to get entry point ruleset"
+        return 1
+    fi
+}
+
+function cf_ruleset_apply_profile () {
+    local ZONE_ID=$1
+    local RULES_JSON=$2
+    
+    _debug "function:${FUNCNAME[0]} - Applying profile to zone $ZONE_ID"
+    
+    # Call the helper directly: a command substitution would run it in a
+    # subshell and discard the globals it reports back to us.
+    if ! _cf_ruleset_get_or_create_entrypoint "$ZONE_ID" "$RULES_JSON"; then
+        _error "Could not obtain entry point ruleset for zone $ZONE_ID"
+        return 1
+    fi
+    
+    local RULESET_ID=$GET_OR_CREATE_RULESET_ID
+    if [[ -z "$RULESET_ID" ]]; then
+        _error "Could not obtain entry point ruleset ID for zone $ZONE_ID"
+        return 1
+    fi
+    
+    # shellcheck disable=SC2034
+    CF_APPLIED_RULESET_ID=$RULESET_ID
+    
+    # If it was newly created with rules already, we're done
+    if [[ ${GET_OR_CREATE_WAS_CREATED:-0} -eq 1 ]] && [[ "$RULES_JSON" != "[]" ]]; then
+        _cf_ruleset_render_table "" "$ZONE_ID" "$GET_OR_CREATE_RULESET_JSON" >&2
+        return 0
+    fi
+    
+    # Existing ruleset found — confirm replacement unless SKIP_CONFIRM is set
+    if [[ "${SKIP_CONFIRM:-0}" -ne 1 ]]; then
+        local existing_count new_count
+        existing_count=$(printf '%s' "$GET_OR_CREATE_RULESET_JSON" | jq -r '(.result.rules // []) | length' 2>/dev/null)
+        existing_count=${existing_count:-0}
+        new_count=$(printf '%s' "$RULES_JSON" | jq -r 'length' 2>/dev/null)
+        new_count=${new_count:-0}
+
+        _warning "This zone already has ${existing_count} rule(s) in the entry point ruleset."
+        if [[ "$existing_count" -gt 0 ]]; then
+            _cf_ruleset_render_table "" "$ZONE_ID" "$GET_OR_CREATE_RULESET_JSON" >&2
+        fi
+        _warning "The profile contains ${new_count} rule(s)."
+
+        if ! ui_confirm "Replace all existing rules?" n; then
+            _warning "Operation cancelled by user"
+            return 1
+        fi
+    fi
+    
+    # Replace all rules
+    if ! cf_ruleset_replace_all_rules "$ZONE_ID" "$RULESET_ID" "$RULES_JSON"; then
+        _error "Failed to apply rules to zone $ZONE_ID"
+        return 1
+    fi
+    
+    # Show what is live now (the PUT response is still in RULESET_API_OUTPUT)
+    _cf_ruleset_render_table "" "$ZONE_ID" >&2
+    
+    return 0
+}
+
+function cf_ruleset_list_rules_action () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+
+    _debug "function:${FUNCNAME[0]} - Listing rules for $DOMAIN_NAME / $ZONE_ID"
+
+    cf_ruleset_list_rules "$DOMAIN_NAME" "$ZONE_ID"
+}
+
+function cf_ruleset_delete_rule_action () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    local RULE_ID=$3
+    
+    _running2 "Deleting rule $RULE_ID on ${DOMAIN_NAME}/${ZONE_ID} via Rulesets API"
+    
+    # Get entry point to find ruleset_id
+    if ! cf_ruleset_get_entrypoint "$ZONE_ID"; then
+        _error "No entry point ruleset found for $DOMAIN_NAME"
+        return 1
+    fi
+    
+    local RULESET_ID
+    RULESET_ID=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.id')
+    
+    # Ask for confirmation unless -y was given
+    if [[ "${SKIP_CONFIRM:-0}" -ne 1 ]]; then
+        if ! ui_confirm "Delete rule ${RULE_ID} from ${DOMAIN_NAME}/${ZONE_ID}?" n; then
+            _error "Operation cancelled"
+            return 1
+        fi
+    fi
+    
+    cf_ruleset_delete_rule "$ZONE_ID" "$RULESET_ID" "$RULE_ID"
+}
+
+function cf_ruleset_delete_rules_action () {
+    local DOMAIN_NAME=$1
+    local ZONE_ID=$2
+    
+    _running2 "Deleting all rules on ${DOMAIN_NAME}/${ZONE_ID} via Rulesets API"
+    
+    # Get entry point
+    if ! cf_ruleset_get_entrypoint "$ZONE_ID"; then
+        _warning "No entry point ruleset found for $DOMAIN_NAME"
+        return 0
+    fi
+    
+    local RULESET_ID
+    RULESET_ID=$(echo "$RULESET_API_OUTPUT" | jq -r '.result.id')
+    
+    # Replace with empty rules array
+    cf_ruleset_replace_all_rules "$ZONE_ID" "$RULESET_ID" "[]"
+}
+
 
 # ==================================
 # -- Output layer
@@ -1319,12 +2422,14 @@ TABLE_ONLY_EXPLICIT=0
         --debug)
         # shellcheck disable=SC2034
         DEBUG=1
+        # shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
         UI_VERBOSE=1
         shift # past argument
         ;;
         --debug-json)
         # shellcheck disable=SC2034
         DEBUG=1
+        # shellcheck disable=SC2034  # read by ui_debug inside vendor/bash-ui/ui.sh
         UI_VERBOSE=1
         # shellcheck disable=SC2034
         DEBUG_JSON=1
@@ -1332,7 +2437,6 @@ TABLE_ONLY_EXPLICIT=0
         ;;
         --table-only)
         # Deprecated: the compact table is now the default list-rules output.
-        TABLE_ONLY="1"
         TABLE_ONLY_EXPLICIT=1
         shift # past argument
         ;;
@@ -1379,8 +2483,6 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 # ==================================
 # One list drives the positional form, the whitelist and the help text.
 CORE_COMMANDS="create-rules update-rules upgrade-default-rules list-rules delete-rule delete-rules list-profiles print-profile validate-profile"
-COMMANDS_NO_AUTH="list-profiles print-profile validate-profile"
-COMMANDS_REQUIRING_AUTH="create-rules update-rules upgrade-default-rules list-rules delete-rule delete-rules"
 
 # Positional form: `cwr.sh create-rules default -d example.com`
 if [[ -z ${CMD:-} && -n ${1:-} ]]; then
@@ -1404,8 +2506,9 @@ fi
 _debug "ARGS: ${*}@"
 
 # -- Dryrun
-if [[ $DRYRUN = "1" ]]; then
-    _error "Dryrun not implemented yet"
+if [[ ${DRYRUN:-0} = "1" ]]; then
+    _error "Dry run is not implemented in cwr.sh yet"
+    exit 2
 fi
 
 # -- Check $CMD
@@ -1428,6 +2531,14 @@ fi
 if [[ "$CMD" == "list-rules" ]]; then
     LIST_DATA_MODE=1
 fi
+
+# -- Dependencies: jq and curl carry every command that talks to Cloudflare
+for app in jq curl; do
+    if ! command -v "$app" >/dev/null 2>&1; then
+        _error "$app is required but was not found on PATH"
+        exit 1
+    fi
+done
 
 # -- Argument validation
 if [[ $CMD == "create-rules" || $CMD == "update-rules" ]]; then
