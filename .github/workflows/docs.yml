@@ -6,6 +6,9 @@ on:
     paths:
       - 'docs/**'
       - 'website/**'
+      - 'profiles/**'
+      - 'bin/**'
+      - 'README.md'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -25,6 +28,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # docs/reference/beta-rules.md and stable-rules.md are rendered from the
+      # profiles, and the README beta pointer with them. Regenerating here means
+      # a profile change that nobody re-rendered fails before the site deploys.
+      - name: Generated pages are current
+        run: |
+          bin/build.sh generate-md
+          git diff --exit-code
 
       - name: Setup Node
         uses: actions/setup-node@v4
