@@ -128,7 +128,7 @@ A rules release does not imply a repository release, and a repository release do
 ## Agents Documentation
 
 * Don't use .cloudflare file, use .cloudflare.example instead to keep secrets from being leaked.
-* You can specify a config file using --config flag or CF_CONFIG_FILE environment variable.
+* You can specify a config file using the `--config <file>` flag on `cloudflare-wordpress-rules.sh`; there is no environment variable for it.
 * Generate a single line git commit for any changes you make.
 
 ## Client Confidentiality in Documentation

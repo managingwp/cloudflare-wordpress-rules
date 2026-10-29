@@ -57,6 +57,8 @@ OPTIONS
   -c, --command <cmd>           Command to execute
   --cf-profile <name>           Cloudflare auth profile from .cloudflare
   --cf-auth-profile <name>      Alias for --cf-profile
+  --config <file>               Credentials file instead of ~/.cloudflare
+  --challenge-ttl <seconds>     Challenge Passage TTL (skips the interactive prompt)
   --debug                       Enable debug mode
   --json                        list-rules: one compact JSON object per zone
   --csv                         list-rules: CSV rows including expressions
@@ -64,6 +66,7 @@ OPTIONS
   --long                        list-rules: detailed block per rule
   --table-only                  DEPRECATED: alias for the default table
   -dr, --dryrun                 Dry run, don't send to Cloudflare
+  -h, --help                    Show this help and exit
 ```
 
 ## Examples
@@ -108,6 +111,28 @@ cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
 # Migration + cleanup of old rules
 cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
 ```
+
+## Challenge Passage TTL
+
+Challenge Passage is how long a visitor who passed a challenge is exempt from
+being challenged again. `--challenge-ttl <seconds>` sets it on the zone before
+the rules are created, which skips the interactive prompt that `create-rules`
+would otherwise show:
+
+```bash
+cloudflare-wordpress-rules -d domain.com -c create-rules default --challenge-ttl 3600
+```
+
+Three things worth knowing:
+
+- The value must be one of Cloudflare's allowed TTLs —
+  `300`, `900`, `1800`, `2700`, `3600`, `7200`, `10800`, `14400`, `28800`,
+  `57600`, `86400`, `604800`, `2592000`, `31536000`. Anything else is rejected
+  with the list printed.
+- It only ever **raises** the setting. If the zone already has an equal or
+  longer TTL, the command leaves it alone and says so.
+- It runs as part of `create-rules` only. To change the setting on its own, use
+  `-c set-settings challenge_ttl <seconds>`.
 
 ## list-rules output formats
 

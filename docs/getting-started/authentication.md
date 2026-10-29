@@ -94,3 +94,24 @@ The complete commented template lives in
 ```
 
 The same flag works on `cloudflare-token.sh` and `cloudflare-turnstile.sh`.
+
+## Using an alternative credentials file
+
+`cloudflare-wordpress-rules.sh` can read credentials from a file other than
+`~/.cloudflare`:
+
+```bash
+./cloudflare-wordpress-rules -d domain.com -c list-rules --config ~/.cloudflare-client1
+```
+
+The file has exactly the same format as `~/.cloudflare` — profiles, tokens and
+keys all work unchanged — so this is the way to keep a client's credentials in
+a separate, separately-protected file.
+
+Three limits are worth knowing:
+
+- **It applies to `cloudflare-wordpress-rules.sh` only.** `cloudflare-token.sh`
+  and `cloudflare-turnstile.sh` always read `~/.cloudflare`.
+- **There is no environment variable for it.** The flag is the only way to
+  point at another file; a relative path is resolved from the directory you run
+  the command in.

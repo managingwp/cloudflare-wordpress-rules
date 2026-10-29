@@ -94,6 +94,7 @@ usage () {
 	echo -e "  ${CCYAN}-c${NC}, ${CCYAN}--command${NC} <cmd>           Command to execute"
     echo -e "  ${CCYAN}--cf-profile${NC} <name>            Cloudflare auth profile from .cloudflare"
     echo -e "  ${CDARKGRAY}--cf-auth-profile${NC} <name>      Alias for --cf-profile"
+    echo -e "  ${CCYAN}--config${NC} <file>                Credentials file instead of \$HOME/.cloudflare"
     echo -e "  ${CCYAN}--challenge-ttl${NC} <seconds>       Challenge Passage TTL (bypasses interactive prompt)"
 	echo -e "  ${CCYAN}--debug${NC}                         Enable debug mode"
     echo -e "  ${CCYAN}--json${NC}                          list-rules: one compact JSON object per zone"
@@ -102,6 +103,7 @@ usage () {
     echo -e "  ${CCYAN}--long${NC}                          list-rules: detailed block per rule"
     echo -e "  ${CDARKGRAY}--table-only${NC}                    DEPRECATED: alias for the default table"
 	echo -e "  ${CCYAN}-dr${NC}, ${CCYAN}--dryrun${NC}                 Dry run, don't send to Cloudflare"
+	echo -e "  ${CCYAN}-h${NC}, ${CCYAN}--help${NC}                    Show this help and exit"
 	echo ""
 	
 	echo -e "${CBOLD}${CYELLOW}EXAMPLES${NC}"
@@ -203,6 +205,10 @@ TABLE_ONLY_EXPLICIT=0
 		CMD="$2"
 		shift # past argument
 		shift # past variable
+		;;
+		-h|--help)
+		usage
+		exit 0
 		;;
         --debug)
         # shellcheck disable=SC2034
