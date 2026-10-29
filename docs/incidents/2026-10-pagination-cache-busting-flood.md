@@ -145,7 +145,9 @@ own. These requests are legitimate and must not match:
 
 Test the expression against all five before deploying. A block rule on the
 tracking parameter alone would have blocked every visitor arriving from the
-LinkedIn post that started the chain.
+LinkedIn post that started the chain — see
+[tracking parameters](../guides/tracking-parameters.md) for why that parameter
+cannot be the match, and for the encoding and pre-deploy checks.
 
 ## Origin fix
 

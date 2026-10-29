@@ -17,6 +17,7 @@ const sidebars = {
         'guides/multi-zone',
         'guides/skip-action',
         'guides/block-response',
+        'guides/tracking-parameters',
         'guides/rate-limiting',
         'guides/migrate-to-rulesets',
       ],
