@@ -29,6 +29,24 @@ Rules:
 * New documentation goes into `docs/` — never at the repository root. Only `README.md`, `CHANGELOG.md` and `AGENTS.md` stay at the root.
 * After completing code work, suggest testing methods for the change to complete.
 
+## V2 Script (v2/cwr.sh)
+
+`v2/cwr.sh` is a single-file rebuild of the WAF CLI that runs beside
+`cloudflare-wordpress-rules.sh`; v1 and `inc/` stay as they are until v2 reaches
+parity. The contract is on the [v2 script page](docs/contributing/v2-rebuild.md).
+
+* **Human output goes through `ui_*`.** Every banner, table, prompt and error
+  uses the vendored `vendor/bash-ui/ui.sh`; do not add `echo -e` colour codes.
+* **stdout is data.** Only `list-rules --json/--csv/--raw` and `print-profile`
+  write to stdout. Everything else goes to stderr, so pipes stay clean.
+* **Same API traffic as v1.** The Rulesets requests and bodies must match v1 for
+  the commands v2 implements; `tests/test-cwr.sh` enforces this.
+* **Profiles are shared.** `v2/cwr.sh` reads the repo `profiles/`; override with
+  `PROFILE_DIR` or `CWR_PROFILE_DIR`.
+* **Never edit `vendor/bash-ui/`.** Update it with the bash-ui vendoring tool so
+  `ui.sh.sha256` keeps matching.
+* `bash tests/test-cwr.sh` must stay green; it needs no credentials or network.
+
 ## Documentation Site (docs/ + website/)
 
 The documentation is a Docusaurus 3 site. `docs/` is the content directory; `website/` holds the config, theme and build.

@@ -67,6 +67,7 @@ const sidebars = {
       items: [
         'contributing/development',
         'contributing/docs-site',
+        'contributing/v2-rebuild',
         'contributing/incident-template',
       ],
     },
