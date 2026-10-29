@@ -180,7 +180,7 @@ for file in "${records[@]}"; do
     fi
 
     for key in $REQUIRED_KEYS; do
-        printf '%s\n' "$fm" | grep -q "^$key:" || missing_keys+="$name:$key "
+        grep -q "^$key:" <<< "$fm" || missing_keys+="$name:$key "
     done
 
     id=$(fm_value "$file" "incident_id")
@@ -199,12 +199,12 @@ for file in "${records[@]}"; do
     in_vocab "$(fm_value "$file" attack_class)" "$ATTACK_CLASSES" || bad_class+="$name($(fm_value "$file" attack_class)) "
 
     # A client identifies as a placeholder, never as a domain.
-    printf '%s\n' "$fm" | grep -q '^sites:' && sites_key+="$name "
-    if ! printf '%s\n' "$fm" | grep -q '^[[:space:]]*\(instances:\|-\|{\)'; then
+    grep -q '^sites:' <<< "$fm" && sites_key+="$name "
+    if ! grep -q '^[[:space:]]*\(instances:\|-\|{\)' <<< "$fm"; then
         bad_site_ref+="$name(no instances) "
-    elif ! printf '%s\n' "$fm" | grep -q 'site_ref: *site-[a-z]'; then
+    elif ! grep -q 'site_ref: *site-[a-z]' <<< "$fm"; then
         bad_site_ref+="$name "
-    elif printf '%s\n' "$fm" | grep 'site_ref:' | grep -qv 'site_ref: *site-[a-z][^a-z]'; then
+    elif [[ -n "$(grep 'site_ref:' <<< "$fm" | grep -v 'site_ref: *site-[a-z][^a-z]')" ]]; then
         bad_site_ref+="$name(non-placeholder) "
     fi
 

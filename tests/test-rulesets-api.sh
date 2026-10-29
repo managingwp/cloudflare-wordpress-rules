@@ -71,7 +71,7 @@ assert_contains() {
     local actual="$3"
     ((TEST_COUNT++))
     
-    if echo "$actual" | grep -qF "$expected"; then
+    if grep -qF "$expected" <<< "$actual"; then
         echo -e "${GREEN}✓ PASS${NC}: $description"
         ((PASS_COUNT++))
     else
@@ -183,7 +183,7 @@ NO_AP=$(cf_ruleset_build_rule_payload \
     'true' \
     'true' \
     '{}')
-if echo "$NO_AP" | grep -q '"action_parameters"'; then
+if grep -q '"action_parameters"' <<< "$NO_AP"; then
     echo -e "  ${YELLOW}Note: empty action_parameters kept (behavior may vary)${NC}"
 else
     assert_eq "Empty action_parameters stripped correctly" 0 0

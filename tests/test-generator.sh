@@ -66,7 +66,7 @@ assert_file() {
 assert_contains() {
     local description="$1" needle="$2" haystack="$3"
     ((TEST_COUNT++))
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
+    if grep -qF -- "$needle" <<< "$haystack"; then
         echo -e "${GREEN}✓ PASS${NC}: $description"
         ((PASS_COUNT++))
     else

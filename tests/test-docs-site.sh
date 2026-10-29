@@ -60,7 +60,7 @@ assert_eq() {
 assert_contains() {
     local description="$1" needle="$2" haystack="$3"
     ((TEST_COUNT++))
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
+    if grep -qF -- "$needle" <<< "$haystack"; then
         echo -e "${GREEN}✓ PASS${NC}: $description"
         ((PASS_COUNT++))
     else
@@ -159,7 +159,7 @@ while IFS= read -r file; do
     [[ -z "$file" ]] && continue
     id="${file#"$DOCS_DIR"/}"
     id="${id%.md}"
-    if ! printf '%s\n' "$sidebar_ids" | grep -qxF "$id"; then
+    if ! grep -qxF "$id" <<< "$sidebar_ids"; then
         missing_from_sidebar+="$id "
     fi
 done <<< "$docs_files"
