@@ -17,7 +17,8 @@
 #
 # Usage:
 #   bash tests/test-incidents.sh
-#   INCIDENTS_DIR=/tmp/fixture bash tests/test-incidents.sh   # negative fixture
+#   bash tests/test-incidents.sh --self-test                # prove the guard trips
+#   INCIDENTS_DIR=/tmp/fixture bash tests/test-incidents.sh  # run against a fixture
 # =====================================================================
 
 set -o pipefail
@@ -100,6 +101,41 @@ in_vocab() {
     local value="$1" vocab="$2"
     [[ " $vocab " == *" $value "* ]]
 }
+
+# --self-test: prove the guard rejects a record that names a hostname.
+# Builds a fixture from the live registry, injects a violation, and expects
+# this same script to fail against it. Exits 0 when the guard trips.
+if [[ "${1:-}" == "--self-test" ]]; then
+    fixture=$(mktemp -d)
+    trap 'rm -rf "$fixture"' EXIT
+    cp "$INCIDENTS_DIR"/*.md "$fixture"/ 2>/dev/null || true
+    cat > "$fixture/2026-01-bad.md" <<'FIXTURE'
+---
+title: Bad fixture
+description: A record that names a hostname instead of a placeholder.
+incident_id: INC-2026-01-01-01
+status: active
+attack_class: scraper-flood
+first_seen: 2026-01-01
+last_seen: 2026-01-01
+severity: low
+instances:
+  - { date: 2026-01-01, site_ref: acme-corp.org }
+confidence: observed
+tags: [fixture]
+---
+
+## Summary
+
+Fixture.
+FIXTURE
+    if INCIDENTS_DIR="$fixture" "$BASH" "$0" >/dev/null 2>&1; then
+        echo "FAIL: the guard accepted a record with a hostname in site_ref"
+        exit 1
+    fi
+    echo "ok: the guard rejects a hostname in site_ref"
+    exit 0
+fi
 
 echo -e "${BLUE}=== registry ===${NC}"
 assert_file "the incident index exists" "$INDEX_FILE"
