@@ -248,7 +248,7 @@ unset -f cf_ruleset_get_entrypoint
 # shellcheck source=../inc/cf-inc-rulesets.sh
 source "$REPO_DIR/inc/cf-inc-rulesets.sh"
 
-USAGE=$("$REPO_DIR/cloudflare-wordpress-rules.sh" 2>&1 || true)
+USAGE=$("$REPO_DIR/cfwrv1.sh" 2>&1 || true)
 assert_contains "usage lists --json" "--json" "$USAGE"
 assert_contains "usage lists --csv" "--csv" "$USAGE"
 assert_contains "usage lists --raw" "--raw" "$USAGE"
@@ -256,11 +256,11 @@ assert_contains "usage lists --long" "--long" "$USAGE"
 assert_contains "usage marks --table-only deprecated" "DEPRECATED" "$USAGE"
 
 set +e
-"$REPO_DIR/cloudflare-wordpress-rules.sh" -d example.com -c list-rules --json --csv >/dev/null 2>&1
+"$REPO_DIR/cfwrv1.sh" -d example.com -c list-rules --json --csv >/dev/null 2>&1
 CONFLICT_EXIT=$?
-"$REPO_DIR/cloudflare-wordpress-rules.sh" -d example.com -c list-rules --json --table-only >/dev/null 2>&1
+"$REPO_DIR/cfwrv1.sh" -d example.com -c list-rules --json --table-only >/dev/null 2>&1
 TABLE_CONFLICT_EXIT=$?
-"$REPO_DIR/cloudflare-wordpress-rules.sh" -d example.com -c list-rules --long --csv >/dev/null 2>&1
+"$REPO_DIR/cfwrv1.sh" -d example.com -c list-rules --long --csv >/dev/null 2>&1
 LONG_CONFLICT_EXIT=$?
 assert_exit "conflicting formats exit 2" "2" "$CONFLICT_EXIT"
 assert_exit "--table-only conflicts with --json" "2" "$TABLE_CONFLICT_EXIT"

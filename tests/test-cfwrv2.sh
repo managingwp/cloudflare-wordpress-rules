@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # =====================================================================
-# test-cwr.sh
-# Offline tests for v2/cwr.sh — the bash-ui rewrite of the WAF CLI.
+# test-cfwrv2.sh
+# Offline tests for cfwrv2.sh — the bash-ui rewrite of the WAF CLI.
 #
 # No credentials and no network: tests/cwr/curl stands in for curl and
 # answers from tests/cwr/*.json, so the whole create/list/delete path
 # runs. Request bodies are captured and compared with the v1 script.
 #
 # Usage:
-#   bash tests/test-cwr.sh
+#   bash tests/test-cfwrv2.sh
 # =====================================================================
 
 set -o pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 REPO_DIR=$(dirname "$SCRIPT_DIR")
-CWR="$REPO_DIR/v2/cwr.sh"
-V1="$REPO_DIR/cloudflare-wordpress-rules.sh"
+CWR="$REPO_DIR/cfwrv2.sh"
+V1="$REPO_DIR/cfwrv1.sh"
 STUB_DIR="$SCRIPT_DIR/cwr"
 ENTRYPOINT_FIXTURE="$SCRIPT_DIR/cf-ruleset-entrypoint.json"
 
