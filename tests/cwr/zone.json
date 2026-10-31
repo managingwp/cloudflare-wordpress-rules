@@ -1,0 +1,21 @@
+{
+  "result": [
+    {
+      "id": "0123456789abcdef0123456789abcdef",
+      "name": "example.com",
+      "status": "active",
+      "paused": false,
+      "type": "full"
+    }
+  ],
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result_info": {
+    "page": 1,
+    "per_page": 50,
+    "count": 1,
+    "total_count": 1,
+    "total_pages": 1
+  }
+}
