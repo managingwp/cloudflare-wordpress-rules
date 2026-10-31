@@ -4,6 +4,7 @@
 import {
   DEFAULT_OPTIONS,
   DEFAULT_TEMPLATE_VERSION,
+  RULE_TITLES,
   isValidTemplateVersion,
   mergeOptions,
   normalizeOptions,
@@ -26,8 +27,10 @@ import {
 import { MAX_CUSTOM_RULES, MAX_EXPRESSION_CHARS, summarizeLimits } from "./limits.js";
 import { ISO_COUNTRIES, countryName } from "./countries.js";
 import { initTheme } from "./theme.js";
+import { decodePayload, encodePayload, manualRulesFor, readShareState } from "./share.js";
 
-const STORAGE_KEY = "cfwpr.generator.options.v1";
+const STORAGE_KEY = "cfwpr.generator.state.v2";
+const LEGACY_STORAGE_KEY = "cfwpr.generator.options.v1";
 const UA_SUGGESTIONS = [
   "PerplexityBot",
   "Perplexity-User",
@@ -160,29 +163,17 @@ function showNotice(message) {
 }
 
 function encodeState() {
-  const payload = {
+  return encodePayload({
     k: state.source.kind,
     n: state.source.name,
     v: state.templateVersion,
     o: state.options,
-  };
-  const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    m: manualRulesFor(state.rules),
+  });
 }
 
 function decodeState(value) {
-  try {
-    const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+  return readShareState(decodePayload(value));
 }
 
 function readHash() {
@@ -192,8 +183,9 @@ function readHash() {
 
 function readStorage() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+      || window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    return raw ? readShareState(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -205,6 +197,7 @@ function persist() {
     n: state.source.name,
     v: state.templateVersion,
     o: state.options,
+    m: manualRulesFor(state.rules),
   };
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -407,6 +400,37 @@ function renderSourceNote() {
     : "Rules are rebuilt from the fields in steps 2–4.";
 }
 
+function applyManualRules(rules, entries) {
+  const next = [...rules];
+  for (const entry of entries) {
+    const index = next.findIndex((rule) => rule.ref === entry.ref);
+    const number = entry.ref.replace("lmt-r", "");
+    const base = index >= 0 ? next[index] : {
+      ref: entry.ref,
+      ruleNumber: number || "1",
+      label: RULE_TITLES[Number(number)] || entry.ref,
+      enabled: true,
+      logging: true,
+    };
+    const merged = {
+      ...base,
+      action: entry.action,
+      enabled: entry.enabled,
+      logging: entry.logging,
+      expression: entry.expression,
+      origin: "manual",
+    };
+    if (merged.action === "skip") {
+      merged.actionParameters = entry.ap || base.actionParameters || { ruleset: "current" };
+    } else {
+      delete merged.actionParameters;
+    }
+    if (index >= 0) next[index] = merged;
+    else next.push(merged);
+  }
+  return next.sort((a, b) => Number(a.ruleNumber) - Number(b.ruleNumber));
+}
+
 function applySource(kind, name, saved) {
   if (kind === "release") {
     const entry = findVersion(state.versions, name);
@@ -419,16 +443,22 @@ function applySource(kind, name, saved) {
     state.templateVersion = versionFor({ rules: entry.rules }, entry.value);
     state.rules = rulesFromProfile(entry);
     state.edited = false;
+    if (saved && Array.isArray(saved.manual) && saved.manual.length > 0) {
+      state.rules = applyManualRules(state.rules, saved.manual);
+    }
   } else {
     const preset = state.presets.find((item) => item.name === name) || builtinPreset();
     state.source = { kind: "builder", name: preset.name };
     state.preset = preset;
-    state.templateVersion = saved && saved.v ? String(saved.v) : preset.templateVersion;
-    state.options = saved && saved.o
-      ? normalizeOptions(mergeOptions(preset.options || DEFAULT_OPTIONS, saved.o))
+    state.templateVersion = saved && saved.version ? saved.version : preset.templateVersion;
+    state.options = saved && saved.options
+      ? normalizeOptions(mergeOptions(preset.options || DEFAULT_OPTIONS, saved.options))
       : normalizeOptions(preset.options || DEFAULT_OPTIONS);
     state.rules = rulesFromOptions(state.options);
     state.edited = false;
+    if (saved && Array.isArray(saved.manual) && saved.manual.length > 0) {
+      state.rules = applyManualRules(state.rules, saved.manual);
+    }
   }
 
   renderSourceOptions();
@@ -1077,14 +1107,12 @@ async function init() {
   }
 
   const saved = readHash() || readStorage();
-  const savedKind = saved && typeof saved.k === "string" ? saved.k : (saved && saved.p ? "builder" : "");
-  const savedName = saved && typeof saved.n === "string" ? saved.n : (saved && saved.p ? saved.p : "");
 
-  if (savedKind === "release" && findVersion(state.versions, savedName)) {
-    applySource("release", savedName, saved);
+  if (saved && saved.kind === "release" && findVersion(state.versions, saved.name)) {
+    applySource("release", saved.name, saved);
   } else {
-    const builderName = state.presets.some((preset) => preset.name === savedName)
-      ? savedName
+    const builderName = saved && state.presets.some((preset) => preset.name === saved.name)
+      ? saved.name
       : fallbackPresetName();
     applySource("builder", builderName, saved);
   }
