@@ -12,7 +12,7 @@ description: Generated reference for the rules in profiles/mwp-rules-beta.json.
 Deploy them with:
 
 ```bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -v1 -d staging.example.com -c create-rules mwp-rules-beta
 ```
 
 <!-- RULES-START -->

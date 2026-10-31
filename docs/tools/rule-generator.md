@@ -7,7 +7,7 @@ sidebar_position: 1
 # Rule generator
 
 The [rule generator](pathname:///generator/index.html) builds the same R1–R4
-rule set that `cloudflare-wordpress-rules.sh` deploys, without credentials,
+rule set that the WAF rules scripts deploy, without credentials,
 without a Cloudflare API call, and without leaving the browser.
 
 Use it when you want the expressions in front of you before you create rules —

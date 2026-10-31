@@ -114,7 +114,7 @@ description: Generated reference for the rules in profiles/mwp-rules-beta.json.
 Deploy them with:
 
 ```bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -v1 -d staging.example.com -c create-rules mwp-rules-beta
 ```
 
 <!-- RULES-START -->
@@ -155,7 +155,7 @@ description: Generated reference for the rules the default selector deploys.
 Deploy them with:
 
 \`\`\`bash
-./cloudflare-wordpress-rules -d example.com -c create-rules default
+./cfwr.sh -v1 -d example.com -c create-rules default
 \`\`\`
 
 <!-- RULES-START -->
@@ -194,7 +194,7 @@ Unreleased rule changes live in [\`profiles/mwp-rules-beta.json\`](profiles/mwp-
 the generated rules are on the [Beta rules page](https://managingwp.github.io/cloudflare-wordpress-rules/reference/beta-rules).
 
 \`\`\`bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -v1 -d staging.example.com -c create-rules mwp-rules-beta
 \`\`\`
 EOF
         printf '%s\n' "$end_marker"

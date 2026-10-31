@@ -10,7 +10,7 @@ description: Generated reference for the rules the default selector deploys.
 Deploy them with:
 
 ```bash
-./cloudflare-wordpress-rules -d example.com -c create-rules default
+./cfwr.sh -v1 -d example.com -c create-rules default
 ```
 
 <!-- RULES-START -->

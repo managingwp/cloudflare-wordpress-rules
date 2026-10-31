@@ -10,9 +10,9 @@ description: Cloudflare WAF rules, API tokens and Turnstile widgets for WordPres
 This repository provides bash scripts for creating Cloudflare WAF rules for
 WordPress sites, plus helpers for API tokens and Turnstile widgets.
 
-- **[`cloudflare-wordpress-rules.sh`](commands/waf-rules.md)** — create,
-  update, list and delete WAF custom rules through the Cloudflare **Rulesets
-  API**, across one zone or many.
+- **[`cfwr.sh`](commands/waf-rules.md)** — create, update, list and delete
+  WAF custom rules through the Cloudflare **Rulesets API**, across one zone or
+  many. It runs the stable `cfwrv1.sh` or the `cfwrv2.sh` refactor in progress.
 - **[`cloudflare-token.sh`](commands/token.md)** — create and manage Cloudflare
   API tokens, including tokens for the Super Page Cache for Cloudflare plugin.
 - **[`cloudflare-turnstile.sh`](commands/turnstile.md)** — create and manage

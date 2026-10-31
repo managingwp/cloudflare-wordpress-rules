@@ -34,11 +34,11 @@ client2-site.com
 # Usage Examples:
 # =============================================================================
 # Apply rules to all zones in this file:
-#   ./cloudflare-wordpress-rules.sh -zf zones.txt -c create-rules default
+#   ./cfwr.sh -v1 -zf zones.txt -c create-rules default
 #
 # Combine with additional domains:
-#   ./cloudflare-wordpress-rules.sh -zf zones.txt -d extra.com -c list-rules
+#   ./cfwr.sh -v1 -zf zones.txt -d extra.com -c list-rules
 #
 # Skip confirmation prompt:
-#   ./cloudflare-wordpress-rules.sh -zf zones.txt -c delete-rules -y
+#   ./cfwr.sh -v1 -zf zones.txt -c delete-rules -y
 # =============================================================================

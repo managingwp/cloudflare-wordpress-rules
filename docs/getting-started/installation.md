@@ -17,11 +17,13 @@ description: Requirements, installation and the first rule deployment.
 ```bash
 git clone https://github.com/managingwp/cloudflare-wordpress-rules.git
 cd cloudflare-wordpress-rules
-chmod +x cloudflare-wordpress-rules.sh cloudflare-token.sh cloudflare-turnstile.sh
+chmod +x cfwr.sh cfwrv1.sh cfwrv2.sh cloudflare-token.sh cloudflare-turnstile.sh
 ```
 
 The repository also ships short symlinks: `cloudflare-wordpress-rules` and
-`cfwpr` both point at `cloudflare-wordpress-rules.sh`.
+`cfwpr` both point at `cfwr.sh`, the version chooser. `cfwrv1.sh` is the stable
+script and `cfwrv2.sh` is the single-file refactor; see
+[cfwr.sh](../commands/waf-rules.md) for how to pick one.
 
 ## Configure credentials
 

@@ -37,7 +37,8 @@ files:
 bash tests/test-apply-profile.sh
 bash tests/test-beta-perplexity.sh
 bash tests/test-beta-readme.sh
-bash tests/test-cwr.sh
+bash tests/test-cfwrv2.sh
+bash tests/test-cfwr-wrapper.sh
 bash tests/test-docs-site.sh
 bash tests/test-generator.sh
 bash tests/test-incidents.sh
@@ -59,7 +60,8 @@ What each one guards:
 | `test-apply-profile.sh` | applying a profile against a stubbed API: new zone, existing zone accepted and declined, `-y`, and the counted result table |
 | `test-list-rules-output.sh` | the `list-rules` formats — default table, `--long`, `--json`, `--csv`, `--raw` — and their stdout/stderr split |
 | `test-print-profile.sh` | `print-profile` output, including action parameters |
-| `test-cwr.sh` | the v2 script: help and arguments, profile commands, every `list-rules` format, the `create-rules` payload, `-y`, and parity with v1 |
+| `test-cfwrv2.sh` | the v2 script: help and arguments, profile commands, every `list-rules` format, the `create-rules` payload, `-y`, and parity with v1 |
+| `test-cfwr-wrapper.sh` | the `cfwr.sh` chooser: help, `-v1`/`-v2` and `CWR_VERSION` routing, the non-interactive default, argv passthrough and the symlinked entry points |
 | `test-profile-resolution.sh` | resolving a profile by filename and by internal name, and how `default` is labelled |
 | `test-rulesets-api.sh` | the `cf-inc-rulesets.sh` builders, validators and converters that need no API access |
 | `test-beta-perplexity.sh` | the beta R1 skip rule: the Perplexity allowlist, its position, and the 4,096-character Free-plan limit |

@@ -5,7 +5,7 @@ description: The v3 profile JSON format used to define WAF rules.
 
 # Profile Format Reference
 
-This document describes the profile JSON format used by `cloudflare-wordpress-rules.sh` to define WAF rules.
+This document describes the profile JSON format used by `cfwrv1.sh` and `cfwrv2.sh` to define WAF rules.
 
 ## Profile Selectors
 

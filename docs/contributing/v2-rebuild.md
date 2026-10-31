@@ -1,30 +1,33 @@
 ---
-title: The v2 script (cwr.sh)
-description: The parallel rewrite of the WAF CLI in v2/cwr.sh — scope, layout, guarantees, and how to test it against v1.
+title: The v2 script (cfwrv2.sh)
+description: The v2 rewrite of the WAF CLI in cfwrv2.sh — scope, layout, guarantees, and how to test it against v1.
 ---
 
-`v2/cwr.sh` is a from-scratch rebuild of the WAF command line, running beside
-`cloudflare-wordpress-rules.sh` on a branch rather than replacing it. It is one
-self-contained file with no `inc/` includes, and every human-facing line goes
-through the vendored [bash-ui](https://github.com/jordantrizz/bash-ui) library.
+`cfwrv2.sh` is a from-scratch rebuild of the WAF command line, running beside
+the stable `cfwrv1.sh` rather than replacing it. It is one self-contained file
+with no `inc/` includes, and every human-facing line goes through the vendored
+[bash-ui](https://github.com/jordantrizz/bash-ui) library.
+
+`cfwr.sh` chooses between the two, and `-v2` (or `CWR_VERSION=2`) forces this
+script; see [cfwr.sh](../commands/waf-rules.md#choosing-a-version).
 
 ## Why a second script
 
 The v1 script grew out of six include files and carries commands that the
-Rulesets API has since retired. `cwr.sh` keeps only what the current workflow
+Rulesets API has since retired. `cfwrv2.sh` keeps only what the current workflow
 needs, so the whole surface fits in one file that can be copied to a server.
 
 v1 remains the supported entry point until v2 reaches parity; nothing in
-`cloudflare-wordpress-rules.sh` or `inc/` changes for v1 callers.
+`cfwrv1.sh` or `inc/` changes for v1 callers.
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `v2/cwr.sh` | The script: argument parsing, config and auth, the Rulesets engine, profiles, and output. |
+| `cfwrv2.sh` | The script: argument parsing, config and auth, the Rulesets engine, profiles, and output. |
 | `vendor/bash-ui/ui.sh` | The pinned UI library, with `ui.sh.sha256` proving it matches the release. |
-| `profiles/` | The same rule profiles v1 reads; `cwr.sh` resolves them relative to the script. |
-| `tests/test-cwr.sh` | Offline tests: a stand-in `curl` (`tests/cwr/curl`) answers from fixtures. |
+| `profiles/` | The same rule profiles v1 reads; `cfwrv2.sh` resolves them relative to the script. |
+| `tests/test-cfwrv2.sh` | Offline tests: a stand-in `curl` (`tests/cwr/curl`) answers from fixtures. |
 
 `PROFILE_DIR` or `CWR_PROFILE_DIR` overrides the profile directory.
 
@@ -38,8 +41,8 @@ Profiles: `list-profiles`, `print-profile`, `validate-profile`.
 Both call styles work, and mean the same thing:
 
 ```bash
-v2/cwr.sh -d example.com -c create-rules default
-v2/cwr.sh create-rules default -d example.com
+cfwrv2.sh -d example.com -c create-rules default
+cfwrv2.sh create-rules default -d example.com
 ```
 
 Options: `-d/--domain` (repeatable), `-zf/--zones-file`, `-c/--command`,
@@ -54,10 +57,10 @@ Not in v2: the deprecated filter commands, the ruleset administration commands,
 
 **stdout is data; stderr is for people.** `list-rules --json`, `--csv` and
 `--raw`, and `print-profile` write to stdout. Everything else — banners, tables,
-prompts, errors — goes to stderr through `ui_*`, so `cwr.sh … --json | jq` and
-`cwr.sh print-profile default > rules.txt` work and stay clean.
+prompts, errors — goes to stderr through `ui_*`, so `cfwrv2.sh … --json | jq` and
+`cfwrv2.sh print-profile default > rules.txt` work and stay clean.
 
-**The API traffic does not change.** `cwr.sh` sends the same Rulesets API
+**The API traffic does not change.** `cfwrv2.sh` sends the same Rulesets API
 requests, with the same bodies, as v1 for the commands it implements. The test
 harness asserts this by running both scripts against the same fixture and
 comparing the captured request bodies.
@@ -65,7 +68,7 @@ comparing the captured request bodies.
 ## Testing
 
 ```bash
-bash tests/test-cwr.sh
+bash tests/test-cfwrv2.sh
 ```
 
 Checks the help and argument surface, the three profile commands, all five
@@ -76,7 +79,7 @@ Checks the help and argument surface, the three profile commands, all five
 Run shellcheck without the vendored library:
 
 ```bash
-shellcheck v2/cwr.sh tests/test-cwr.sh $(git ls-files 'tests/cwr/*')
+shellcheck cfwrv2.sh tests/test-cfwrv2.sh $(git ls-files 'tests/cwr/*')
 ```
 
 ## Keeping bash-ui current

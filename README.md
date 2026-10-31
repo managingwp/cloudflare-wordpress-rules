@@ -15,7 +15,7 @@ Unreleased rule changes live in [`profiles/mwp-rules-beta.json`](profiles/mwp-ru
 the generated rules are on the [Beta rules page](https://managingwp.github.io/cloudflare-wordpress-rules/reference/beta-rules).
 
 ```bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -v1 -d staging.example.com -c create-rules mwp-rules-beta
 ```
 <!-- BETA-RULES-END -->
 
@@ -28,7 +28,7 @@ Requires `bash`, `curl`, `jq`, a Cloudflare account and an API token with
 git clone https://github.com/managingwp/cloudflare-wordpress-rules.git
 cd cloudflare-wordpress-rules
 cp .cloudflare.example ~/.cloudflare    # then add your account and token
-./cloudflare-wordpress-rules -d example.com -c create-rules default
+./cfwr.sh -v1 -d example.com -c create-rules default
 ```
 
 ## Rule generator

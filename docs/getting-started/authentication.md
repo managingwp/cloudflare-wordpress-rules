@@ -97,8 +97,8 @@ The same flag works on `cloudflare-token.sh` and `cloudflare-turnstile.sh`.
 
 ## Using an alternative credentials file
 
-`cloudflare-wordpress-rules.sh` can read credentials from a file other than
-`~/.cloudflare`:
+`cfwr.sh` — and either script it runs — can read credentials from a file
+other than `~/.cloudflare`:
 
 ```bash
 ./cloudflare-wordpress-rules -d domain.com -c list-rules --config ~/.cloudflare-client1
@@ -110,7 +110,7 @@ a separate, separately-protected file.
 
 Three limits are worth knowing:
 
-- **It applies to `cloudflare-wordpress-rules.sh` only.** `cloudflare-token.sh`
+- **It applies to the WAF rules scripts only.** `cloudflare-token.sh`
   and `cloudflare-turnstile.sh` always read `~/.cloudflare`.
 - **There is no environment variable for it.** The flag is the only way to
   point at another file; a relative path is resolved from the directory you run

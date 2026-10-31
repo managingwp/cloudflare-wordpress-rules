@@ -1,5 +1,5 @@
 // Output renderers: Cloudflare dashboard expressions, Rulesets API JSON, an
-// upgrade manifest, and a v3 profile for cloudflare-wordpress-rules.sh.
+// upgrade manifest, and a v3 profile for cfwrv1.sh.
 //
 // Descriptions carry the template version and a hash of the expression:
 //   lmt-r1 | t207-3fa9c2d1 | Allow trusted IPs, ...
@@ -92,7 +92,7 @@ export const UPGRADE_RULES = [
   },
 ];
 
-/** v3 profile JSON, the format cloudflare-wordpress-rules.sh consumes. */
+/** v3 profile JSON, the format cfwrv1.sh and cfwrv2.sh consume. */
 export function toV3Profile(profileName, description, rules, templateVersion) {
   return {
     name: profileName,

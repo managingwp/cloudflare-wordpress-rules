@@ -1,17 +1,46 @@
 ---
-title: cloudflare-wordpress-rules.sh
-description: Create and manage Cloudflare WAF custom rules for WordPress sites.
+title: cfwr.sh
+description: Create and manage Cloudflare WAF custom rules, choosing between the stable v1 CLI and the v2 refactor.
 ---
 
-# cloudflare-wordpress-rules.sh
+# cfwr.sh
 
-Bash script to create and manage Cloudflare WAF rules for WordPress sites
+Bash scripts to create and manage Cloudflare WAF rules for WordPress sites
 through the Cloudflare API. Supports batch operations across multiple zones.
 
-## Usage
+`cfwr.sh` is the entry point. It runs one of two scripts:
+
+| Script | What it is |
+| --- | --- |
+| `cfwrv1.sh` | The stable CLI: the released command set, backed by `inc/`. |
+| `cfwrv2.sh` | The single-file refactor, still in progress. It covers the core WAF and profile commands. |
+
+## Choosing a version
+
+```bash
+./cfwr.sh -d example.com -c create-rules default     # asks, on a terminal
+./cfwr.sh -v1 -d example.com -c create-rules default # force the stable CLI
+./cfwr.sh -v2 -d example.com -c list-rules --json    # force the refactor
+CWR_VERSION=2 ./cfwr.sh list-profiles                # same, for scripts
+```
+
+- On a terminal it prints a short banner explaining that v2 is a refactor in
+  progress, then asks `Version [1]:`. Enter selects v1; `2` selects v2.
+- In a pipe, a cron job, a CI run or any non-interactive shell it does not ask:
+  it runs **v1** and prints one stderr line naming `-v2`.
+- `-v1`/`--v1` and `-v2`/`--v2` may appear anywhere in the arguments; the flag
+  is removed before the chosen script sees the rest.
+- The chooser's own banner and menu go to stderr, so
+  `./cfwr.sh -v2 … --json | jq` stays clean.
+
+Both scripts stay runnable directly — `./cfwrv1.sh …` and `./cfwrv2.sh …` behave
+exactly as `cfwr.sh -v1 …` and `cfwr.sh -v2 …` without the chooser. The short
+symlinks `cloudflare-wordpress-rules` and `cfwpr` point at `cfwr.sh`.
+
+## v1 usage
 
 ```text
-cloudflare-wordpress-rules -d <domain> -c <command> [options]
+cfwrv1.sh -d <domain> -c <command> [options]
 
 RULES COMMANDS (Rulesets API)
   create-rules <profile>          Create rules on domain using profile
@@ -73,43 +102,43 @@ OPTIONS
 
 ```bash
 # Create rules on a single domain
-cloudflare-wordpress-rules -d domain.com -c create-rules default
+cfwrv1.sh -d domain.com -c create-rules default
 
 # Create rules and force a specific auth profile
-cloudflare-wordpress-rules -d domain.com -c create-rules default --cf-profile PROD
+cfwrv1.sh -d domain.com -c create-rules default --cf-profile PROD
 
 # List rules on a domain
-cloudflare-wordpress-rules -d domain.com -c list-rules
+cfwrv1.sh -d domain.com -c list-rules
 
 # List rules as one JSON object per zone (pipe to jq)
-cloudflare-wordpress-rules -d domain.com -c list-rules --json
+cfwrv1.sh -d domain.com -c list-rules --json
 
 # List rules as CSV, including expressions
-cloudflare-wordpress-rules -d domain.com -c list-rules --csv > rules.csv
+cfwrv1.sh -d domain.com -c list-rules --csv > rules.csv
 
 # Show each rule's logging, action parameters and full expression
-cloudflare-wordpress-rules -d domain.com -c list-rules --long
+cfwrv1.sh -d domain.com -c list-rules --long
 
 # Print the unmodified Cloudflare entry point response
-cloudflare-wordpress-rules -d domain.com -c list-rules --raw
+cfwrv1.sh -d domain.com -c list-rules --raw
 
 # Deprecated alias for the default table (kept for existing scripts)
-cloudflare-wordpress-rules -d domain.com -c list-rules --table-only
+cfwrv1.sh -d domain.com -c list-rules --table-only
 
 # Delete a specific rule
-cloudflare-wordpress-rules -d domain.com -c delete-rule 1234567890
+cfwrv1.sh -d domain.com -c delete-rule 1234567890
 
 # Get security settings
-cloudflare-wordpress-rules -d domain.com -c get-settings
+cfwrv1.sh -d domain.com -c get-settings
 
 # Set security level
-cloudflare-wordpress-rules -d domain.com -c set-settings security_level high
+cfwrv1.sh -d domain.com -c set-settings security_level high
 
 # One-time migration from old Firewall Rules to the Rulesets API
-cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
+cfwrv1.sh -d domain.com -c migrate-to-rulesets
 
 # Migration + cleanup of old rules
-cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
+cfwrv1.sh -d domain.com -c migrate-to-rulesets --delete-old
 ```
 
 ## Challenge Passage TTL
@@ -120,7 +149,7 @@ the rules are created, which skips the interactive prompt that `create-rules`
 would otherwise show:
 
 ```bash
-cloudflare-wordpress-rules -d domain.com -c create-rules default --challenge-ttl 3600
+cfwrv1.sh -d domain.com -c create-rules default --challenge-ttl 3600
 ```
 
 Three things worth knowing:
@@ -131,8 +160,9 @@ Three things worth knowing:
   with the list printed.
 - It only ever **raises** the setting. If the zone already has an equal or
   longer TTL, the command leaves it alone and says so.
-- It runs as part of `create-rules` only. To change the setting on its own, use
-  `-c set-settings challenge_ttl <seconds>`.
+- It runs as part of `create-rules` only. To change the setting on its own in
+  v1, use `-c set-settings challenge_ttl <seconds>`; v2 exposes it through
+  `create-rules --challenge-ttl` only.
 
 ## list-rules output formats
 
@@ -141,8 +171,8 @@ Three things worth knowing:
 ### Table (default)
 
 ```text
-$ cloudflare-wordpress-rules -d cannaessence.ch -c list-rules
-cannaessence.ch · 8e88ca76443f8e20af9c78042803b58d
+$ cfwrv1.sh -d example.com -c list-rules
+example.com · 8e88ca76443f8e20af9c78042803b58d
 default · http_request_firewall_custom · 4 rules · version 12 · updated 2026-10-16 20:32:35
 
 #  ACTION             ENABLED  RULE ID                           UPDATED              DESCRIPTION
@@ -166,13 +196,13 @@ logging, `last_updated`, action parameters and the full expression.
 One compact object per zone — `domain`, `zone_id`, `ruleset` (id, name, phase, version, last_updated, rule_count) and the `rules` array exactly as Cloudflare returns it:
 
 ```bash
-cloudflare-wordpress-rules -d cannaessence.ch -c list-rules --json | jq '.rules[].action'
+cfwrv1.sh -d example.com -c list-rules --json | jq '.rules[].action'
 ```
 
 For several zones, each zone prints its own object; combine them with `jq -s`:
 
 ```bash
-cloudflare-wordpress-rules -zf zones.txt -c list-rules --json | jq -s 'map({domain, count: (.rules | length)})'
+cfwrv1.sh -zf zones.txt -c list-rules --json | jq -s 'map({domain, count: (.rules | length)})'
 ```
 
 ### CSV
@@ -182,7 +212,7 @@ A single header row per run, then one row per rule:
 Fields are quoted by `@csv`, so commas and quotes in expressions and descriptions stay in one field.
 
 ```bash
-cloudflare-wordpress-rules -d cannaessence.ch -c list-rules --csv > rules.csv
+cfwrv1.sh -d example.com -c list-rules --csv > rules.csv
 ```
 
 ### Raw
@@ -204,8 +234,36 @@ instead of dumping the API response:
 - **`-y` / `--yes`** skips the prompt and the existing-rules preview; the
   resulting table still prints.
 
-Every request failure still exits non-zero and reports the Cloudflare error;
-stdout carries the table only.
+Every request failure still exits non-zero and reports the Cloudflare error.
+In v1 stdout carries the table; in v2 the table is human output and goes to
+stderr (see [v2 differences](#v2-differences)).
+
+## v2 differences
+
+`cfwrv2.sh` implements the core workflow in one self-contained file, with all
+human output going through the vendored
+[bash-ui](https://github.com/jordantrizz/bash-ui) library. The full contract is
+on the [v2 script page](../contributing/v2-rebuild.md).
+
+Commands: `create-rules`, `update-rules`, `upgrade-default-rules`, `list-rules`,
+`delete-rule`, `delete-rules`, `list-profiles`, `print-profile`,
+`validate-profile`.
+
+What changes against v1:
+
+| | v1 (`cfwrv1.sh`) | v2 (`cfwrv2.sh`) |
+| --- | --- | --- |
+| Command form | `-d <domain> -c <command>` | Both that and `cfwrv2.sh <command> … -d <domain>` |
+| `list-rules` table, validation report, prompts | stdout | stderr, always |
+| stdout | mixed | data only: `list-rules --json/--csv/--raw`, `print-profile` |
+| `delete-rule` with `-y` | still prompts | skips the prompt |
+| `-dr` / `--dryrun` | warns, then continues | exits 2 with a message |
+| Not available | — | filters, ruleset administration, `migrate-to-rulesets`, `get-settings`/`set-settings`, `list-auth-profiles`, token and Turnstile |
+
+The API traffic is unchanged: for every command v2 implements it sends the same
+Rulesets requests, with the same bodies, as v1. `tests/test-cfwrv2.sh` asserts
+that by running both scripts against the same fixture and comparing the captured
+request bodies.
 
 ## Profiles
 

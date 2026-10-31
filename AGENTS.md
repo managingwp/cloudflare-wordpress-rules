@@ -29,23 +29,36 @@ Rules:
 * New documentation goes into `docs/` — never at the repository root. Only `README.md`, `CHANGELOG.md` and `AGENTS.md` stay at the root.
 * After completing code work, suggest testing methods for the change to complete.
 
-## V2 Script (v2/cwr.sh)
+## Scripts and the v2 track (cfwr.sh, cfwrv1.sh, cfwrv2.sh)
 
-`v2/cwr.sh` is a single-file rebuild of the WAF CLI that runs beside
-`cloudflare-wordpress-rules.sh`; v1 and `inc/` stay as they are until v2 reaches
-parity. The contract is on the [v2 script page](docs/contributing/v2-rebuild.md).
+`cfwr.sh` is the user-facing entry point: it explains that v2 is a refactor in
+progress, prompts for a version on a terminal, and runs `cfwrv1.sh` (stable) or
+`cfwrv2.sh` (v2). `-v1`/`-v2` and `CWR_VERSION=1|2` force one; a pipe, cron job
+or CI run uses v1 without prompting. The banner and menu go to stderr.
+
+`cfwrv2.sh` is a single-file rebuild of the WAF CLI that runs beside
+`cfwrv1.sh`; v1 and `inc/` stay as they are until v2 reaches parity. The
+contract is on the [v2 script page](docs/contributing/v2-rebuild.md).
+
+* **The chooser is the documented entry point.** New docs show `./cfwr.sh`
+  (with `-v1` when a prompt would get in the way); `cfwpr` and
+  `cloudflare-wordpress-rules` are symlinks to it, and both scripts stay
+  runnable directly.
+* **The chooser never prompts without a terminal.** Non-interactive runs fall
+  back to v1 with one stderr note; never add a prompt that can block cron.
 
 * **Human output goes through `ui_*`.** Every banner, table, prompt and error
   uses the vendored `vendor/bash-ui/ui.sh`; do not add `echo -e` colour codes.
 * **stdout is data.** Only `list-rules --json/--csv/--raw` and `print-profile`
   write to stdout. Everything else goes to stderr, so pipes stay clean.
 * **Same API traffic as v1.** The Rulesets requests and bodies must match v1 for
-  the commands v2 implements; `tests/test-cwr.sh` enforces this.
-* **Profiles are shared.** `v2/cwr.sh` reads the repo `profiles/`; override with
+  the commands v2 implements; `tests/test-cfwrv2.sh` enforces this.
+* **Profiles are shared.** `cfwrv2.sh` reads the repo `profiles/`; override with
   `PROFILE_DIR` or `CWR_PROFILE_DIR`.
 * **Never edit `vendor/bash-ui/`.** Update it with the bash-ui vendoring tool so
   `ui.sh.sha256` keeps matching.
-* `bash tests/test-cwr.sh` must stay green; it needs no credentials or network.
+* `bash tests/test-cfwrv2.sh` and `bash tests/test-cfwr-wrapper.sh` must stay
+  green; neither needs credentials or network.
 
 ## Documentation Site (docs/ + website/)
 
@@ -170,7 +183,7 @@ A rules release does not imply a repository release, and a repository release do
 ## Agents Documentation
 
 * Don't use .cloudflare file, use .cloudflare.example instead to keep secrets from being leaked.
-* You can specify a config file using the `--config <file>` flag on `cloudflare-wordpress-rules.sh`; there is no environment variable for it.
+* You can specify a config file using the `--config <file>` flag on `cfwr.sh` or either WAF script; there is no environment variable for it.
 * Generate a single line git commit for any changes you make.
 
 ## Client Confidentiality in Documentation
