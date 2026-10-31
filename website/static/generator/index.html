@@ -40,35 +40,78 @@
 
 <p id="notice" class="notice" role="status" hidden></p>
 
-<main id="main" class="wrap layout">
-  <section class="panel" aria-labelledby="settings-heading">
-    <h2 id="settings-heading">Settings</h2>
-
-    <div class="presets">
-      <span class="presets-label" id="preset-label">Preset</span>
-      <div id="preset-tabs" class="preset-tabs" role="group" aria-labelledby="preset-label"></div>
-      <p id="preset-description" class="hint"></p>
+<div class="stepper-bar">
+  <div class="wrap">
+    <div class="stepper" role="tablist" aria-label="Generator steps" aria-orientation="horizontal">
+      <button type="button" role="tab" id="tab-start" aria-controls="step-start" aria-selected="true">
+        <span class="step-number">1</span>Start</button>
+      <button type="button" role="tab" id="tab-trusted" aria-controls="step-trusted" aria-selected="false" tabindex="-1">
+        <span class="step-number">2</span>Trusted traffic</button>
+      <button type="button" role="tab" id="tab-blocking" aria-controls="step-blocking" aria-selected="false" tabindex="-1">
+        <span class="step-number">3</span>Blocking</button>
+      <button type="button" role="tab" id="tab-challenges" aria-controls="step-challenges" aria-selected="false" tabindex="-1">
+        <span class="step-number">4</span>Challenges</button>
+      <button type="button" role="tab" id="tab-output" aria-controls="step-output" aria-selected="false" tabindex="-1">
+        <span class="step-number">5</span>Output</button>
     </div>
+    <p class="status-strip">
+      <span><strong id="rules-used">0 / 5</strong> custom rules</span>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="linklike" id="status-issues">No issues</button>
+      <span aria-hidden="true">·</span>
+      <span id="status-chars">No rules yet</span>
+    </p>
+    <p id="step-announcer" class="sr-only" aria-live="polite"></p>
+  </div>
+</div>
 
-    <div class="row">
-      <label class="field">
-        <span>Template version</span>
-        <input id="opt-version" inputmode="numeric" autocomplete="off" spellcheck="false" size="6">
-        <span class="hint">Rules version stamped into each rule description (<code>t207-…</code>).</span>
+<main id="main" class="wrap">
+  <section class="step-panel" id="step-start" role="tabpanel" aria-labelledby="tab-start" tabindex="-1">
+    <h2 class="step-title" tabindex="-1" id="step-start-heading">Start</h2>
+    <p class="step-lead">Pick what you are reproducing, then adjust it one rule at a time. Every later step starts from
+      this choice, and nothing leaves this tab.</p>
+
+    <div class="card">
+      <label class="field" for="opt-source">
+        <span>Start from</span>
+        <select id="opt-source"></select>
+        <span class="hint" id="source-note"></span>
       </label>
-      <div class="field">
-        <span>Preset file</span>
-        <div class="button-row">
-          <button type="button" class="btn" id="preset-export">Download preset</button>
-          <label class="btn">Load preset…
-            <input id="preset-import" type="file" accept="application/json,.json" class="sr-only">
-          </label>
-        </div>
-      </div>
+      <p class="hint">A <strong>builder rule set</strong> fills the fields below from a preset and rebuilds each rule as
+        you edit. A <strong>release</strong> loads the exact expressions that version shipped — edit them directly in
+        steps 2–4.</p>
     </div>
 
-    <fieldset class="card">
-      <legend>Trusted traffic (R1 — skip)</legend>
+    <details class="card">
+      <summary>Preset file</summary>
+      <div class="button-row">
+        <button type="button" class="btn" id="preset-export">Download preset</button>
+        <label class="btn">Load preset…
+          <input id="preset-import" type="file" accept="application/json,.json" class="sr-only">
+        </label>
+      </div>
+      <p class="hint">A preset is the option form, not a release: it reproduces what the builder generates.</p>
+    </details>
+
+    <div class="button-row">
+      <button type="button" class="btn" id="reset">Reset to source</button>
+      <button type="button" class="btn" id="share">Copy share link</button>
+      <span class="hint" id="storage-note" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="step-panel" id="step-trusted" role="tabpanel" aria-labelledby="tab-trusted" tabindex="-1" hidden>
+    <h2 class="step-title" tabindex="-1" id="step-trusted-heading">Trusted traffic</h2>
+    <p class="step-lead"><strong>Rule 1 skips rules 2–4.</strong> Anything listed here is never blocked or challenged,
+      so keep it short and prefer an account IP list over inline addresses.
+      <a href="../guides/skip-action">Skip action</a></p>
+
+    <div id="editor-r1"></div>
+
+    <fieldset class="card" id="fields-trusted">
+      <legend>Rule 1 sources</legend>
+
+      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
 
       <label class="field" for="opt-ips">
         <span>Trusted IP addresses <output id="ips-count" class="pill">0</output></span>
@@ -100,10 +143,25 @@
           string skips every rule below.</span>
       </label>
       <div class="chips" id="ua-suggestions" aria-label="Suggested user agents"></div>
-    </fieldset>
 
-    <fieldset class="card">
-      <legend>Blocking (R2 — block)</legend>
+      <label class="toggle"><input type="checkbox" id="opt-verified-bots"> Allow verified bots
+        (<code>cf.client.bot</code>)</label>
+      <label class="toggle"><input type="checkbox" id="opt-2fa"> Allow two-factor login actions
+        (<code>validate_2fa</code>, <code>backup_2fa</code>, <code>grace_2fa</code>)</label>
+    </fieldset>
+  </section>
+
+  <section class="step-panel" id="step-blocking" role="tabpanel" aria-labelledby="tab-blocking" tabindex="-1" hidden>
+    <h2 class="step-title" tabindex="-1" id="step-blocking-heading">Blocking</h2>
+    <p class="step-lead"><strong>Rule 2 blocks outright</strong> — no challenge, no page load. Block only paths and
+      networks you are sure nothing legitimate uses. <a href="../guides/block-response">Custom block responses</a></p>
+
+    <div id="editor-r2"></div>
+
+    <fieldset class="card" id="fields-blocking">
+      <legend>Rule 2 sources</legend>
+
+      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
 
       <label class="field" for="opt-paths">
         <span>Blocked paths</span>
@@ -119,9 +177,22 @@
         <span class="hint">One ASN per line or comma-separated, e.g. <code>396982</code>.</span>
       </label>
     </fieldset>
+  </section>
 
-    <fieldset class="card">
-      <legend>Challenges</legend>
+  <section class="step-panel" id="step-challenges" role="tabpanel" aria-labelledby="tab-challenges" tabindex="-1" hidden>
+    <h2 class="step-title" tabindex="-1" id="step-challenges-heading">Challenges</h2>
+    <p class="step-lead"><strong>Rules 3 and 4 ask the visitor to prove they are human</strong> instead of blocking them:
+      login and admin paths first, then everyone outside your countries. Challenge TTL is set per zone, not here.</p>
+
+    <div class="row">
+      <div id="editor-r3"></div>
+      <div id="editor-r4"></div>
+    </div>
+
+    <fieldset class="card" id="fields-challenges">
+      <legend>Rules 3 and 4 sources</legend>
+
+      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
 
       <label class="toggle"><input type="checkbox" id="opt-login"> Managed Challenge on <code>/wp-login.php</code> and
         <code>/wp-admin/</code> (R3)</label>
@@ -150,27 +221,18 @@
         <div class="chips" id="country-chips" aria-label="Allowed countries"></div>
         <span class="hint">Everyone outside these countries is challenged by R4.</span>
       </div>
-
-      <label class="toggle"><input type="checkbox" id="opt-verified-bots"> Allow verified bots
-        (<code>cf.client.bot</code>)</label>
-      <label class="toggle"><input type="checkbox" id="opt-2fa"> Allow two-factor login actions
-        (<code>validate_2fa</code>, <code>backup_2fa</code>, <code>grace_2fa</code>)</label>
     </fieldset>
-
-    <div class="button-row footer-actions">
-      <button type="button" class="btn" id="reset">Reset to preset</button>
-      <button type="button" class="btn" id="share">Copy share link</button>
-      <span class="hint" id="storage-note" role="status" aria-live="polite"></span>
-    </div>
   </section>
 
-  <section class="panel output" aria-labelledby="output-heading">
-    <h2 id="output-heading">Output</h2>
+  <section class="step-panel" id="step-output" role="tabpanel" aria-labelledby="tab-output" tabindex="-1" hidden>
+    <h2 class="step-title" tabindex="-1" id="step-output-heading">Output</h2>
+    <p class="step-lead">Copy the expressions into <em>Security → WAF → Custom rules</em>, send the JSON with
+      <code>curl</code>, or save a profile for the CLI. All three describe the same rules.</p>
 
     <div class="summary card" id="summary">
       <div class="summary-head">
         <strong>Rules used</strong>
-        <span id="rules-used" class="pill">0 / 5</span>
+        <span id="rules-used-badge" class="pill">0 / 5</span>
       </div>
       <progress id="rules-progress" max="5" value="0" aria-label="Custom rules used"></progress>
       <div class="summary-head">
@@ -230,6 +292,12 @@
       </div>
     </div>
   </section>
+
+  <nav class="step-nav" aria-label="Step navigation">
+    <button type="button" class="btn" id="step-back">← Back</button>
+    <p class="step-position" id="step-position">Step 1 of 5</p>
+    <button type="button" class="btn primary" id="step-next">Next: Trusted traffic →</button>
+  </nav>
 </main>
 
 <footer class="site-footer wrap">

@@ -113,11 +113,75 @@ a:hover { color: var(--accent); }
   background: var(--warn-bg); color: var(--fg); border-radius: var(--radius);
 }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
-@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+/* -- steps ------------------------------------------------------------- */
 
-.panel { min-width: 0; }
-.panel > h2 { margin: 0 0 0.75rem; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.stepper-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.stepper { display: flex; gap: 0.15rem; overflow-x: auto; scrollbar-width: thin; }
+.stepper [role="tab"] {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.65rem;
+  font: inherit; font-size: 0.82rem; font-weight: 600;
+  color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 8px;
+  cursor: pointer; white-space: nowrap;
+}
+.stepper [role="tab"]:hover { color: var(--fg); border-color: var(--border); }
+.stepper [role="tab"][aria-selected="true"] {
+  color: var(--fg); background: var(--card); border-color: var(--border);
+}
+.step-number {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.2rem; height: 1.2rem; border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.7rem; font-variant-numeric: tabular-nums;
+}
+.stepper [role="tab"][aria-selected="true"] .step-number {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+}
+.stepper [role="tab"].has-error .step-number { border-color: var(--danger); color: var(--danger); }
+.stepper [role="tab"].has-warning .step-number { border-color: var(--warn); color: var(--warn); }
+
+.status-strip {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline;
+  margin: 0.45rem 0 0; font-size: 0.78rem; color: var(--muted);
+}
+.status-strip strong { color: var(--fg); }
+.linklike {
+  font: inherit; font-size: inherit; color: var(--muted);
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 2px;
+}
+.linklike:hover { color: var(--fg); text-decoration-color: var(--accent); }
+.linklike.has-issues { color: var(--danger); font-weight: 600; }
+
+.step-panel { max-width: 52rem; scroll-margin-top: 7.5rem; }
+.step-title:focus { outline: none; }
+.step-panel[hidden] { display: none; }
+.step-title { margin: 0 0 0.4rem; font-size: 1.35rem; letter-spacing: -0.01em; }
+.step-lead { margin: 0 0 1rem; max-width: 68ch; color: var(--muted); }
+.step-lead strong { color: var(--fg); }
+.step-lead a { color: var(--fg); }
+
+#step-output { max-width: none; }
+
+.step-nav {
+  scroll-margin-top: 7.5rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  max-width: 52rem;
+  margin: 1.5rem 0 2rem; padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.step-position { margin: 0; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+#step-back[disabled] { visibility: hidden; }
 
 .card {
   background: var(--card);
@@ -204,6 +268,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .presets-label { font-weight: 600; font-size: 0.95rem; }
 .preset-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
 .preset-tabs .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.locked-note { margin: 0 0 0.75rem; padding: 0.45rem 0.6rem; border-radius: 8px;
+  border: 1px dashed var(--border); background: var(--card-2); }
+.pill-loaded { border-color: var(--ok); color: var(--ok); }
+.pill-edited { border-color: var(--warn); color: var(--warn); }
+fieldset[disabled] { opacity: 0.6; }
+fieldset[disabled] .locked-note { opacity: 1; }
 
 .pill {
   display: inline-block; padding: 0.05rem 0.45rem; border-radius: 999px;
