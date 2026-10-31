@@ -144,11 +144,15 @@ a:hover { color: var(--accent); }
   border: 1px solid var(--border);
   font-size: 0.7rem; font-variant-numeric: tabular-nums;
 }
+/* State colours come first so the selected badge always keeps its dark ink on
+   the orange disc; on the current step the state is carried by the label. */
+.stepper [role="tab"].has-error .step-number { border-color: var(--danger); color: var(--danger); }
+.stepper [role="tab"].has-warning .step-number { border-color: var(--warn); color: var(--warn); }
 .stepper [role="tab"][aria-selected="true"] .step-number {
   background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
 }
-.stepper [role="tab"].has-error .step-number { border-color: var(--danger); color: var(--danger); }
-.stepper [role="tab"].has-warning .step-number { border-color: var(--warn); color: var(--warn); }
+.stepper [role="tab"][aria-selected="true"].has-error { color: var(--danger); }
+.stepper [role="tab"][aria-selected="true"].has-warning { color: var(--warn); }
 
 .status-strip {
   display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline;

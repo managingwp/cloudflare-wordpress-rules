@@ -43,16 +43,16 @@
 <div class="stepper-bar">
   <div class="wrap">
     <div class="stepper" role="tablist" aria-label="Generator steps" aria-orientation="horizontal">
-      <button type="button" role="tab" id="tab-start" aria-controls="step-start" aria-selected="true">
-        <span class="step-number">1</span>Start</button>
-      <button type="button" role="tab" id="tab-trusted" aria-controls="step-trusted" aria-selected="false" tabindex="-1">
-        <span class="step-number">2</span>Trusted traffic</button>
-      <button type="button" role="tab" id="tab-blocking" aria-controls="step-blocking" aria-selected="false" tabindex="-1">
-        <span class="step-number">3</span>Blocking</button>
-      <button type="button" role="tab" id="tab-challenges" aria-controls="step-challenges" aria-selected="false" tabindex="-1">
-        <span class="step-number">4</span>Challenges</button>
-      <button type="button" role="tab" id="tab-output" aria-controls="step-output" aria-selected="false" tabindex="-1">
-        <span class="step-number">5</span>Output</button>
+      <button type="button" role="tab" id="tab-start" aria-controls="step-start" data-step-tab aria-selected="true">
+        <span class="step-number" aria-hidden="true">1</span>Start<span class="sr-only" data-step-state></span></button>
+      <button type="button" role="tab" id="tab-trusted" aria-controls="step-trusted" data-step-tab aria-selected="false" tabindex="-1">
+        <span class="step-number" aria-hidden="true">2</span>Trusted traffic<span class="sr-only" data-step-state></span></button>
+      <button type="button" role="tab" id="tab-blocking" aria-controls="step-blocking" data-step-tab aria-selected="false" tabindex="-1">
+        <span class="step-number" aria-hidden="true">3</span>Blocking<span class="sr-only" data-step-state></span></button>
+      <button type="button" role="tab" id="tab-challenges" aria-controls="step-challenges" data-step-tab aria-selected="false" tabindex="-1">
+        <span class="step-number" aria-hidden="true">4</span>Challenges<span class="sr-only" data-step-state></span></button>
+      <button type="button" role="tab" id="tab-output" aria-controls="step-output" data-step-tab aria-selected="false" tabindex="-1">
+        <span class="step-number" aria-hidden="true">5</span>Output<span class="sr-only" data-step-state></span></button>
     </div>
     <p class="status-strip">
       <span><strong id="rules-used">0 / 5</strong> custom rules</span>

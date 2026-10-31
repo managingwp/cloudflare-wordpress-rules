@@ -584,6 +584,10 @@ function renderStatus(items, limits) {
     const hasWarning = items.some((item) => item.tone === "warn" && item.step === step.id);
     tab.classList.toggle("has-error", hasError);
     tab.classList.toggle("has-warning", hasWarning && !hasError);
+    const stateSlot = tab.querySelector("[data-step-state]");
+    if (stateSlot) {
+      stateSlot.textContent = hasError ? ", has an error" : (hasWarning ? ", has a warning" : "");
+    }
   }
 }
 
@@ -766,6 +770,7 @@ function buildEditor(ref) {
   const counter = document.createElement("span");
   counter.className = "pill";
   counter.dataset.role = "counter";
+  counter.id = `${ref}-counter`;
   const state_ = document.createElement("span");
   state_.className = "pill";
   state_.dataset.role = "origin";
@@ -774,6 +779,7 @@ function buildEditor(ref) {
 
   const stateLine = document.createElement("p");
   stateLine.className = "hint rule-state";
+  stateLine.id = `${ref}-state`;
 
   const controls = document.createElement("div");
   controls.className = "rule-editor-controls";
@@ -810,7 +816,8 @@ function buildEditor(ref) {
   textarea.rows = 4;
   textarea.spellcheck = false;
   textarea.setAttribute("autocomplete", "off");
-  textarea.setAttribute("aria-label", `${ref} expression`);
+  textarea.setAttribute("aria-label", `R${ref.replace("lmt-r", "")} expression`);
+  textarea.setAttribute("aria-describedby", `${stateLine.id} ${counter.id}`);
 
   const actions = document.createElement("div");
   actions.className = "card-actions";
