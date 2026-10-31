@@ -111,8 +111,6 @@
     <fieldset class="card" id="fields-trusted">
       <legend>Rule 1 sources</legend>
 
-      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
-
       <label class="field" for="opt-ips">
         <span>Trusted IP addresses <output id="ips-count" class="pill">0</output></span>
         <textarea id="opt-ips" rows="6" spellcheck="false" autocomplete="off"
@@ -161,8 +159,6 @@
     <fieldset class="card" id="fields-blocking">
       <legend>Rule 2 sources</legend>
 
-      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
-
       <label class="field" for="opt-paths">
         <span>Blocked paths</span>
         <textarea id="opt-paths" rows="3" spellcheck="false" autocomplete="off"></textarea>
@@ -184,15 +180,11 @@
     <p class="step-lead"><strong>Rules 3 and 4 ask the visitor to prove they are human</strong> instead of blocking them:
       login and admin paths first, then everyone outside your countries. Challenge TTL is set per zone, not here.</p>
 
-    <div class="row">
-      <div id="editor-r3"></div>
-      <div id="editor-r4"></div>
-    </div>
+    <div id="editor-r3"></div>
+    <div id="editor-r4"></div>
 
     <fieldset class="card" id="fields-challenges">
       <legend>Rules 3 and 4 sources</legend>
-
-      <p class="hint locked-note" hidden>Loaded release: its rules are read-only in this step. The fields below hold your own builder configuration and do not describe this release.</p>
 
       <label class="toggle"><input type="checkbox" id="opt-login"> Managed Challenge on <code>/wp-login.php</code> and
         <code>/wp-admin/</code> (R3)</label>

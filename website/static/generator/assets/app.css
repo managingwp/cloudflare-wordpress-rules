@@ -272,7 +272,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .locked-note { margin: 0 0 0.75rem; padding: 0.45rem 0.6rem; border-radius: 8px;
   border: 1px dashed var(--border); background: var(--card-2); }
 .pill-loaded { border-color: var(--ok); color: var(--ok); }
-.pill-edited { border-color: var(--warn); color: var(--warn); }
+.pill-manual { border-color: var(--warn); color: var(--warn); }
+.pill-off { color: var(--muted); }
+.pill.over { border-color: var(--danger); color: var(--danger); }
 fieldset[disabled] { opacity: 0.6; }
 fieldset[disabled] .locked-note { opacity: 1; }
 
@@ -330,6 +332,38 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
 .tabs [role="tab"][aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 
 .tab-panel[hidden] { display: none; }
+
+/* -- rule editors ------------------------------------------------------ */
+
+.rule-editor {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem;
+  margin: 0 0 1rem;
+}
+.rule-editor header { display: flex; gap: 0.6rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rule-editor h3 { margin: 0; font-size: 0.95rem; }
+.rule-editor-controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: 0.7rem 0 0.5rem; }
+.rule-editor-controls .field.inline { margin: 0; flex: 0 0 auto; }
+.rule-editor-controls .toggle { margin: 0; }
+.rule-expression {
+  width: 100%;
+  min-height: 6rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
+}
+.rule-editor .rule-state { margin: 0.4rem 0 0; }
+.rule-editor .card-actions { margin-top: 0.6rem; }
+.rule-editor.is-off { border-style: dashed; }
+.rule-editor.is-off .rule-expression { opacity: 0.5; }
 
 .rule-cards { display: grid; gap: 1rem; }
 .rule-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import {
+  expressionIssues,
   isHandEdited,
   normalizeRule,
   rebuildRule,
@@ -197,4 +198,38 @@ test("hand-edited is a rule-level state, not a page-level one", () => {
     rule.ref === "lmt-r2" ? { ...rule, expression: "(cf.client.bot)", origin: "manual" } : rule,
   );
   assert.deepEqual(edited.filter(isHandEdited).map((rule) => rule.ref), ["lmt-r2"]);
+});
+
+test("expression sanity checks catch the mistakes a person makes", () => {
+  assert.deepEqual(expressionIssues("(ip.src in { 203.0.113.10 })"), []);
+  assert.deepEqual(expressionIssues('(http.user_agent contains "Zapier")'), []);
+  assert.deepEqual(expressionIssues("(ip.src in { 203.0.113.10 }"), ["parentheses are unbalanced"]);
+  assert.deepEqual(expressionIssues("(cf.client.bot))"), ["parentheses are unbalanced"]);
+  assert.deepEqual(
+    expressionIssues('(http.user_agent contains "Zapier)'),
+    ["parentheses are unbalanced", "a quoted string is not closed"],
+  );
+  assert.deepEqual(expressionIssues(""), ["the expression is empty"]);
+  assert.deepEqual(expressionIssues("   "), ["the expression is empty"]);
+});
+
+test("a paren inside a quoted string does not count", () => {
+  assert.deepEqual(expressionIssues('(http.request.uri.path eq "/a(b")'), []);
+  assert.deepEqual(expressionIssues('(http.request.uri.path eq "/a\\(b")'), []);
+});
+
+test("per-rule enabled and logging reach the exports", () => {
+  const profile = loaded.find((entry) => entry.version === "207").profile;
+  const rules = rulesFromProfile(profile).map((rule) =>
+    rule.ref === "lmt-r2" ? { ...rule, enabled: false, logging: false } : rule,
+  );
+  const body = toApiBody(rules, "207");
+  const second = body.rules.find((rule) => rule.ref === "lmt-r2");
+  assert.equal(second.enabled, false);
+  assert.deepEqual(second.logging, { enabled: false });
+
+  const profileJson = toV3Profile("x", "x", rules, "207");
+  const exported = profileJson.rules.find((rule) => rule.rule_number === "2");
+  assert.equal(exported.enabled, false);
+  assert.deepEqual(exported.logging, { enabled: false });
 });

@@ -10,7 +10,7 @@ import {
   splitList,
   validateOptions,
 } from "./rules.js";
-import { rulesFromOptions, rulesFromProfile, versionFor } from "./ruleset.js";
+import { expressionIssues, rebuildRule, rulesFromOptions, rulesFromProfile, versionFor } from "./ruleset.js";
 import { builtinPreset, exportPreset, importPreset, loadPresets } from "./presets.js";
 import { describeVersion, findVersion, loadVersions } from "./versions.js";
 import {
@@ -66,7 +66,29 @@ const STEP_FOR_PATH = [
   [/^(challengeLoginAdmin|geo)/, "step-challenges"],
 ];
 
-const FIELDSETS = ["fields-trusted", "fields-blocking", "fields-challenges"];
+const RULE_ACTIONS = [
+  ["skip", "Skip"],
+  ["block", "Block"],
+  ["managed_challenge", "Managed challenge"],
+  ["js_challenge", "JS challenge"],
+  ["challenge", "Challenge"],
+  ["log", "Log only"],
+];
+
+// Which fields rebuild which rule. A field change only touches its own rule.
+const RULE_FIELDS = {
+  "lmt-r1": ["opt-ips", "opt-ip-list", "opt-ip-list-name", "opt-queries", "opt-uas", "opt-verified-bots", "opt-2fa"],
+  "lmt-r2": ["opt-paths", "opt-xmlrpc", "opt-asns"],
+  "lmt-r3": ["opt-login"],
+  "lmt-r4": ["opt-geo-enabled", "opt-geo-action"],
+};
+
+const EDITOR_HOSTS = {
+  "lmt-r1": "editor-r1",
+  "lmt-r2": "editor-r2",
+  "lmt-r3": "editor-r3",
+  "lmt-r4": "editor-r4",
+};
 
 const state = {
   presets: [],
@@ -278,7 +300,7 @@ function writeCountryChips() {
     remove.addEventListener("click", () => {
       countries = countries.filter((item) => item !== code);
       writeCountryChips();
-      update(true);
+      updateFromFields("lmt-r4");
     });
     chip.append(label, remove);
     container.append(chip);
@@ -291,7 +313,7 @@ function addCountry(raw) {
   if (!countries.includes(code)) {
     countries = [...countries, code].sort();
     writeCountryChips();
-    update(true);
+    updateFromFields("lmt-r4");
   }
   el("country-input").value = "";
   return true;
@@ -385,14 +407,6 @@ function renderSourceNote() {
     : "Rules are rebuilt from the fields in steps 2–4.";
 }
 
-function setFieldsLocked(locked) {
-  for (const id of FIELDSETS) {
-    const fieldset = el(id);
-    if (fieldset) fieldset.disabled = locked;
-  }
-  for (const note of document.querySelectorAll(".locked-note")) note.hidden = !locked;
-}
-
 function applySource(kind, name, saved) {
   if (kind === "release") {
     const entry = findVersion(state.versions, name);
@@ -419,9 +433,9 @@ function applySource(kind, name, saved) {
 
   renderSourceOptions();
   renderSourceNote();
-  setFieldsLocked(state.source.kind === "release");
   writeForm();
-  update();
+  renderEditors();
+  refresh();
 }
 
 function fallbackPresetName() {
@@ -473,6 +487,12 @@ function collectMessages(validation, limits) {
         "warn",
         STEP_FOR_REF[item.ref] || "step-output",
       );
+    }
+  }
+
+  for (const rule of state.rules) {
+    for (const issue of expressionIssues(rule.expression)) {
+      push(`${rule.ref} expression: ${issue}. Cloudflare's API is the final check.`, "error", STEP_FOR_REF[rule.ref] || "step-output");
     }
   }
 
@@ -683,20 +703,188 @@ function renderProfile() {
   el("download-profile").onclick = () => download(`${name}.json`, json);
 }
 
-function update(fromForm = false) {
-  if (fromForm) {
-    state.options = readForm();
-    if (state.source.kind === "builder") {
-      state.rules = rulesFromOptions(state.options);
-      state.edited = true;
-    }
-  }
+// -- rule editors ----------------------------------------------------------
 
+function ruleSourceLabel() {
+  if (state.source.kind !== "release") return "";
+  const entry = findVersion(state.versions, state.source.name);
+  return entry ? entry.source : "profiles/";
+}
+
+function ruleStateText(rule) {
+  if (!rule) return "The fields for this rule are off, so it is not part of the set.";
+  if (rule.origin === "manual") return "Hand-edited: the fields no longer describe this rule. Rebuild from fields replaces it.";
+  if (rule.origin === "loaded") return `Loaded from ${ruleSourceLabel()}: the fields do not change it. Rebuild from fields replaces it.`;
+  return "Built from the fields in this step.";
+}
+
+function ruleByRef(ref) {
+  return state.rules.find((rule) => rule.ref === ref) || null;
+}
+
+function buildEditor(ref) {
+  const rule = ruleByRef(ref);
+  const article = document.createElement("article");
+  article.className = "rule-editor";
+  article.dataset.ref = ref;
+
+  const header = document.createElement("header");
+  const heading = document.createElement("h3");
+  heading.textContent = `${ref.replace("lmt-r", "R")} expression`;
+  const meta = document.createElement("div");
+  meta.className = "rule-meta";
+  const counter = document.createElement("span");
+  counter.className = "pill";
+  counter.dataset.role = "counter";
+  const state_ = document.createElement("span");
+  state_.className = "pill";
+  state_.dataset.role = "origin";
+  meta.append(counter, state_);
+  header.append(heading, meta);
+
+  const stateLine = document.createElement("p");
+  stateLine.className = "hint rule-state";
+
+  const controls = document.createElement("div");
+  controls.className = "rule-editor-controls";
+
+  const actionLabel = document.createElement("label");
+  actionLabel.className = "field inline";
+  const actionText = document.createElement("span");
+  actionText.textContent = "Action";
+  const actionSelect = document.createElement("select");
+  for (const [value, label] of RULE_ACTIONS) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    actionSelect.append(option);
+  }
+  actionLabel.append(actionText, actionSelect);
+
+  const enabledLabel = document.createElement("label");
+  enabledLabel.className = "toggle";
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabledLabel.append(enabled, document.createTextNode(" Rule enabled"));
+
+  const loggingLabel = document.createElement("label");
+  loggingLabel.className = "toggle";
+  const logging = document.createElement("input");
+  logging.type = "checkbox";
+  loggingLabel.append(logging, document.createTextNode(" Log matched requests"));
+
+  controls.append(actionLabel, enabledLabel, loggingLabel);
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "rule-expression";
+  textarea.rows = 4;
+  textarea.spellcheck = false;
+  textarea.setAttribute("autocomplete", "off");
+  textarea.setAttribute("aria-label", `${ref} expression`);
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  const rebuild = document.createElement("button");
+  rebuild.type = "button";
+  rebuild.className = "btn";
+  rebuild.textContent = "Rebuild from fields";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "btn";
+  copy.textContent = "Copy expression";
+  actions.append(rebuild, copy);
+
+  article.append(header, stateLine, controls, textarea, actions);
+
+  const sync = () => {
+    const current = ruleByRef(ref);
+    counter.textContent = `${(current ? current.expression : "").length} / ${MAX_EXPRESSION_CHARS}`;
+    counter.classList.toggle("over", current ? current.expression.length > MAX_EXPRESSION_CHARS : false);
+    state_.textContent = current ? current.origin : "off";
+    state_.className = `pill pill-${current ? current.origin : "off"}`;
+    stateLine.textContent = ruleStateText(current);
+    article.classList.toggle("is-off", !current);
+    if (current) {
+      actionSelect.value = RULE_ACTIONS.some(([value]) => value === current.action) ? current.action : "block";
+      enabled.checked = current.enabled !== false;
+      logging.checked = current.logging !== false;
+      textarea.value = current.expression;
+      textarea.disabled = false;
+      rebuild.disabled = current.origin === "fields";
+    } else {
+      textarea.value = "";
+      textarea.disabled = true;
+      rebuild.disabled = true;
+      actionSelect.value = "block";
+      enabled.checked = false;
+      logging.checked = false;
+    }
+  };
+
+  actionSelect.addEventListener("change", () => {
+    const current = ruleByRef(ref);
+    if (!current) return;
+    current.action = actionSelect.value;
+    if (current.action !== "skip") delete current.actionParameters;
+    else if (!current.actionParameters) current.actionParameters = { ruleset: "current" };
+    refresh();
+    sync();
+  });
+
+  enabled.addEventListener("change", () => {
+    const current = ruleByRef(ref);
+    if (!current) return;
+    current.enabled = enabled.checked;
+    refresh();
+  });
+
+  logging.addEventListener("change", () => {
+    const current = ruleByRef(ref);
+    if (!current) return;
+    current.logging = logging.checked;
+    refresh();
+  });
+
+  textarea.addEventListener("input", () => {
+    const current = ruleByRef(ref);
+    if (!current) return;
+    current.expression = textarea.value;
+    current.origin = "manual";
+    sync();
+    refresh();
+  });
+
+  rebuild.addEventListener("click", () => {
+    state.options = readForm();
+    state.rules = rebuildRule(state.rules, ref, state.options);
+    renderEditors();
+    refresh();
+    if (!ruleByRef(ref)) {
+      showNotice(`${ref} is not generated by the current fields, so it was removed from the set.`);
+    }
+  });
+
+  copy.addEventListener("click", () => {
+    const current = ruleByRef(ref);
+    copyText(current ? current.expression : "", copy);
+  });
+
+  sync();
+  return article;
+}
+
+function renderEditors() {
+  for (const [ref, hostId] of Object.entries(EDITOR_HOSTS)) {
+    const host = el(hostId);
+    if (!host) continue;
+    host.textContent = "";
+    host.append(buildEditor(ref));
+  }
+}
+
+function refresh() {
   const validation = validateOptions(state.options);
   state.options = validation.options;
-  if (state.source.kind === "builder") {
-    state.rules = rulesFromOptions(state.options);
-  }
   const limits = summarizeLimits(state.rules);
   const items = collectMessages(validation, limits);
 
@@ -711,6 +899,26 @@ function update(fromForm = false) {
   renderApi();
   renderProfile();
   persist();
+}
+
+function updateFromFields(ref) {
+  state.options = readForm();
+  state.rules = rebuildRule(state.rules, ref, state.options);
+  renderEditors();
+  refresh();
+}
+
+function hasHandEdits() {
+  return state.rules.some((rule) => rule.origin === "manual");
+}
+
+function requestSourceChange(kind, name) {
+  if (hasHandEdits()
+    && !window.confirm("Discard your hand-edited expressions and load a different source?")) {
+    renderSourceOptions();
+    return;
+  }
+  applySource(kind, name);
 }
 
 // -- output tabs -----------------------------------------------------------
@@ -761,7 +969,7 @@ function renderUaSuggestionChips() {
       values.push(suggestion);
       el("opt-uas").value = values.join("\n");
       renderUaSuggestionChips();
-      update(true);
+      updateFromFields("lmt-r1");
     });
     container.append(chip);
   }
@@ -780,23 +988,17 @@ function fillCountryDatalist() {
 // -- events ----------------------------------------------------------------
 
 function bindEvents() {
-  for (const id of [
-    "opt-ips", "opt-ip-list-name", "opt-queries", "opt-uas", "opt-paths", "opt-asns",
-    "opt-geo-action",
-  ]) {
-    el(id).addEventListener("input", () => update(true));
-    el(id).addEventListener("change", () => update(true));
+  for (const [ref, ids] of Object.entries(RULE_FIELDS)) {
+    for (const id of ids) {
+      el(id).addEventListener("input", () => updateFromFields(ref));
+      el(id).addEventListener("change", () => updateFromFields(ref));
+    }
   }
   el("opt-uas").addEventListener("input", renderUaSuggestionChips);
-  for (const id of [
-    "opt-ip-list", "opt-xmlrpc", "opt-login", "opt-geo-enabled", "opt-verified-bots", "opt-2fa",
-  ]) {
-    el(id).addEventListener("change", () => update(true));
-  }
 
   el("opt-source").addEventListener("change", (event) => {
     const [kind, ...rest] = event.target.value.split(":");
-    applySource(kind, rest.join(":"));
+    requestSourceChange(kind, rest.join(":"));
   });
 
   el("country-add").addEventListener("click", () => addCountry(el("country-input").value));
@@ -807,7 +1009,7 @@ function bindEvents() {
   });
   el("country-input").addEventListener("change", () => addCountry(el("country-input").value));
 
-  el("reset").addEventListener("click", () => applySource(state.source.kind, state.source.name));
+  el("reset").addEventListener("click", () => requestSourceChange(state.source.kind, state.source.name));
 
   el("share").addEventListener("click", (event) => {
     window.history.replaceState(null, "", `#s=${encodeState()}`);

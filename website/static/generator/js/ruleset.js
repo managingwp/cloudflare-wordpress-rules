@@ -89,3 +89,47 @@ export function rebuildRule(rules, ref, options) {
 export function isHandEdited(rule) {
   return rule.origin === "manual";
 }
+
+/**
+ * Local sanity checks for a hand-edited expression. Cloudflare's own parser is
+ * authoritative — this only catches the mistakes a person makes while typing:
+ * an empty rule, unbalanced parentheses and an unterminated string.
+ */
+export function expressionIssues(expression) {
+  const text = String(expression ?? "");
+  const issues = [];
+  if (text.trim() === "") return ["the expression is empty"];
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let closedEarly = false;
+
+  for (const character of text) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (character === "(") depth += 1;
+    if (character === ")") {
+      depth -= 1;
+      if (depth < 0) {
+        closedEarly = true;
+        break;
+      }
+    }
+  }
+
+  if (depth !== 0 || closedEarly) issues.push("parentheses are unbalanced");
+  if (inString) issues.push("a quoted string is not closed");
+  return issues;
+}

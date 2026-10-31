@@ -32,9 +32,9 @@ export function toCloudflareRule(rule, templateVersion) {
   const output = { action: rule.action };
   if (rule.actionParameters) output.action_parameters = rule.actionParameters;
   output.description = ruleDescription(rule, templateVersion);
-  output.enabled = true;
+  output.enabled = rule.enabled === undefined ? true : Boolean(rule.enabled);
   output.expression = rule.expression;
-  output.logging = { enabled: true };
+  output.logging = { enabled: rule.logging === undefined ? true : Boolean(rule.logging) };
   output.ref = rule.ref;
   return output;
 }
@@ -104,8 +104,8 @@ export function toV3Profile(profileName, description, rules, templateVersion) {
         description: ruleDescription(rule, templateVersion),
         expression: rule.expression,
         action: rule.action,
-        enabled: true,
-        logging: { enabled: true },
+        enabled: rule.enabled === undefined ? true : Boolean(rule.enabled),
+        logging: { enabled: rule.logging === undefined ? true : Boolean(rule.logging) },
       };
       if (rule.actionParameters) entry.action_parameters = rule.actionParameters;
       return entry;
