@@ -6,7 +6,7 @@
 # ==================================
 # -- Variables
 # ==================================
-SCRIPT_NAME="cloudflare-wordpress-rules"
+SCRIPT_NAME="cfwrv1"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# cwr.sh — Cloudflare WordPress Rules (v2)
+# cfwrv2.sh — Cloudflare WordPress Rules (v2)
 #
 # Core WAF and profile commands for a Cloudflare zone, in one file, with all
 # human output going through the vendored bash-ui library.
 #
-#   cwr.sh -d example.com -c create-rules default
-#   cwr.sh create-rules default -d example.com
+#   cfwrv2.sh -d example.com -c create-rules default
+#   cfwrv2.sh create-rules default -d example.com
 #
 # stdout carries data only (list-rules --json/--csv/--raw, print-profile).
 # =============================================================================
@@ -14,22 +14,21 @@
 # ==================================
 # -- Variables
 # ==================================
-SCRIPT_NAME="cwr"
+SCRIPT_NAME="cfwrv2"
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-REPO_DIR=$( cd -- "${SCRIPT_DIR}/.." &> /dev/null && pwd )
-VERSION=$(cat "${REPO_DIR}/VERSION")
+VERSION=$(cat "${SCRIPT_DIR}/VERSION")
 DEBUG="0"
 DRYRUN="0"
 LIST_FORMAT="table"
 LIST_LONG="0"
 LIST_DATA_MODE="0"
-export PROFILE_DIR="${PROFILE_DIR:-${CWR_PROFILE_DIR:-${REPO_DIR}/profiles}}"
+export PROFILE_DIR="${PROFILE_DIR:-${CWR_PROFILE_DIR:-${SCRIPT_DIR}/profiles}}"
 
 # ==================================
 # -- bash-ui (vendored at the repo root)
 # ==================================
 # $BASH_UI wins, otherwise the nearest vendor/bash-ui/ui.sh at or above this
-# script. The stub keeps cwr.sh usable when the library is missing.
+# script. The stub keeps cfwrv2.sh usable when the library is missing.
 _ui_lib=${BASH_UI:-}
 if [[ -z $_ui_lib ]]; then
 	_ui_dir=$SCRIPT_DIR
@@ -63,7 +62,7 @@ if ! command -v ui_ok >/dev/null 2>&1; then
 	ui_summary() { :; }
 fi
 # shellcheck disable=SC2034  # read by ui_header inside vendor/bash-ui/ui.sh
-UI_APP_NAME="cwr"
+UI_APP_NAME="cfwrv2"
 
 # ============================================================
 # -- Constants and state (folded from inc/cf-inc*.sh)
@@ -2442,7 +2441,7 @@ CORE_COMMANDS="create-rules update-rules upgrade-default-rules list-rules delete
 COMMANDS_REQUIRING_DOMAIN="create-rules update-rules upgrade-default-rules list-rules delete-rules delete-rule"
 COMMANDS_SUPPORTING_MULTIZONE="create-rules update-rules list-rules delete-rules"
 
-# Positional form: `cwr.sh create-rules default -d example.com`
+# Positional form: `cfwrv2.sh create-rules default -d example.com`
 if [[ -z $CMD && -n ${1:-} && " $CORE_COMMANDS " == *" $1 "* ]]; then
 	CMD=$1
 	shift
@@ -2450,7 +2449,7 @@ fi
 
 # -- Dry run is advertised but not implemented; say so instead of pretending
 if [[ ${DRYRUN:-0} == "1" ]]; then
-	_error "Dry run is not implemented in cwr.sh yet"
+	_error "Dry run is not implemented in cfwrv2.sh yet"
 	exit 2
 fi
 
