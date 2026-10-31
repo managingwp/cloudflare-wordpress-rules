@@ -127,6 +127,7 @@ a:hover { color: var(--accent); }
 .stepper { display: flex; gap: 0.15rem; overflow-x: auto; scrollbar-width: thin; }
 .stepper [role="tab"] {
   display: inline-flex; align-items: center; gap: 0.45rem;
+  position: relative;
   flex: 0 0 auto;
   padding: 0.4rem 0.65rem;
   font: inherit; font-size: 0.82rem; font-weight: 600;
