@@ -90,18 +90,19 @@ The complete commented template lives in
 ## Passing a profile to a command
 
 ```bash
-./cloudflare-wordpress-rules -d domain.com -c create-rules default --cf-profile PROD
+./cfwr.sh -d domain.com -c create-rules default --cf-profile PROD
 ```
 
 The same flag works on `cloudflare-token.sh` and `cloudflare-turnstile.sh`.
 
 ## Using an alternative credentials file
 
-`cfwr.sh` — and either script it runs — can read credentials from a file
+`cfwr.sh` forwards `--config` to whoever it runs, and both `cfwrv1.sh` and
+`cfwrv2.sh` accept it — so either version can read credentials from a file
 other than `~/.cloudflare`:
 
 ```bash
-./cloudflare-wordpress-rules -d domain.com -c list-rules --config ~/.cloudflare-client1
+./cfwr.sh -d domain.com -c list-rules --config ~/.cloudflare-client1
 ```
 
 The file has exactly the same format as `~/.cloudflare` — profiles, tokens and

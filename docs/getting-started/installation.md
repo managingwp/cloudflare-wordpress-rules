@@ -40,20 +40,20 @@ format and precedence rules.
 ## Create rules on a zone
 
 ```bash
-./cloudflare-wordpress-rules -d example.com -c create-rules default
+./cfwr.sh -d example.com -c create-rules default
 ```
 
 `default` always resolves to the latest numbered release. To try the staging
 rules instead, use the `mwp-rules-beta` selector:
 
 ```bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -d staging.example.com -c create-rules mwp-rules-beta
 ```
 
 ## Verify what is live
 
 ```bash
-./cloudflare-wordpress-rules -d example.com -c list-rules
+./cfwr.sh -d example.com -c list-rules
 ```
 
 Commands that only read local profiles need no credentials at all:

@@ -23,7 +23,7 @@ WordPress sites, plus helpers for API tokens and Turnstile widgets.
 1. [Install the scripts](getting-started/installation.md) and configure
    [`~/.cloudflare`](getting-started/authentication.md).
 2. Deploy the stable rules with
-   `./cloudflare-wordpress-rules -d example.com -c create-rules default`.
+   `./cfwr.sh -d example.com -c create-rules default`.
 3. Review the [command reference](commands/waf-rules.md) and the
    [profile format](reference/profile-format.md).
 
