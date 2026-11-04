@@ -164,5 +164,5 @@ every profile in `profiles/` is already v3. Key conversions:
 
 Validate a profile against the Rulesets API schema:
 ```bash
-cloudflare-wordpress-rules -c validate-profile <profile-name>
+./cfwr.sh -c validate-profile <profile-name>
 ```

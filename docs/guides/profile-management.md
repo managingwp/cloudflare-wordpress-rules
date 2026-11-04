@@ -39,7 +39,7 @@ git commit -m "feat: update beta rules"
 ## Deploying beta rules to test
 
 ```bash
-./cloudflare-wordpress-rules -d staging.example.com -c create-rules mwp-rules-beta
+./cfwr.sh -d staging.example.com -c create-rules mwp-rules-beta
 ```
 
 ## Promoting beta to a numbered release
@@ -68,10 +68,10 @@ release, not the numeric rules version.
 
 ```bash
 # default always points to the latest release
-./cloudflare-wordpress-rules -d domain.com -c create-rules default
+./cfwr.sh -d domain.com -c create-rules default
 
 # Or upgrade an existing deployment in place
-./cloudflare-wordpress-rules -d domain.com -c upgrade-default-rules
+./cfwr.sh -d domain.com -c upgrade-default-rules
 ```
 
 ## Related

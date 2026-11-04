@@ -37,13 +37,13 @@ convert them:
 
 ```bash
 # Preview the migration (rules are applied, old ones preserved)
-cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets
+./cfwr.sh -v1 -d domain.com -c migrate-to-rulesets
 
 # Full migration with cleanup of old rules and filters
-cloudflare-wordpress-rules -d domain.com -c migrate-to-rulesets --delete-old
+./cfwr.sh -v1 -d domain.com -c migrate-to-rulesets --delete-old
 
 # Multi-zone migration
-cloudflare-wordpress-rules -zf zones.txt -c migrate-to-rulesets
+./cfwr.sh -v1 -zf zones.txt -c migrate-to-rulesets
 ```
 
 The migration tool:

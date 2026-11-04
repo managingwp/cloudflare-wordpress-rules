@@ -13,7 +13,7 @@ managing rules on many domains.
 Use `-d` more than once:
 
 ```bash
-cloudflare-wordpress-rules -d site1.com -d site2.com -d site3.com -c create-rules default
+./cfwr.sh -d site1.com -d site2.com -d site3.com -c create-rules default
 ```
 
 ## Using a zones file
@@ -32,13 +32,13 @@ example.org  # inline comments too
 Then reference it with `-zf`:
 
 ```bash
-cloudflare-wordpress-rules -zf zones.txt -c create-rules default
+./cfwr.sh -zf zones.txt -c create-rules default
 ```
 
 Both methods can be combined:
 
 ```bash
-cloudflare-wordpress-rules -zf zones.txt -d extra-site.com -c list-rules
+./cfwr.sh -zf zones.txt -d extra-site.com -c list-rules
 ```
 
 `zones.txt` is ignored by git. Start from
@@ -50,7 +50,7 @@ By default the script lists every affected zone and asks for confirmation
 before proceeding. Use `-y` to skip the prompt in automation:
 
 ```bash
-cloudflare-wordpress-rules -zf zones.txt -c delete-rules -y
+./cfwr.sh -v1 -zf zones.txt -c delete-rules -y
 ```
 
 `list-rules` is read-only and data-only, so it never prompts — the zone list is
@@ -65,6 +65,9 @@ not written to stdout ahead of the rules.
 - `get-settings` — get settings from all specified zones
 - `set-settings` — set settings on all specified zones
 
+`get-settings` and `set-settings` exist only in `cfwrv1.sh`; the rest are in both
+scripts.
+
 ## Listing rules across zones
 
 `list-rules` is data-only, so the per-zone banners and the final summary are
@@ -74,11 +77,11 @@ CSV prints its header once for the whole run:
 
 ```bash
 # One compact JSON object per zone
-cloudflare-wordpress-rules -zf zones.txt -c list-rules --json \
+./cfwr.sh -v1 -zf zones.txt -c list-rules --json \
   | jq -s 'map({domain, count: (.rules | length)})'
 
 # One CSV document with a single header
-cloudflare-wordpress-rules -zf zones.txt -c list-rules --csv > rules.csv
+./cfwr.sh -v1 -zf zones.txt -c list-rules --csv > rules.csv
 ```
 
 The exit status is non-zero only when a zone fails hard (authentication or an

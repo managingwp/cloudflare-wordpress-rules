@@ -181,7 +181,7 @@ start with `lmt-` back into the body first.
 `profiles/`, and deploy it with the script:
 
 ```bash
-./cloudflare-wordpress-rules -d example.com -c create-rules my-profile
+./cfwr.sh -d example.com -c create-rules my-profile
 ```
 
 ## Upgrading without losing local changes
