@@ -183,6 +183,23 @@ while IFS= read -r file; do
 done <<< "$docs_files"
 assert_eq "relative docs links resolve" "" "$broken_docs_links"
 
+# The scripts were renamed to cfwr.sh (chooser), cfwrv1.sh and cfwrv2.sh.
+# The old name survives as a symlink, so a stale example still works — which is
+# exactly why nothing caught it. Changelog and the migration history are records
+# of the past and keep their original wording.
+retired_name_hits=""
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    case "$file" in
+        */changelog.md|*/history/ruleset-migration-plan.md) continue ;;
+    esac
+    while IFS= read -r hit; do
+        [[ -z "$hit" ]] && continue
+        retired_name_hits+="${file#"$REPO_DIR"/}:$hit"$'\n'
+    done < <(grep -nE 'cloudflare-wordpress-rules\.sh|\./cloudflare-wordpress-rules |cloudflare-wordpress-rules -' "$file" || true)
+done <<< "$docs_files"
+assert_eq "live pages invoke cfwr.sh, not the retired command name" "" "$retired_name_hits"
+
 # -- release notifications -------------------------------------------
 NOTIF_PAGE="$DOCS_DIR/getting-started/release-notifications.md"
 
